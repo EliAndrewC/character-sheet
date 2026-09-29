@@ -1127,3 +1127,19 @@ def test_the_schema_bounds_mirumoto_points():
     c = Character(name="M", school="mirumoto_bushi", school_ring_choice="Void",
                   knacks={"counterattack": 3, "double_attack": 3, "iaijutsu": 3}, attack=2)
     assert sanitize_adventure_state(c, {"mirumoto_round_points": 99}) == {"mirumoto_round_points": 4}
+
+
+def test_an_action_keeps_the_rows_display_lines_unless_the_dice_change(client, scripted):
+    """The tab PATCHes display lines (a wound check's outcome, ...) into the
+    history row; an action that does not change the dice must not wipe them."""
+    cid = _ikoma(client, advantages=["lucky"])
+    data = _roll(client, cid, roll_key="skill:bragging", headers=scripted("2")).json()
+    s = client._test_session_factory()
+    row = s.get(RollHistory, data["history_id"])
+    row.payload = dict(row.payload, extras=["a line the tab added"])
+    s.commit()
+    s.close()
+    _act(client, cid, data["session_id"], "raise")
+    assert _row(client, data["history_id"])["extras"] == ["a line the tab added"]
+    _act(client, cid, data["session_id"], "lucky_reroll", headers=scripted("9"))
+    assert "Lucky reroll used" in _row(client, data["history_id"])["extras"]

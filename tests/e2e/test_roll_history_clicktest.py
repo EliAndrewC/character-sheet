@@ -70,43 +70,51 @@ def _char_id(page):
     return int(m.group(1))
 
 
+# The server makes every roll and writes its history row
+# (server-rolls-design); these drive REAL rolls with forced dice.
+
+def _real_attack(page, tn=20, dice=(9,), void=0):
+    from tests.e2e.dice_control import force_dice, restore_dice
+    page.locator('[data-roll-key="attack"]').click()
+    page.wait_for_selector('[data-modal="attack"]', state="visible", timeout=5000)
+    page.locator('[data-modal="attack"] select:visible').first.select_option(str(tn))
+    if void:
+        page.evaluate(f"() => {{ window._diceRoller.atkVoidSelected = {void}; }}")
+    force_dice(page, list(dice))
+    page.locator('[data-modal="attack"] [data-action="roll-attack"]').click()
+    page.wait_for_function("() => window._diceRoller.atkPhase === 'result'", timeout=10000)
+    restore_dice(page)
+
+
+def _real_damage(page, dice=(6,)):
+    from tests.e2e.dice_control import force_dice, restore_dice
+    force_dice(page, list(dice))
+    page.locator('[data-action="roll-damage"]').click()
+    page.wait_for_function("() => window._diceRoller.atkPhase === 'damage-result'", timeout=10000)
+    restore_dice(page)
+
+
+def _real_wound_check(page, light_wounds, dice):
+    from tests.e2e.dice_control import force_dice, restore_dice
+    page.locator('[data-action="lw-plus"]').click()
+    page.wait_for_selector('input[placeholder="Amount"]', timeout=5000)
+    page.fill('input[placeholder="Amount"]', str(light_wounds))
+    page.locator('input[placeholder="Amount"]').locator('..').locator('button:has-text("Add")').click()
+    page.wait_for_selector('[data-modal="wound-check"]', state="visible", timeout=5000)
+    force_dice(page, list(dice))
+    page.locator('[data-action="roll-wound-check-go"]').click()
+    page.wait_for_function("() => window._diceRoller.wcPhase === 'result'", timeout=10000)
+    restore_dice(page)
+
+
 def test_attack_and_damage_record_with_distinct_labels(page, live_server_url):
-    """Regression for live-site bug: after an Acting roll then an attack
-    + damage sequence, the Roll History showed three 'Acting' rows because
-    the dice-roller's `title` and `currentRollKey` weren't updated by the
-    attack modal. Each modal-specific roll must record its own key+label.
-    Also verifies that damage rolls do NOT capture the attack's TN.
-    """
+    """The attack row carries its TN; the damage row (its own key) does not."""
     _create_owner_character(page, live_server_url, name="MultiModal")
     cid = _char_id(page)
     _make_skill_roll_and_wait(page, skill_key="skill:bragging")
-    # Simulate an attack roll completion (atkTN is set during atkPhase
-    # 'result'; we want to verify that ONLY the attack row records it).
-    page.evaluate("""
-        const d = window._diceRoller;
-        d.atkModalOpen = true;
-        d.atkPhase = 'result';
-        d.atkKey = 'attack';
-        d.atkTN = 20;
-        d.atkFormula = {label: 'Attack', rolled: 5, kept: 3, bonuses: []};
-        d.atkRollTotal = 28;
-        d.keptDice = [{value: 9}, {value: 7}, {value: 6}];
-        d.unkeptDice = [{value: 4}, {value: 3}];
-        d._saveRollHistoryCreate();
-    """)
-    page.wait_for_timeout(400)
-    # Then damage - the same atkModalOpen flag remains true, but the phase
-    # transitions to damage-result. tn must NOT be captured.
-    page.evaluate("""
-        const d = window._diceRoller;
-        d.atkPhase = 'damage-result';
-        d.atkDamageRolled = 4;
-        d.atkDamageKept = 2;
-        d.atkDamageTotal = 14;
-        d.finalDice = [{value: 7, kept: true}, {value: 7, kept: true}, {value: 3, kept: false}, {value: 2, kept: false}];
-        d._saveRollHistoryCreate();
-    """)
-    page.wait_for_timeout(400)
+    _real_attack(page, tn=20, dice=(10, 9))
+    _real_damage(page)
+    page.wait_for_timeout(300)
     rolls = _list_rolls(page, cid)
     assert rolls and len(rolls) == 3
     # rolls are newest-first
@@ -114,7 +122,7 @@ def test_attack_and_damage_record_with_distinct_labels(page, live_server_url):
     assert "Damage" in rolls[0]["roll_label"]
     assert rolls[0]["tn"] is None, "damage rolls must NOT carry the attack's TN"
     assert rolls[1]["roll_key"] == "attack"
-    assert rolls[1]["roll_label"] == "Attack"
+    assert rolls[1]["roll_label"].startswith("Attack")  # the formula's label
     assert rolls[1]["tn"] == 20
     assert rolls[2]["roll_key"] == "skill:bragging"
     assert rolls[2]["tn"] is None
@@ -588,22 +596,8 @@ def test_wound_check_outcome_captured_on_pass_keep_lw(page, live_server_url):
     saved row's extras must record that choice."""
     _create_owner_character(page, live_server_url, name="WCKeep")
     cid = _char_id(page)
-    page.evaluate("""
-        const d = window._diceRoller;
-        d.wcModalOpen = true;
-        d.wcPhase = 'result';
-        d.wcLightWounds = 12;
-        d.wcRollTotal = 25;
-        d.wcPassed = true;
-        d.wcMargin = 13;
-        d.wcSeriousWounds = 0;
-        d.keptDice = [{value: 8}, {value: 7}, {value: 5}];
-        d.unkeptDice = [];
-        d.formula = {rolled: 5, kept: 3, flat: 0, bonuses: []};
-        d._saveRollHistoryCreate();
-    """)
-    page.wait_for_timeout(400)
-    # Player clicks Keep Light Wounds
+    _real_wound_check(page, 12, dice=(9,))
+    assert page.evaluate("() => window._diceRoller.wcPassed") is True
     page.evaluate("window._diceRoller.wcKeepLightWounds()")
     page.wait_for_timeout(400)
     rolls = _list_rolls(page, cid)
@@ -616,21 +610,7 @@ def test_wound_check_outcome_captured_on_pass_keep_lw(page, live_server_url):
 def test_wound_check_outcome_captured_on_pass_take_1_sw(page, live_server_url):
     _create_owner_character(page, live_server_url, name="WCTake1")
     cid = _char_id(page)
-    page.evaluate("""
-        const d = window._diceRoller;
-        d.wcModalOpen = true;
-        d.wcPhase = 'result';
-        d.wcLightWounds = 8;
-        d.wcRollTotal = 22;
-        d.wcPassed = true;
-        d.wcMargin = 14;
-        d.wcSeriousWounds = 0;
-        d.keptDice = [{value: 8}, {value: 7}];
-        d.unkeptDice = [];
-        d.formula = {rolled: 4, kept: 2, flat: 0, bonuses: []};
-        d._saveRollHistoryCreate();
-    """)
-    page.wait_for_timeout(400)
+    _real_wound_check(page, 8, dice=(9,))
     page.evaluate("window._diceRoller.wcTakeSeriousAndReset()")
     page.wait_for_timeout(400)
     rolls = _list_rolls(page, cid)
@@ -643,196 +623,86 @@ def test_wound_check_outcome_captured_on_pass_take_1_sw(page, live_server_url):
 def test_wound_check_outcome_captured_on_failure(page, live_server_url):
     _create_owner_character(page, live_server_url, name="WCFail")
     cid = _char_id(page)
-    page.evaluate("""
-        const d = window._diceRoller;
-        d.wcModalOpen = true;
-        d.wcPhase = 'result';
-        d.wcLightWounds = 30;
-        d.wcRollTotal = 10;
-        d.wcPassed = false;
-        d.wcMargin = 20;
-        d.wcSeriousWounds = 3;
-        d.wcResultApplied = false;
-        d.keptDice = [{value: 5}, {value: 3}];
-        d.unkeptDice = [];
-        d.formula = {rolled: 4, kept: 2, flat: 0, bonuses: []};
-        d._saveRollHistoryCreate();
-    """)
-    page.wait_for_timeout(400)
-    # Simulate the failure-applied path
-    page.evaluate("window._diceRoller.applyWoundCheckFailure()")
-    page.wait_for_timeout(400)
+    # Nothing to spend on it, so the failure applies itself.
+    _real_wound_check(page, 30, dice=(1,))
+    wounds = page.evaluate("() => window._diceRoller.wcSeriousWounds")
+    page.wait_for_timeout(800)
     rolls = _list_rolls(page, cid)
+    assert len(rolls) == 1
     extras = rolls[0]["payload"].get("extras", [])
-    assert any("Took 3 serious wounds" in e for e in extras), (
-        f"expected 'Took 3 serious wounds' bullet in {extras!r}"
+    word = "wound" if wounds == 1 else "wounds"
+    assert any(f"Took {wounds} serious {word}" in e for e in extras), (
+        f"expected the serious wounds taken in {extras!r}"
     )
 
 
 def test_wound_check_outcome_survives_modal_close_before_create_resolves(
     page, live_server_url,
 ):
-    """Real race: a WC failure auto-applies, the user clicks Close on the
-    failure modal, and THEN the create POST resolves. The deferred PATCH
-    must still record the outcome - even though _currentResultPayload()
-    returns null at that moment because the modal is closed. The fix
-    snapshots the payload at choice-handler time so the deferred PATCH
-    is immune to the modal state."""
+    """A WC failure auto-applies and the player closes the modal at once:
+    the outcome is still recorded on the row the server wrote."""
     _create_owner_character(page, live_server_url, name="WCCloseRace")
     cid = _char_id(page)
-    page.evaluate("""
-        const d = window._diceRoller;
-        d.wcModalOpen = true;
-        d.wcPhase = 'result';
-        d.wcLightWounds = 30;
-        d.wcRollTotal = 5;
-        d.wcPassed = false;
-        d.wcMargin = 25;
-        d.wcSeriousWounds = 5;
-        d.wcResultApplied = false;
-        d.keptDice = [{value: 3}, {value: 2}];
-        d.unkeptDice = [];
-        d.formula = {rolled: 4, kept: 2, flat: 0, bonuses: []};
-        // Real call sequence: create POST fires, auto-apply runs sync,
-        // THEN the user closes the modal. All before the POST resolves.
-        d._saveRollHistoryCreate();
-        d.applyWoundCheckFailure();
-        d.wcModalOpen = false;
-    """)
+    # Nothing to spend on it, so the failure applies itself.
+    _real_wound_check(page, 30, dice=(1,))
+    wounds = page.evaluate("() => window._diceRoller.wcSeriousWounds")
+    page.evaluate("() => { window._diceRoller.wcModalOpen = false; }")
     page.wait_for_timeout(800)
     rolls = _list_rolls(page, cid)
     assert len(rolls) == 1
     extras = rolls[0]["payload"].get("extras", [])
-    assert any("Took 5 serious wounds" in e for e in extras), (
-        f"expected 'Took 5 serious wounds' bullet in {extras!r}; "
-        f"snapshot must survive modal close"
+    word = "wound" if wounds == 1 else "wounds"
+    assert any(f"Took {wounds} serious {word}" in e for e in extras), (
+        f"expected the serious wounds taken in {extras!r}"
     )
 
 
 def test_wound_check_outcome_captured_with_sync_failure_apply(page, live_server_url):
-    """Regression: when a WC fails with no discretionary bonuses, the
-    real rollWoundCheck() calls applyWoundCheckFailure() SYNCHRONOUSLY
-    right after _saveRollHistoryCreate(). The create POST hasn't
-    returned yet, so a naive _flushRollHistoryUpdate() would early-
-    return on the null _rollHistoryId and the outcome would never be
-    recorded. The pending-update flag must catch this race."""
+    """A failed WC with nothing to spend applies itself as soon as the
+    server's roll lands; the outcome reaches the server's history row."""
     _create_owner_character(page, live_server_url, name="WCFailSync")
     cid = _char_id(page)
-    # Call create + apply-failure back-to-back in the SAME tick (no
-    # await between them) to reproduce the real call sequence.
-    page.evaluate("""
-        const d = window._diceRoller;
-        d.wcModalOpen = true;
-        d.wcPhase = 'result';
-        d.wcLightWounds = 30;
-        d.wcRollTotal = 10;
-        d.wcPassed = false;
-        d.wcMargin = 20;
-        d.wcSeriousWounds = 4;
-        d.wcResultApplied = false;
-        d.keptDice = [{value: 5}, {value: 3}];
-        d.unkeptDice = [];
-        d.formula = {rolled: 4, kept: 2, flat: 0, bonuses: []};
-        d._saveRollHistoryCreate();
-        d.applyWoundCheckFailure();
-    """)
-    # Wait long enough for the create POST + the deferred PATCH to land
+    # Nothing to spend on it, so the failure applies itself.
+    _real_wound_check(page, 30, dice=(1,))
+    wounds = page.evaluate("() => window._diceRoller.wcSeriousWounds")
     page.wait_for_timeout(800)
     rolls = _list_rolls(page, cid)
     assert len(rolls) == 1
     extras = rolls[0]["payload"].get("extras", [])
-    assert any("Took 4 serious wounds" in e for e in extras), (
-        f"expected 'Took 4 serious wounds' bullet in {extras!r}; "
-        f"the pending-update flag must defer the flush until the "
-        f"create POST resolves"
+    word = "wound" if wounds == 1 else "wounds"
+    assert any(f"Took {wounds} serious {word}" in e for e in extras), (
+        f"expected the serious wounds taken in {extras!r}"
     )
 
 
 def test_damage_roll_records_atk_damage_parts_in_extras(page, live_server_url):
-    """The live damage modal shows the dice-composition breakdown via
-    ``atkDamageParts`` (strings like '3k2 weapon', '+3k0 from Fire',
-    '+4k0 extra from attack roll', '+4 flat bonus'). The readonly modal
-    must show the same breakdown - they need to land in the saved
-    extras list."""
+    """The damage modal's dice-composition breakdown (``atkDamageParts``)
+    lands in the saved extras, so the readonly modal shows it too."""
     _create_owner_character(page, live_server_url, name="DmgParts")
     cid = _char_id(page)
-    page.evaluate("""
-        const d = window._diceRoller;
-        d.atkModalOpen = true;
-        d.atkPhase = 'damage-result';
-        d.atkKey = 'attack';
-        d.atkDamageRolled = 10;
-        d.atkDamageKept = 2;
-        d.atkDamageFlat = 4;
-        d.atkDamageTotal = 22;
-        d.atkDamageShosuroBonus = 0;
-        d.convictionSpentThisRoll = 0;
-        d.atkDamageParts = [
-            '3k2 weapon',
-            '+3k0 from Fire',
-            '+4k0 extra from attack roll',
-            '+4 flat bonus'
-        ];
-        d.finalDice = [
-            {value: 9, kept: true}, {value: 7, kept: true},
-            {value: 4, kept: false}, {value: 3, kept: false}
-        ];
-        d._saveRollHistoryCreate();
-    """)
+    _real_attack(page, tn=5, dice=(9,))
+    _real_damage(page)
+    parts = page.evaluate("() => window._diceRoller.atkDamageParts")
+    assert parts and "weapon" in parts[0]
     page.wait_for_timeout(400)
     rolls = _list_rolls(page, cid)
-    assert rolls and len(rolls) == 1
-    extras = rolls[0]["payload"].get("extras", [])
-    for expected in (
-        "3k2 weapon",
-        "+3k0 from Fire",
-        "+4k0 extra from attack roll",
-        "+4 flat bonus",
-    ):
+    damage_row = next(r for r in rolls if r["roll_key"] == "attack:damage")
+    extras = damage_row["payload"].get("extras", [])
+    for expected in parts:
         assert expected in extras, (
             f"damage extras missing {expected!r}; got {extras!r}"
         )
 
 
 def test_damage_roll_does_not_inherit_attack_vp_extras(page, live_server_url):
-    """Regression: an attack roll's VP spend was leaking into the damage
-    roll's recorded extras because both shared atkFormula. Damage rolls
-    don't accept VP, so the damage payload must NOT contain a "spent
-    void point" extra (or any other formula-derived attack-only extra)."""
+    """An attack's void spend must not leak into its damage roll's extras:
+    damage takes no void."""
+    from tests.e2e.helpers import save_tracking
     _create_owner_character(page, live_server_url, name="DmgVpLeak")
     cid = _char_id(page)
-    _make_skill_roll_and_wait(page, skill_key="skill:bragging")
-    # Simulate an attack with VP spent, then a damage roll.
-    page.evaluate("""
-        const d = window._diceRoller;
-        d.atkModalOpen = true;
-        d.atkPhase = 'result';
-        d.atkKey = 'attack';
-        d.atkTN = 20;
-        d.atkFormula = {
-            label: 'Attack', rolled: 6, kept: 4,
-            bonuses: [], void_spent: 1
-        };
-        d.atkRollTotal = 30;
-        d.keptDice = [{value: 9}, {value: 8}, {value: 7}, {value: 6}];
-        d.unkeptDice = [{value: 4}, {value: 3}];
-        d._saveRollHistoryCreate();
-    """)
-    page.wait_for_timeout(400)
-    page.evaluate("""
-        const d = window._diceRoller;
-        d.atkPhase = 'damage-result';
-        d.atkDamageRolled = 4;
-        d.atkDamageKept = 2;
-        d.atkDamageTotal = 14;
-        d.atkDamageShosuroBonus = 0;
-        d.convictionSpentThisRoll = 0;
-        d.finalDice = [
-            {value: 7, kept: true}, {value: 6, kept: true},
-            {value: 3, kept: false}, {value: 2, kept: false}
-        ];
-        d._saveRollHistoryCreate();
-    """)
+    save_tracking(page, voidPoints=2)
+    _real_attack(page, tn=5, dice=(9,), void=1)
+    _real_damage(page)
     page.wait_for_timeout(400)
     rolls = _list_rolls(page, cid)
     damage_row = next(r for r in rolls if r["roll_key"] == "attack:damage")
@@ -840,7 +710,6 @@ def test_damage_roll_does_not_inherit_attack_vp_extras(page, live_server_url):
     assert all("void point" not in e for e in extras), (
         f"damage extras must not mention VP, got {extras!r}"
     )
-    # Attack row SHOULD still have the VP bullet
     attack_row = next(r for r in rolls if r["roll_key"] == "attack")
     attack_extras = attack_row["payload"].get("extras", [])
     assert any("void point" in e for e in attack_extras), (

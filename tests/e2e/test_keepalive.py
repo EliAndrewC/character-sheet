@@ -103,12 +103,14 @@ def test_an_hour_after_the_last_interaction_the_pings_stop(page, live_server_url
     page.wait_for_function("() => window.L7RKeepAlive !== undefined")
     hits = []
     page.on("request", lambda r: hits.append(r.url) if r.url.endswith("/keepalive") else None)
-    # Ask the question as of an hour and a minute after the page load.
+    # Ask the question as of an hour and a minute after the page load - with
+    # the session window moved to a day that never comes, so the answer does
+    # not depend on whether the test happens to run on a game night.
     sent = page.evaluate(
         "() => {"
         "  const K = window.L7RKeepAlive;"
         "  const later = new Date(K.currentOptions().lastInteraction + 61 * 60 * 1000);"
-        "  return K.tick(later, window.fetch.bind(window), K.currentOptions());"
+        "  return K.tick(later, window.fetch.bind(window), {...K.currentOptions(), days: []});"
         "}"
     )
     page.wait_for_timeout(300)

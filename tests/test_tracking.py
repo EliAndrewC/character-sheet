@@ -299,3 +299,10 @@ def test_a_4th_dan_priest_keeps_their_spent_conviction(client):
     )
     start_combat_round(priest, [{"value": 4}])
     assert priest.adventure_state["conviction_used"] == 3
+
+
+def test_track_is_retired_outside_the_test_server(client, monkeypatch):
+    """server-rolls-design Phase 10: the whole-state write is a test seam."""
+    monkeypatch.setenv("TEST_AUTH_BYPASS", "false")
+    resp = client.post("/characters/1/track", json={"rev": 0})
+    assert resp.status_code == 404

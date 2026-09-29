@@ -57,7 +57,7 @@ def kakita_5th_formula(character: Any, formulas: Dict[str, Any], choices: Dict[s
     own = int((character.knacks or {}).get("iaijutsu") or 0)
     add("contested skill", 5 * max(0, own - _int(choices, "opponent_skill_rank", 4, 0, 10)))
     f["bonuses"] = bonuses
-    f["label"] = "Kakita 5th Dan"
+    f["label"] = "Kakita 5th Dan Contest"
     # A contested roll, not an attack against a TN.
     f["is_attack_type"] = False
     return f

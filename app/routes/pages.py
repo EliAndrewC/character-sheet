@@ -48,6 +48,7 @@ from app.data import shosuro_lowest_3_avg
 from app.services.dice import build_all_roll_formulas, is_impaired
 from app.services.roll_sessions import server_rolled
 from app.services.attack_rolls import attack_flags
+from app.services.tracking_ops import precepts_pool_flags
 from app.services.wound_checks import wound_check_flags
 from app.services.parry_feint import parry_feint_flags
 from app.services.special_rolls import can_bless, performs_impaired_ritual, xk1_ability
@@ -864,11 +865,7 @@ def view_character(request: Request, char_id: int, db: Session = Depends(get_db)
         # rolled at the start of combat; any pool die can swap into any rolled
         # die on attack/parry/damage/wound_check rolls. Persists across combat
         # rounds, cleared only by the per-adventure reset.
-        "priest_precepts_pool": character.school == "priest" and dan >= 3,
-        "priest_precepts_pool_size": (
-            (char_dict.get("skills") or {}).get("precepts", 0)
-            if character.school == "priest" and dan >= 3 else 0
-        ),
+        **precepts_pool_flags(character),
         # Ide Diplomat 3rd Dan: spend VP to subtract Xk1 from someone's roll
         "ide_subtract_roll": character.school == "ide_diplomat" and dan >= 3,
         "ide_subtract_x": (xk1_ability(char_dict) or {}).get("x", 0) if character.school == "ide_diplomat" else 0,

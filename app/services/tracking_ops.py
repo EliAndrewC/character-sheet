@@ -325,6 +325,47 @@ def _akodo_reflect(c: Character, args: Dict[str, Any]) -> None:
     apply_void_spend(c, plan)
 
 
+BANK_LIST_KEYS = ("akodo_banked_bonuses", "banked_wc_excess", "matsu_banked_wc_bonuses")
+BANK_AMOUNT_KEYS = ("hiruma_banked_attack_bonus", "bayushi_banked_feint_raise", "ide_banked_tn_reduce",
+                    "hida_banked_wc_bonus")
+
+
+def _bank(c: Character, args: Dict[str, Any]) -> None:
+    """The tracking section's hand edits to a banked bonus: ``spend`` one
+    amount (off a list bank, or subtracted from a single-amount bank), or
+    ``clear`` it."""
+    key = args.get("key")
+    if key not in BANK_LIST_KEYS + BANK_AMOUNT_KEYS:
+        raise OpRefused("no such bank")
+    state = _state(c)
+    if args.get("clear"):
+        state.pop(key, None)
+    else:
+        amount = _int(args, "spend")
+        if key in BANK_LIST_KEYS:
+            bank = list(state.get(key) or [])
+            if amount not in bank:
+                raise OpRefused(f"no banked +{amount} to spend")
+            bank.remove(amount)
+            state[key] = bank
+        else:
+            state[key] = max(0, int(state.get(key) or 0) - max(0, amount))
+    c.adventure_state = state
+
+
+def precepts_pool_flags(c: Character) -> Dict[str, Any]:
+    """Priest 3rd Dan: a pool of X dice (X = precepts) to swap into the
+    party's attack / parry / damage / wound check rolls."""
+    data = c.to_dict()
+    on = c.school == "priest" and school_dan(data) >= 3
+    return {"priest_precepts_pool": on,
+            "priest_precepts_pool_size": int((data.get("skills") or {}).get("precepts", 0) or 0) if on else 0}
+
+
+def _precepts_pool_clear(c: Character, args: Dict[str, Any]) -> None:
+    c.precepts_pool = []
+
+
 OPS: Dict[str, Callable[[Character, Dict[str, Any]], None]] = {
     "light_wounds": _light_wounds,
     "take_serious": _take_serious,
@@ -345,7 +386,10 @@ OPS: Dict[str, Callable[[Character, Dict[str, Any]], None]] = {
     "mantis_3rd_dan": _mantis_3rd_dan,
     "kakita_interrupt": _kakita_interrupt,
     "akodo_reflect": _akodo_reflect,
+    "precepts_pool_clear": _precepts_pool_clear,
+    "bank": _bank,
 }
+
 
 
 def apply_op(character: Character, op: str, args: Dict[str, Any]) -> None:

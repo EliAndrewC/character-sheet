@@ -105,6 +105,7 @@ class RollRefused(ValueError):
 
 
 SPECIAL_KEYS = ("bless", "spend_vp_xk1", "freeform")
+PRECEPTS_POOL = "precepts_pool"
 
 
 def server_rolled(roll_key: str) -> bool:
@@ -112,7 +113,7 @@ def server_rolled(roll_key: str) -> bool:
     rolls (Phase 1), initiative (5), parry and feint (6)."""
     if roll_key in SPECIAL_KEYS:
         return True
-    if roll_key in ("initiative", "initiative:athletics"):
+    if roll_key in ("initiative", "initiative:athletics", PRECEPTS_POOL):
         return True
     if not roll_key or roll_key.startswith("initiative"):
         return False
@@ -199,6 +200,8 @@ def start_roll(
     ow = _count(choices, "otherworldliness")
     char_data = character.to_dict()
     party = party_member_data(visible_party_members(db, character, viewer))
+    if roll_key == PRECEPTS_POOL:
+        return _roll_precepts_pool(db, character, viewer=viewer, live=live, rng=rng, request_id=request_id)
     if roll_key.startswith("initiative"):
         if void or ow or choices.get("kitsune_swap"):
             raise RollRefused("initiative is rolled without spending void points")
@@ -505,8 +508,11 @@ def _session_total(session: RollSession) -> int:
     return base + extra
 
 
-_ROW_FIELDS = ("bonuses", "total", "kept", "dropped", "kept_sum", "extras", "alternatives",
-               "formula", "lucky", "togashi_original_total")
+_ROW_FIELDS = ("bonuses", "total", "kept", "dropped", "kept_sum", "alternatives", "lucky",
+               "togashi_original_total")
+# Rewritten on the row only when an action changed the dice: otherwise the
+# display lines the tab PATCHes in (a wound check's outcome, ...) stand.
+_DICE_ROW_FIELDS = ("extras", "formula")
 _ACTION_LABELS = {"raise": "3rd Dan free raise", "togashi_raise": "Athletics raise (Togashi 3rd Dan)",
                   "conviction": "Conviction", "courtier_5th": "Courtier 5th Dan",
                   "pcp_raise": "Player Character Point free raise",
@@ -519,7 +525,7 @@ _ACTION_LABELS = {"raise": "3rd Dan free raise", "togashi_raise": "Athletics rai
                   "wc_excess": "banked wound check excess"}
 
 
-def _write_payload(db: Session, session: RollSession) -> None:
+def _write_payload(db: Session, session: RollSession, dice_changed: bool = False) -> None:
     """The session's payload (and its history row) with the actions shown."""
     payload = dict(session.payload or {})
     base_bonuses = [b for b in payload.get("bonuses", []) if not b.get("post_roll")]
@@ -533,7 +539,8 @@ def _write_payload(db: Session, session: RollSession) -> None:
     if session.history_id:
         row = db.get(RollHistory, session.history_id)
         if row is not None:
-            row.payload = dict(row.payload or {}, **{k: payload[k] for k in _ROW_FIELDS if k in payload})
+            fields = _ROW_FIELDS + (_DICE_ROW_FIELDS if dice_changed else ())
+            row.payload = dict(row.payload or {}, **{k: payload[k] for k in fields if k in payload})
 
 
 def act(db: Session, session: RollSession, character: Character, action: str,
@@ -548,6 +555,7 @@ def act(db: Session, session: RollSession, character: Character, action: str,
     undo = action.startswith("undo_")
     name = action[5:] if undo else action
     extra: Dict[str, Any] = {}
+    dice_before = session.dice
     if choices.get("resolved"):
         raise RollRefused("this wound check is already resolved")
     if (session.formula or {}).get("iaijutsu_strike") and name in (
@@ -604,7 +612,7 @@ def act(db: Session, session: RollSession, character: Character, action: str,
         _wc_state(session)
     if session.roll_key in DUEL_KEYS:
         _duel_state(session)
-    _write_payload(db, session)
+    _write_payload(db, session, dice_changed=session.dice != dice_before)
     db.flush()
     return dict(extra, **_initiative_fields(session), **{
         "session_id": session.id,
@@ -1281,11 +1289,13 @@ def _post_bonus(db, session, character, args, rng):
 
 
 def _courtier_vp(db, session, character, args, rng):
-    """Courtier 4th Dan: a temp void point after a successful attack."""
-    _attack_only(session, "the Courtier void point")
+    """Courtier 4th Dan: a temp void point after a successful attack or
+    Manipulation roll (the Manipulation's success is the player's to judge)."""
+    if session.roll_key != "skill:manipulation":
+        _attack_only(session, "the Courtier void point")
     if not attack_flags(character.to_dict())["courtier_temp_vp_on_hit"]:
         raise RollRefused(f"{character.name} gains no void point from an attack")
-    if not _attack_state(character, session)["hit"]:
+    if _is_attack(session) and not _attack_state(character, session)["hit"]:
         raise RollRefused("only a successful attack gives the void point")
     _once(session, "courtier_vp", "the Courtier void point")
     _add_flag(session, "courtier_vp")
@@ -1370,9 +1380,9 @@ def _damage(db, session, character, args, rng):
         extra_flats=tuple(extra_flats), wave_man_recover=bool(args.get("wave_man_recover", True)),
         trade_dice=trade,
     )
-    variant = (f.get("attack_variant") or "attack").replace("_", " ").title()
     dformula = {
-        "label": f"{variant} damage", "rolled": pool["rolled"], "kept": pool["kept"],
+        "attack_damage": True,
+        "label": "Damage", "rolled": pool["rolled"], "kept": pool["kept"],
         "flat": pool["flat"], "reroll_tens": True, "is_damage_roll": True, "bonuses": [],
         "damage_parts": pool["parts"], "void_spent": 0, "void_overflow_bonus": 0,
         "wave_man_round_damage": f.get("wave_man_round_damage") or 0,
@@ -1599,7 +1609,8 @@ def _duel_formula(roll_key, formula, choices, void, ow):
     if bonus:
         formula["flat"] = (formula.get("flat") or 0) + bonus
         formula["bonuses"] = list(formula.get("bonuses") or []) + [{"label": "duel restart", "amount": bonus}]
-    formula["label"] = "Iaijutsu Contested" if roll_key == "iaijutsu:contested" else "Iaijutsu Strike"
+    formula["label"] = ("Iaijutsu Duel - Contested" if roll_key == "iaijutsu:contested"
+                        else "Iaijutsu Duel - Strike")
     if roll_key == "iaijutsu:strike":
         if void or ow or choices.get("kitsune_swap"):
             raise RollRefused("no void may be spent on the strike")
@@ -1670,7 +1681,7 @@ def _duel_damage(db, session, character, args, rng):
     base = build_all_roll_formulas(character.to_dict()).get("knack:iaijutsu") or {}
     pool = duel_damage_pool(base, weapon, duel["excess"])
     extras = [f"{weapon[0]}k{weapon[1]} weapon", f"+{max(0, duel['excess'])}k0 from the strike's excess"]
-    return _child_damage(db, session, character, "iaijutsu:damage", "Iaijutsu Damage",
+    return _child_damage(db, session, character, "iaijutsu:damage", "Iaijutsu Duel - Damage",
                          pool["rolled"], pool["kept"], pool["flat"], rng, extras)
 
 
@@ -1694,3 +1705,81 @@ def _kakita_5th_damage(db, session, character, args, rng):
 
 
 REROLLS.update({"duel_damage": _duel_damage, "kakita_5th_damage": _kakita_5th_damage})
+
+
+
+# ---------------------------------------------------------------------------
+# The Priest 3rd Dan precepts pool (Phase 10)
+# ---------------------------------------------------------------------------
+
+def _roll_precepts_pool(db, character, *, viewer, live, rng, request_id) -> Dict[str, Any]:
+    """Priest 3rd Dan: roll the pool - X dice (X = precepts), 10s rerolled,
+    highest first. Live, it becomes the character's pool; simulated, it is
+    only shown (a non-editor's test-drive)."""
+    from app.services.tracking_ops import precepts_pool_flags
+    flags = precepts_pool_flags(character)
+    if not flags["priest_precepts_pool"] or flags["priest_precepts_pool_size"] <= 0:
+        raise RollRefused(f"{character.name} has no precepts pool to roll")
+    rng = rng or random.SystemRandom()
+    dice = [roll_one_die(True, rng) for _ in range(flags["priest_precepts_pool_size"])]
+    pool = [{"value": d["value"]} for d in sorted(dice, key=lambda d: -d["value"])]
+    if live:
+        character.precepts_pool = pool
+    session = RollSession(
+        id=request_id or secrets.token_hex(16), character_id=character.id, viewer_discord_id=viewer,
+        mode="live" if live else "simulate", roll_key=PRECEPTS_POOL,
+        choices={"pool": pool}, formula={"label": "Precepts pool", "rolled": len(dice),
+                                         "kept": len(dice), "flat": 0, "reroll_tens": True},
+        dice=dice, payload={}, actions=[], history_id=None,
+    )
+    db.add(session)
+    db.flush()
+    return dict(_answer(session, character), pool=pool)
+
+
+def _precepts_qualifies(session: RollSession) -> bool:
+    """Attack, parry, attack damage and wound check rolls take a swap."""
+    f = session.formula or {}
+    return (_is_attack(session) or session.roll_key in PARRY_KEYS
+            or session.roll_key == "wound_check" or bool(f.get("attack_damage")))
+
+
+def _precepts_swap(db, session, character, args, rng):
+    """Swap a die of the priest's pool into this roll; the rolled die goes
+    back to the pool. A priest may swap in any different die on their own
+    roll; on an ally's roll only a higher one."""
+    from app.services.tracking_ops import precepts_pool_flags
+    if not _precepts_qualifies(session):
+        raise RollRefused("the precepts pool is only for attack, parry, damage and wound check rolls")
+    priest_id = args.get("priest_id")
+    if priest_id == "self":
+        priest = character
+    else:
+        priest = next((p for p in visible_party_members(db, character, session.viewer_discord_id)
+                       if p.id == priest_id), None)
+    if priest is None or not precepts_pool_flags(priest)["priest_precepts_pool"]:
+        raise RollRefused("that character has no precepts pool")
+    pool = [dict(d) for d in priest.precepts_pool or []]
+    try:
+        index, rolled = int(args.get("pool_index")), int(args.get("rolled_value"))
+    except (TypeError, ValueError):
+        raise RollRefused("pool_index and rolled_value must be whole numbers") from None
+    if not 0 <= index < len(pool):
+        raise RollRefused("no such die in the pool")
+    value = int(pool[index].get("value") or 0)
+    cells = [dict(d) for d in session.dice or []]
+    i = next((j for j, d in enumerate(cells) if d["value"] == rolled), None)
+    if i is None:
+        raise RollRefused(f"there is no {rolled} to swap")
+    if value == rolled or (priest is not character and value < rolled):
+        raise RollRefused("that swap is not allowed")
+    cells[i] = {"parts": [value], "value": value}
+    pool[index] = {"value": rolled}
+    if session.mode == "live":
+        priest.precepts_pool = pool
+    _add_flag(session, "precepts_swap", priest=priest.name, rolled=rolled, value=value)
+    _rescore(character, session, cells)
+    return {"precepts": {"priest_id": priest_id, "pool": pool}}
+
+
+REROLLS.update({"precepts_swap": _precepts_swap})

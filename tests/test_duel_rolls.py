@@ -30,7 +30,7 @@ def test_the_contested_roll_takes_void_and_the_restart_bonus(client, scripted):
                  headers=scripted("5")).json()
     assert {"label": "duel restart", "amount": 5} in data["payload"]["bonuses"]
     assert data["tracking"]["current_void_points"] == 1 and data["duel"]["total"] == data["total"]
-    assert _row(client, data["history_id"])["title"] == "Iaijutsu Contested"
+    assert _row(client, data["history_id"])["title"] == "Iaijutsu Duel - Contested"
     assert "multiple of 5" in _roll(client, cid, roll_key="iaijutsu:contested", restart_bonus=3).json()["error"]
     s = client._test_session_factory()
     assert s.get(RollHistory, data["history_id"]).roll_key == "iaijutsu:contested"

@@ -42,29 +42,14 @@ for (const c of initCases.sort_value) {
   });
 }
 
-for (const c of initCases.action_values) {
-  test("initiativeActionValues: " + c.name, () => {
-    const kept = c.kept.slice();
-    assert.deepEqual(M.initiativeActionValues(kept, c.flags), c.want);
-    assert.deepEqual(kept, c.kept, "must not mutate its input");
-  });
-}
-
-test("initiativeActionValues tolerates missing arguments", () => {
-  assert.deepEqual(M.initiativeActionValues(undefined, undefined), []);
-});
-
 // Attack / damage / wound-check arithmetic shared with
 // app/services/combat_math.py (the GM combat tracker's NPC rolls).
 const combatCases = load("combat_math_cases.json");
 const combatFns = {
   excess_to_extra_dice: "excessToExtraDice",
   attack_effective_tn: "attackEffectiveTn",
-  failed_parry_dice_reduction: "failedParryDiceReduction",
   wound_check_result: "woundCheckResult",
   wave_man_weapon_floor: "waveManWeaponFloor",
-  wave_man_round_damage: "waveManRoundDamage",
-  wave_man_miss_raise: "waveManMissRaise",
   wave_man_failed_parry_dice: "waveManFailedParryDice",
 };
 for (const [section, fn] of Object.entries(combatFns)) {

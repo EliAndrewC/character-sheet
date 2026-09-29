@@ -121,7 +121,8 @@ def test_double_attack_miss_shows_elevated_tn(page, live_server_url):
     _create_attacker(page, live_server_url, "DblAtkMiss")
     _wait_alpine(page)
     # Force dice to roll low so the attack misses even at a modest TN.
-    page.evaluate("window._origRandom = Math.random; Math.random = () => 0.0")
+    from tests.e2e.dice_control import force_dice, restore_dice
+    force_dice(page, [1])
     page.locator('[data-roll-key="knack:double_attack"]').click()
     page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=5000)
     modal = page.locator('[data-modal="attack"]')
@@ -135,7 +136,7 @@ def test_double_attack_miss_shows_elevated_tn(page, live_server_url):
         }
         return false;
     }""", timeout=10000)
-    page.evaluate("Math.random = window._origRandom")
+    restore_dice(page)
     miss_text = modal.locator('div:has-text("MISSED")').first.text_content()
     # Effective TN for a double attack at base TN 20 is 40.
     assert "needed 40" in miss_text, \

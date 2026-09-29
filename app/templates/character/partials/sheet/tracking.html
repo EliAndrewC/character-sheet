@@ -250,7 +250,7 @@
                             </span>
                             {% if viewer_can_edit %}
                             <button x-show="!b.spent"
-                                    @click="akodoBankedBonuses[i].spent = true; saveBankedBonuses()"
+                                    @click="akodoBankedBonuses[i].spent = true; op('bank', {key: 'akodo_banked_bonuses', spend: b.amount})"
                                     class="text-xs text-ink/50 hover:text-accent">Mark spent</button>
                             {% endif %}
                             <span x-show="b.spent" class="text-xs text-ink/40">spent</span>
@@ -269,7 +269,7 @@
                         (<span x-text="bayushiBankedFeintRaise / 5"></span> raise<span x-show="bayushiBankedFeintRaise > 5">s</span>)
                     </span>
                     {% if viewer_can_edit %}
-                    <button @click="bayushiBankedFeintRaise = Math.max(0, bayushiBankedFeintRaise - 5); if (window._diceRoller) window._diceRoller.bayushiBankedFeintRaise = bayushiBankedFeintRaise; saveBankedBonuses()"
+                    <button @click="bayushiBankedFeintRaise = Math.max(0, bayushiBankedFeintRaise - 5); op('bank', {key: 'bayushi_banked_feint_raise', spend: 5})"
                             class="text-xs text-ink/50 hover:text-accent">Mark 1 spent</button>
                     {% endif %}
                 </div>
@@ -284,7 +284,7 @@
                         +<span x-text="hirumaBankedAttackBonus"></span> (attack and damage)
                     </span>
                     {% if viewer_can_edit %}
-                    <button @click="const amt = {{ school_abilities.get('hiruma_post_parry_amount', 0) }}; hirumaBankedAttackBonus = Math.max(0, hirumaBankedAttackBonus - amt); if (window._diceRoller) window._diceRoller.hirumaBankedAttackBonus = hirumaBankedAttackBonus; saveBankedBonuses()"
+                    <button @click="const amt = {{ school_abilities.get('hiruma_post_parry_amount', 0) }}; hirumaBankedAttackBonus = Math.max(0, hirumaBankedAttackBonus - amt); op('bank', {key: 'hiruma_banked_attack_bonus', spend: amt})"
                             class="text-xs text-ink/50 hover:text-accent">Mark 1 spent</button>
                     {% endif %}
                 </div>
@@ -299,7 +299,7 @@
                         +<span x-text="hidaBankedWcBonus"></span> to next wound check
                     </span>
                     {% if viewer_can_edit %}
-                    <button @click="hidaBankedWcBonus = 0; if (window._diceRoller) window._diceRoller.hidaBankedWcBonus = 0; saveBankedBonuses()"
+                    <button @click="hidaBankedWcBonus = 0; op('bank', {key: 'hida_banked_wc_bonus', clear: true})"
                             class="text-xs text-ink/50 hover:text-accent">Clear</button>
                     {% endif %}
                 </div>
@@ -322,7 +322,7 @@
                             </span>
                             {% if viewer_can_edit %}
                             <button x-show="!b.spent"
-                                    @click="bankedWcExcess[i].spent = true; saveBankedBonuses()"
+                                    @click="bankedWcExcess[i].spent = true; op('bank', {key: 'banked_wc_excess', spend: b.amount})"
                                     class="text-xs text-ink/50 hover:text-accent">Mark spent</button>
                             {% endif %}
                             <span x-show="b.spent" class="text-xs text-ink/40">spent</span>
@@ -343,7 +343,7 @@
                     </div>
                 </template>
                 {% if viewer_can_edit %}
-                <button @click="matsuBankedWcBonuses = []; if (window._diceRoller) window._diceRoller.matsuBankedWcBonuses = []; saveBankedBonuses()"
+                <button @click="matsuBankedWcBonuses = []; op('bank', {key: 'matsu_banked_wc_bonuses', clear: true})"
                         class="text-xs text-ink/50 hover:text-accent mt-1">Clear All</button>
                 {% endif %}
             </div>

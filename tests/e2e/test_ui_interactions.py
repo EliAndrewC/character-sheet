@@ -755,13 +755,19 @@ def test_akodo_banked_bonus_on_miss(page, live_server_url):
     _create_char(page, live_server_url, "AkodoMissB", "akodo_bushi",
                  knack_overrides={"double_attack": 3, "feint": 3, "iaijutsu": 3})
     # Bank a bonus by injecting directly (simulating a passed wound check)
-    page.evaluate("window._trackingBridge.akodoBankedBonuses.push({amount: 15, spent: false})")
-    page.wait_for_timeout(200)
+    # Saved, not just set on the tab: the server spends the bank.
+    page.evaluate("""async () => {
+        const t = window._trackingBridge;
+        t.akodoBankedBonuses.push({amount: 15, spent: false});
+        t.saveBankedBonuses();
+        await t.whenSaved();
+    }""")
     # Verify it shows in tracking section
     page.locator('text="Banked 3rd Dan Bonuses"').wait_for(state="visible", timeout=5000)
     assert page.locator('text="Banked 3rd Dan Bonuses"').is_visible()
     # Mock dice low so we miss
-    page.evaluate("window._origRandom = Math.random; Math.random = () => 0.0")
+    from tests.e2e.dice_control import force_dice, restore_dice
+    force_dice(page, [1])
     # Roll attack with high TN to guarantee miss
     page.locator('[data-roll-key="attack"]').click()
     page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=3000)
@@ -769,7 +775,7 @@ def test_akodo_banked_bonus_on_miss(page, live_server_url):
     modal.locator('select:visible').select_option("30")
     modal.locator('[data-action="roll-attack"]').click()
     _wait_attack_result(page)
-    page.evaluate("if (window._origRandom) Math.random = window._origRandom")
+    restore_dice(page)
     # Should have missed
     miss_text = page.locator('[data-modal="attack"]').text_content()
     assert "MISSED" in miss_text
@@ -807,17 +813,23 @@ def test_akodo_undo_visible_after_all_bonuses_spent(page, live_server_url):
     _create_char(page, live_server_url, "AkodoUndoB", "akodo_bushi",
                  knack_overrides={"double_attack": 3, "feint": 3, "iaijutsu": 3})
     # Inject a single banked bonus
-    page.evaluate("window._trackingBridge.akodoBankedBonuses.push({amount: 12, spent: false})")
-    page.wait_for_timeout(200)
+    # Saved, not just set on the tab: the server spends the bank.
+    page.evaluate("""async () => {
+        const t = window._trackingBridge;
+        t.akodoBankedBonuses.push({amount: 12, spent: false});
+        t.saveBankedBonuses();
+        await t.whenSaved();
+    }""")
     # Mock dice high, roll attack with low TN to guarantee hit
-    page.evaluate("window._origRandom = Math.random; Math.random = () => 0.6")
+    from tests.e2e.dice_control import force_dice, restore_dice
+    force_dice(page, [7])
     page.locator('[data-roll-key="attack"]').click()
     page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=3000)
     modal = page.locator('[data-modal="attack"]')
     modal.locator('select:visible').select_option("5")
     modal.locator('[data-action="roll-attack"]').click()
     _wait_attack_result(page)
-    page.evaluate("if (window._origRandom) Math.random = window._origRandom")
+    restore_dice(page)
     # Apply the only bonus - this spends all bonuses
     apply_btn = modal.locator('button:has-text("Apply +12"):visible')
     apply_btn.first.wait_for(state="visible", timeout=5000)
@@ -871,19 +883,23 @@ def test_akodo_banked_bonuses_display_in_tracking(page, live_server_url):
     # Initially no bonuses
     assert not page.locator('text="Banked 3rd Dan Bonuses"').is_visible()
     # Add a bonus
-    page.evaluate("window._trackingBridge.akodoBankedBonuses.push({amount: 8, spent: false})")
-    page.wait_for_timeout(300)
+    page.evaluate("""async () => {
+        const t = window._trackingBridge;
+        t.akodoBankedBonuses.push({amount: 8, spent: false});
+        t.saveBankedBonuses();
+        await t.whenSaved();
+    }""")
     # Should now be visible
     page.locator('text="Banked 3rd Dan Bonuses"').wait_for(state="visible", timeout=5000)
     assert page.locator('text="Banked 3rd Dan Bonuses"').is_visible()
     body = page.text_content("body")
     assert "8" in body  # the amount is displayed
-    # Mark it spent
+    # Mark it spent: the server takes it out of the bank, so the section
+    # (which only lists what is left) goes away.
     page.locator('button:has-text("Mark spent")').click()
-    page.wait_for_timeout(300)
-    # Should show as spent (line-through)
-    page.locator('text="spent"').wait_for(state="visible", timeout=5000)
-    assert page.locator('text="spent"').is_visible()
+    page.locator('text="Banked 3rd Dan Bonuses"').wait_for(state="hidden", timeout=5000)
+    page.reload()
+    assert not page.locator('text="Banked 3rd Dan Bonuses"').is_visible()
 
 
 # ---------------------------------------------------------------------------
@@ -949,24 +965,11 @@ def test_reset_adventure_clears_combat_bonuses(page, live_server_url):
 
 
 def _stub_low_reroll(page):
-    """Patch the dice-roller's ``_rerollDice`` to always return all-1s.
-    Guarantees the Lucky reroll is strictly lower than the original roll
-    so the auto-use-higher path fires deterministically, with no animation
-    delay. Applies to every flow (attack/wc/damage/duel/generic) since they
-    share one dice-roller Alpine instance."""
-    page.evaluate("""() => {
-        const els = document.querySelectorAll('[x-data]');
-        for (const el of els) {
-            const d = window.Alpine && window.Alpine.$data(el);
-            if (d && typeof d._rerollDice === 'function') {
-                d._rerollDice = async (rolled) => {
-                    return Array.from({length: rolled}, () => ({value: 1}));
-                };
-            }
-        }
-    }""")
-    # Rerolls of a roll the server made take their dice from the server.
-    page.set_extra_http_headers({"X-Test-Dice": "1"})
+    """Make the next reroll come up all 1s (the server rerolls; see
+    dice_control), so it is strictly lower than a high original and the
+    auto-use-higher path fires deterministically."""
+    from tests.e2e.dice_control import force_dice
+    force_dice(page, [1])
 
 
 def test_lucky_auto_uses_higher_on_attack(page, live_server_url):
@@ -1055,6 +1058,8 @@ def test_lucky_auto_uses_higher_on_wound_check(page, live_server_url):
     _create_char(page, live_server_url, "LuckyHighWC", "akodo_bushi",
                  knack_overrides={"double_attack": 3, "feint": 3, "iaijutsu": 3})
     _add_lw_and_open_wc(page, 30)
+    from tests.e2e.dice_control import force_dice
+    force_dice(page, [9])  # a high original, so the forced-low reroll loses
     _roll_wc(page)
     before = page.evaluate("""() => {
         const els = document.querySelectorAll('[x-data]');
@@ -1119,22 +1124,7 @@ def test_lucky_keeps_reroll_when_higher_attack(page, live_server_url):
         }
         return 0;
     }""")
-    # Stub the reroll to come back as oversized values so it always beats
-    # the original regardless of any reroll-tens chain the original got.
-    # Tens-on-tens chains can easily push a real roll past 50+; bumping
-    # each rerolled die well past any plausible original keeps the test
-    # deterministic without per-run inspection of the original total.
-    page.evaluate("""() => {
-        const els = document.querySelectorAll('[x-data]');
-        for (const el of els) {
-            const d = window.Alpine && window.Alpine.$data(el);
-            if (d && typeof d._rerollDice === 'function') {
-                d._rerollDice = async (rolled) => {
-                    return Array.from({length: rolled}, () => ({value: 99}));
-                };
-            }
-        }
-    }""")
+    # The reroll comes up 9s, beating the forced-low original.
     force_dice(page, [9])  # the server's reroll
     modal.locator('button:has-text("Use Lucky"):visible').first.click()
     _wait_attack_result(page)

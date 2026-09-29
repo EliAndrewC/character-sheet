@@ -2338,14 +2338,14 @@ def test_knack_roll_image_payload_omits_skill_rank_parenthetical(page, live_serv
 
 def test_roll_image_prerender_overlaps_animation(page, live_server_url):
     """The Copy-as-image render is kicked off the moment the dice are
-    known (from ``onDiceReady``, inside ``rollAndAnimate``) - in parallel
+    known (from ``onDiceReady``, inside ``animateDice``) - in parallel
     with the animation - rather than after the roll settles. We detect
     this deterministically: the prerender ``onDiceReady`` runs while the
     roller is still in phase 'rolling' (before ``runRoll`` flips it to
     'done'), so the captured phase at the moment the /roll-image POST
     fires is 'rolling'. The pre-optimization code fired it only after
     phase had already become 'done'. (Holds regardless of the animation
-    pref, since onDiceReady runs before rollAndAnimate returns.)"""
+    pref, since onDiceReady runs before animateDice returns.)"""
     _create_roller(page, live_server_url, "OverlapRoll")
     page.evaluate("""() => {
         window.__phaseAtRollImage = null;

@@ -244,6 +244,7 @@
             _atkRequest: null,
             atkError: '',
             _lastAct: null,
+            _actChain: null,
             _predeclaredNext: false,
             akodoFeintDone: false,
             atkCourtierVpTaken: false,
@@ -343,27 +344,10 @@
             // the first place (the spend handlers are gated on canEdit), so
             // there's nothing to refresh and no informational message to
             // surface in the initiative modal.
-            // ``serverRound``: the server starts the round for a roll it
-            // makes (and says what refreshed), so only the tab-local
-            // Mirumoto points are refreshed here.
             _resetPerRoundAbilities(serverRound) {
-                const messages = [];
-                const t = window._trackingBridge;
-                if (!t || !t.canEdit) return messages;
-                if (this.schoolAbilities.mirumoto_round_points && !serverRound) {
-                    const max = t.mirumotoRoundPointsMax || 0;
-                    if ((t.mirumotoRoundPoints || 0) < max) {
-                        t.mirumotoRoundPoints = max;
-                        messages.push('Mirumoto 3rd Dan points refreshed for the new combat round');
-                    }
-                }
-                if (this.schoolAbilities.priest_round_conviction_refresh && !serverRound) {
-                    if ((t.getCount ? t.getCount('conviction') : 0) > 0) {
-                        t.setCount('conviction', 0);
-                        messages.push('Conviction pool refreshed for the new combat round');
-                    }
-                }
-                return messages;
+                // The server starts the round (and says what refreshed, in
+                // the roll's notes); nothing is refreshed here.
+                return [];
             },
 
             canUseLucky() {
@@ -398,147 +382,16 @@
                     + (this.wcExcessSpentThisRoll || 0);
             },
 
-            // Snapshot the dice-display state immediately before a Lucky
-            // reroll fires. Two purposes:
-            //   1. If the reroll comes out lower (non-initiative), we
-            //      restore this state so the live modal and every followup
-            //      step (attack -> damage, wound check -> serious wounds)
-            //      reads the higher original value - the "auto-use-higher"
-            //      rule. There is never a reason to keep a strictly-lower
-            //      roll, so the player isn't asked.
-            //   2. Either way, the cell-shaped copies (``keptCells`` /
-            //      ``droppedCells``) get recorded into ``luckyRollPair``
-            //      so the Roll History page can display both halves of the
-            //      pair side by side.
-            // ``actionDice`` is only meaningful for initiative; for other
-            // flows it's just whatever leftover values are sitting in the
-            // shared state and the renderer ignores it because the pair's
-            // initiative flag is false.
-            _luckyDiceSnapshot() {
-                return {
-                    finalDice: (this.finalDice || []).map(d => ({...d})),
-                    keptDice: (this.keptDice || []).map(d => ({...d})),
-                    unkeptDice: (this.unkeptDice || []).map(d => ({...d})),
-                    keptSum: this.keptSum,
-                    keptCells: this._cellsFromDice(this.keptDice),
-                    droppedCells: this._cellsFromDice(this.unkeptDice),
-                    actionDice: (this.actionDice || []).map(d => ({value: d.value})),
-                };
-            },
-
-            _restoreLuckyDice(snap) {
-                this.finalDice = snap.finalDice;
-                this.keptDice = snap.keptDice;
-                this.unkeptDice = snap.unkeptDice;
-                this.keptSum = snap.keptSum;
-            },
-
-            // Decide the Lucky reroll outcome, restore the original dice
-            // display when it wins (non-initiative only), and record the
-            // pair for the Roll History display. Call this AFTER the
-            // reroll has populated ``this.keptDice`` / ``this.unkeptDice``
-            // / ``this.keptSum`` with the rerolled values - we build the
-            // ``reroll`` half of the pair from current state before any
-            // restore happens. Returns ``{total, keepReroll}``; callers
-            // assign ``total`` back into their flow-specific total var
-            // (``atkRollTotal`` / ``wcRollTotal`` / ``atkDamageTotal`` /
-            // ``duelXRoll``) and use ``keepReroll`` to undo any
-            // companion state that lives outside the dice snapshot
-            // (e.g. damage's ``atkDamageShosuroBonus``).
-            _resolveLucky(origSnap, origTotal, newTotal, isInit) {
-                const res = window.L7RRollMath.luckyResolveReroll(
-                    origTotal, newTotal, isInit,
-                );
-                const rerollHalf = {
-                    kept: this._cellsFromDice(this.keptDice),
-                    dropped: this._cellsFromDice(this.unkeptDice),
-                    total: newTotal,
-                    show_total: !isInit,
-                };
-                if (isInit) {
-                    rerollHalf.action_dice = (this.actionDice || [])
-                        .map(d => ({value: d.value}));
-                }
-                if (!res.keepReroll) {
-                    this._restoreLuckyDice(origSnap);
-                }
-                this.luckyOriginalWasHigher = res.originalHigher;
-                const origHalf = {
-                    kept: origSnap.keptCells,
-                    dropped: origSnap.droppedCells,
-                    total: origTotal,
-                    show_total: !isInit,
-                };
-                if (isInit) {
-                    origHalf.action_dice = origSnap.actionDice;
-                }
-                this.luckyRollPair = {
-                    kept: res.keepReroll ? 'reroll' : 'original',
-                    original: origHalf,
-                    reroll: rerollHalf,
-                    // 'lucky' or 'pcp' - drives the result-panel / Roll History
-                    // / dice-card label on the reroll pair.
-                    source: this._rerollSource,
-                };
-                return {
-                    total: res.keepReroll ? newTotal : origTotal,
-                    keepReroll: res.keepReroll,
-                };
-            },
-
-            // Generic Lucky reroll (skill / knack / ring / initiative /
-            // bless). Snapshot the dice BEFORE runRoll wipes them so the
-            // auto-use-higher rule can restore the original if the reroll
-            // comes out lower. ``runRoll`` is told to skip its own image
-            // render + history create - we patch the existing history row
-            // and re-prerender after the resolve so the effective (possibly
-            // restored) state is what gets stored / pasted-as-image.
-            useLucky() {
-                if (!this.canUseLucky()) return;
-                if (this._onServerRoll()) {
-                    this.luckyUsedThisRoll = true;
-                    this._rerollSource = 'lucky';
-                    this._serverReroll('lucky_reroll', {}, true).then(d => {
-                        if (!d) this.luckyUsedThisRoll = false;
-                    });
-                    return;
-                }
-                const t = window._trackingBridge;
-                t.setToggle('lucky_used', true);
+            // Lucky: the server rerolls the roll it made (keeping the higher
+            // total, except initiative) and spends Lucky; ``kind`` is the
+            // session the panel shows.
+            async _luckyOn(kind) {
+                if (!this.canUseLucky() || !this._onServerRoll(kind === 'roll' ? undefined : kind)) return;
                 this.luckyUsedThisRoll = true;
                 this._rerollSource = 'lucky';
-                this._performGenericReroll();
+                if (!(await this._serverReroll('lucky_reroll', {}, true))) this.luckyUsedThisRoll = false;
             },
-
-            // The generic reroll mechanic, shared by Lucky and PCP. Caller has
-            // already set the source flag/toggle. Snapshots the dice BEFORE
-            // runRoll wipes them so the auto-use-higher rule can restore the
-            // original; carried-over discretionary bonuses (raises, PCP raises,
-            // etc.) survive the reroll.
-            _performGenericReroll() {
-                const isInit = this.formula?.is_initiative;
-                const disc = this._genericDiscretionaryTotal();
-                const origTotal = this.baseTotal;
-                const origSnap = this._luckyDiceSnapshot();
-                // Preserved so the existing initiative "choose which set"
-                // panel in modal_result.html keeps working.
-                this.luckyPrevBaseTotal = origTotal - disc;
-                this.luckyPrevTotal = origTotal;
-                this.luckyPrevActionDice = [...this.actionDice];
-                this.runRoll({skipHistoryCreate: true, skipImageRender: true}).then(() => {
-                    // runRoll resets baseTotal to dice-only; re-add the
-                    // carried-over discretionary bonuses (they survive
-                    // every reroll wave).
-                    this.baseTotal += disc;
-                    const newTotal = this.baseTotal;
-                    const r = this._resolveLucky(origSnap, origTotal, newTotal, isInit);
-                    this.baseTotal = r.total;
-                    this._prerenderRollImage(isInit
-                        ? this._buildInitiativeImagePayload()
-                        : this._buildRollImagePayload());
-                    this._patchRollHistoryNow();
-                });
-            },
+            useLucky() { this._luckyOn('roll'); },
 
             // ---- Merchant: reroll a business roll for a void point -------
             // Shares the one-reroll lock with Lucky and the PCP reroll, and
@@ -566,23 +419,12 @@
             },
 
             useBusinessReroll() {
-                if (!this.canUseBusinessReroll()) return;
-                if (this._onServerRoll()) {
-                    this.merchantRerollUsedThisRoll = true;
-                    this._rerollSource = 'merchant';
-                    this._serverReroll('merchant_reroll', {}, true).then(d => {
-                        if (!d) this.merchantRerollUsedThisRoll = false;
-                    });
-                    return;
-                }
-                const opt = this.businessRerollVoidOption();
-                if (!opt) return;
-                // deductVoidPoints already early-returns for a non-editor, so
-                // a viewer sees the reroll without paying for it.
-                this.deductVoidPoints(opt);
+                if (!this.canUseBusinessReroll() || !this._onServerRoll()) return;
                 this.merchantRerollUsedThisRoll = true;
                 this._rerollSource = 'merchant';
-                this._performGenericReroll();
+                this._serverReroll('merchant_reroll', {}, true).then(d => {
+                    if (!d) this.merchantRerollUsedThisRoll = false;
+                });
             },
 
             // ---- Player Character Point roll options (generic panel) ------
@@ -653,114 +495,17 @@
                 const cb = this.pcpConfirm.onAccept;
                 if (!t || !t.canSpendPcp()) return;
                 this.pcpSpending = true;
-                // Close the modal and apply the (local) effect immediately so it
-                // feels instant and the accept button can't be clicked again;
-                // persist the spend (POST + version) in the background. The
-                // per-roll lock (e.g. pcpRerollUsedThisRoll) is set inside the
-                // effect, so a second reroll can't slip in. void_refresh has no
-                // effect callback - spendPcp itself updates the void points.
+                // Close the modal first so the accept button can't be clicked
+                // again. A roll option (reroll / free raise / reroll 10s) is
+                // a session action that spends the PCP on the server; the
+                // void refresh has no roll, so it posts /spend-pcp.
                 this.pcpConfirm = { open: false, use: null, onAccept: null };
                 try {
-                    // On a roll the server made, the action itself spends
-                    // the PCP (and answers with it); only a browser-rolled
-                    // window posts /spend-pcp afterwards.
-                    const r = cb ? await cb() : null;
-                    if (!(r && r.server)) await t.spendPcp(use);
+                    if (cb) await cb();
+                    else await t.spendPcp(use);
                 } finally {
                     this.pcpSpending = false;
                 }
-            },
-            // -- Shared PCP mechanics, used by every roll-result panel ------
-            // Each panel supplies a "flow" descriptor (total accessor +
-            // recompute + image) and/or its extracted reroll core. The reroll
-            // shares the one-reroll lock with Lucky; the free raise and the
-            // reroll-10s are each once per roll. Reroll + raise gates are
-            // flow-agnostic (canUsePcpReroll / canSpendPcpRaise); only the
-            // reroll-10s gate differs per panel.
-            _pcpReroll(coreFn) {
-                if (this.luckyUsedThisRoll || this.pcpRerollUsedThisRoll) return;
-                this.openPcpConfirm('reroll', async () => {
-                    this.pcpRerollUsedThisRoll = true;
-                    this._rerollSource = 'pcp';
-                    return await coreFn();
-                });
-            },
-            _pcpFreeRaise(flow) {
-                if ((this.pcpRaisesSpentThisRoll || 0) >= 1) return;
-                this.openPcpConfirm('free_raise', () => {
-                    this.pcpRaisesSpentThisRoll++;
-                    flow.setTotal(flow.getTotal() + 5);
-                    if (flow.recompute) flow.recompute();
-                    if (flow.image) this._prerenderRollImage(flow.image());
-                    this._patchRollHistoryNow();
-                });
-            },
-            // Explode the 10s an impaired character couldn't (they didn't
-            // explode on the original roll); re-pick the highest kept dice and
-            // recompute off the (possibly higher) result.
-            _pcpRerollTens(flow) {
-                if (this.pcpTensRerolledThisRoll) return;
-                this.openPcpConfirm('reroll_tens', async () => {
-                    this.pcpTensRerolledThisRoll = true;
-                    const f = flow.formula();
-                    // This is NOT a full reroll: the impaired roll's 10s never
-                    // exploded, so we KEEP every die as-is and only let each die
-                    // showing a 10 explode (reroll-and-add). A 10 that rerolls
-                    // 10 then 3 becomes 10 + (10+3) = 23, displayed as an
-                    // exploding die with parts [10, 10, 3].
-                    const tens = this.finalDice.filter(d => d.value === 10).length;
-                    if (tens === 0) return;
-                    // Animate just the 10s rerolling (with explosions) in the tray.
-                    if (flow.enterRolling) flow.enterRolling();
-                    const rerolls = await this._rerollDice(tens, true, flow.tray || 'dice-animation');
-                    if (flow.exitRolling) flow.exitRolling();
-                    // Keep every die; explode only the 10s and re-pick kept.
-                    const res = window.L7RRollMath.pcpExplodeTens(
-                        this.finalDice, rerolls, f.kept,
-                    );
-                    this.finalDice = res.dice;
-                    this.keptDice = res.dice.filter(d => d.kept);
-                    this.unkeptDice = res.dice.filter(d => !d.kept);
-                    this.keptSum = res.keptSum;
-                    flow.setTotal(this.keptSum + (f.flat || 0) + flow.disc());
-                    if (flow.recompute) flow.recompute();
-                    if (flow.image) this._prerenderRollImage(flow.image());
-                    this._patchRollHistoryNow();
-                });
-            },
-            // W5 (Wave Man): "You may reroll 10s on a single die when
-            // impaired", one die per copy of the ability. Unlike the PCP
-            // version above this is free and the die is picked
-            // automatically - every 10 is interchangeable at reroll time, so
-            // there is nothing to choose - which is why there is no picker
-            // UI and no confirm step. The freed die still chains: a rerolled
-            // 10 rerolls again, which is why the rule frees a *die* rather
-            // than a *ten*.
-            //
-            // ``wave_man_freed_dice`` is only stamped on formulas whose 10s
-            // Impaired actually suppressed, so this never resurrects a
-            // reroll blocked for some other reason (an unskilled roll, the
-            // duel strike, initiative).
-            async _applyWaveManFreedTens(formula, trayId) {
-                const budget = window.L7RRollMath.waveManFreedDice(
-                    formula?.wave_man_freed_dice || 0
-                );
-                if (!budget || !this._impairedNow()) return 0;
-                const tens = (this.finalDice || []).filter(d => d.value === 10).length;
-                if (!tens) return 0;
-                const before = this.keptSum;
-                const rerolls = await this._rerollDice(
-                    Math.min(tens, budget), true, trayId || 'dice-animation'
-                );
-                const res = window.L7RRollMath.waveManExplodeTens(
-                    this.finalDice, rerolls, formula.kept, budget,
-                );
-                this.finalDice = res.dice;
-                this.keptDice = res.dice.filter(d => d.kept);
-                this.unkeptDice = res.dice.filter(d => !d.kept);
-                this.keptSum = res.keptSum;
-                this.waveManTensExploded = Math.min(tens, budget);
-                return res.keptSum - before;
             },
 
             // Reroll-10s gate for the combat panels (attack / duel contested):
@@ -771,176 +516,54 @@
                 return !this.pcpTensRerolledThisRoll && this._impairedNow()
                     && (this.finalDice || []).some(d => d.value === 10);
             },
-            // Recompute helpers used by free-raise / reroll-10s on panels whose
-            // result depends on the (possibly changed) total.
-            _wcRecomputeFromTotal() {
-                const wc = window.L7RRollMath.woundCheckResult(
-                    this.wcRollTotal, this.wcLightWounds,
-                    this.formulas['wound_check']?.bayushi_5th_dan_half_lw,
-                );
-                this.wcPassed = wc.passed;
-                this.wcMargin = wc.margin;
-                this.wcSeriousWounds = wc.seriousWounds;
-                this.wcResultApplied = false;
-            },
-            _duelStrikeRecompute() {
-                const excess = this.duelStrikeRoll - this.duelOpponentTN;
-                this.duelStrikeHit = excess >= 0;
-                this.duelStrikeExcess = excess;
-            },
-            // Per-flow descriptors.
-            _pcpFlowGeneric() {
-                return {
-                    getTotal: () => this.baseTotal, setTotal: (v) => { this.baseTotal = v; },
-                    recompute: null, formula: () => this.formula,
-                    disc: () => this._genericDiscretionaryTotal(),
-                    tray: 'dice-animation',
-                    enterRolling: () => { this.phase = 'rolling'; },
-                    exitRolling: () => { this.phase = 'done'; },
-                    image: () => this.formula?.is_initiative
-                        ? this._buildInitiativeImagePayload() : this._buildRollImagePayload(),
-                };
-            },
-            _pcpFlowAttack() {
-                return {
-                    getTotal: () => this.atkRollTotal,
-                    setTotal: (v) => { this.atkRollTotal = v; this.baseTotal = v; },
-                    recompute: () => this._atkUpdateHitState(),
-                    formula: () => this.formula, disc: () => this._atkDiscretionaryTotal(),
-                    tray: 'dice-animation-atk',
-                    enterRolling: () => { this.atkPhase = 'rolling'; },
-                    exitRolling: () => { this.atkPhase = 'result'; },
-                    image: () => this._buildAttackImagePayload(),
-                };
-            },
-            _pcpFlowWoundCheck() {
-                return {
-                    getTotal: () => this.wcRollTotal,
-                    setTotal: (v) => { this.wcRollTotal = v; this.baseTotal = v; },
-                    recompute: () => this._wcRecomputeFromTotal(),
-                    formula: () => this.formula, disc: () => this._wcDiscretionaryTotal(),
-                    tray: 'dice-animation-wc', image: () => this._buildWoundCheckImagePayload(),
-                };
-            },
-            _pcpFlowDuelContested() {
-                return {
-                    getTotal: () => this.duelContestedRoll,
-                    setTotal: (v) => { this.duelContestedRoll = v; this.baseTotal = v; },
-                    recompute: null, formula: () => this.formula,
-                    disc: () => (this.convictionSpentThisRoll || 0) + (this.pcpRaisesSpentThisRoll || 0) * 5,
-                    tray: 'dice-animation-duel',
-                    enterRolling: () => { this.duelPhase = 'contested-rolling'; },
-                    exitRolling: () => { this.duelPhase = 'contested-result'; },
-                    image: () => this._buildDuelContestedImagePayload(),
-                };
-            },
-            _pcpFlowDuelStrike() {
-                return {
-                    getTotal: () => this.duelStrikeRoll,
-                    setTotal: (v) => { this.duelStrikeRoll = v; this.baseTotal = v; },
-                    recompute: () => this._duelStrikeRecompute(),
-                    formula: () => this.formula,
-                    disc: () => (this.convictionSpentThisRoll || 0) + (this.pcpRaisesSpentThisRoll || 0) * 5,
-                    tray: 'dice-animation-duel', image: () => this._buildDuelStrikeImagePayload(),
-                };
-            },
             // ---- Generic (done) panel ----
-            requestPcpReroll() {
-                if (this._onServerRoll()) {
-                    this._pcpReroll(async () => {
-                        const d = await this._serverReroll('pcp_reroll', {}, true);
-                        if (!d) this.pcpRerollUsedThisRoll = false;
-                        return {server: true};
-                    });
-                    return;
-                }
-                this._pcpReroll(() => this._performGenericReroll());
-            },
-            requestPcpRaise() {
-                if (this._onServerRoll()) {
-                    if ((this.pcpRaisesSpentThisRoll || 0) >= 1) return;
-                    this.openPcpConfirm('free_raise', async () => {
-                        this.pcpRaisesSpentThisRoll++;
-                        this.baseTotal += 5;
-                        if (!(await this._act('pcp_free_raise'))) {
-                            this.pcpRaisesSpentThisRoll--;
-                            this.baseTotal -= 5;
-                        }
-                        return {server: true};
-                    });
-                    return;
-                }
-                this._pcpFreeRaise(this._pcpFlowGeneric());
-            },
+            requestPcpReroll() { this._pcpRerollOn('roll'); },
+            requestPcpRaise() { this._pcpServerRaise('roll'); },
             requestPcpRerollTens() {
-                if (!this.canPcpRerollTens()) return;
-                if (this._onServerRoll()) {
-                    this.openPcpConfirm('reroll_tens', async () => {
-                        this.pcpTensRerolledThisRoll = true;
-                        const d = await this._serverReroll('pcp_reroll_tens', {}, false);
-                        if (!d) this.pcpTensRerolledThisRoll = false;
-                        return {server: true};
-                    });
-                    return;
-                }
-                this._pcpRerollTens(this._pcpFlowGeneric());
+                if (this.canPcpRerollTens()) this._pcpServerTens('roll');
             },
             // ---- Attack panel ----
             canPcpRerollTensAttack() { return this._pcpCanRerollTensHere(); },
-            requestPcpRerollAttack() { this._pcpRerollOn('attack', () => this._rerollAttackCore()); },
+            requestPcpRerollAttack() { this._pcpRerollOn('attack'); },
             requestPcpRaiseAttack() {
-                if (this._onServerRoll('attack')) return this._pcpServerRaise(() => {
-                    this.atkRollTotal = this.baseTotal;
-                });
-                this._pcpFreeRaise(this._pcpFlowAttack());
+                this._pcpServerRaise('attack', () => { this.atkRollTotal = this.baseTotal; });
             },
-            requestPcpRerollTensAttack() {
-                if (this._onServerRoll('attack')) return this._pcpServerTens();
-                this._pcpRerollTens(this._pcpFlowAttack());
-            },
+            requestPcpRerollTensAttack() { this._pcpServerTens('attack'); },
             // ---- Wound check panel (no reroll-10s: WC always rerolls 10s) ----
-            requestPcpRerollWoundCheck() { this._pcpRerollOn('wc', () => this._rerollWoundCheckCore()); },
+            requestPcpRerollWoundCheck() { this._pcpRerollOn('wc'); },
             requestPcpRaiseWoundCheck() {
-                if (this._onServerRoll('wc')) return this._pcpServerRaise(() => {
-                    this.wcRollTotal = this.baseTotal;
-                    this._wcRecompute();
-                });
-                this._pcpFreeRaise(this._pcpFlowWoundCheck());
+                this._pcpServerRaise('wc', () => { this.wcRollTotal = this.baseTotal; this._wcRecompute(); });
             },
             // ---- Duel contested panel ----
             canPcpRerollTensDuelContested() { return this._pcpCanRerollTensHere(); },
-            requestPcpRerollDuelContested() { this._pcpRerollOn('duel-contested', () => this._rerollDuelContestedCore()); },
+            requestPcpRerollDuelContested() { this._pcpRerollOn('duel-contested'); },
             requestPcpRaiseDuelContested() {
-                if (this._onServerRoll('duel-contested')) return this._pcpServerRaise(() => {
-                    this.duelContestedRoll = this.baseTotal;
-                });
-                this._pcpFreeRaise(this._pcpFlowDuelContested());
+                this._pcpServerRaise('duel-contested', () => { this.duelContestedRoll = this.baseTotal; });
             },
-            requestPcpRerollTensDuelContested() {
-                if (this._onServerRoll('duel-contested')) return this._pcpServerTens();
-                this._pcpRerollTens(this._pcpFlowDuelContested());
-            },
+            requestPcpRerollTensDuelContested() { this._pcpServerTens('duel-contested'); },
             // ---- Duel strike panel (no reroll-10s: strike excluded by rule) ----
-            requestPcpRerollDuelStrike() { this._pcpRerollOn('duel-strike', () => this._rerollDuelStrikeCore()); },
+            requestPcpRerollDuelStrike() { this._pcpRerollOn('duel-strike'); },
             requestPcpRaiseDuelStrike() {
-                if (this._onServerRoll('duel-strike')) return this._pcpServerRaise(() => {
+                this._pcpServerRaise('duel-strike', () => {
                     this.duelStrikeRoll = this.baseTotal;
                     this._duelUpdateStrikeState();
                 });
-                this._pcpFreeRaise(this._pcpFlowDuelStrike());
             },
             // ---- Damage panels (reroll only) ----
-            requestPcpRerollDamage() { this._pcpRerollOn('damage', () => this._rerollDamageCore()); },
+            requestPcpRerollDamage() { this._pcpRerollOn('damage'); },
             // A PCP reroll / free raise / reroll-10s on a roll the server
             // made: the action spends the PCP there.
-            _pcpRerollOn(kind, browserCore) {
-                if (!this._onServerRoll(kind)) return this._pcpReroll(browserCore);
-                this._pcpReroll(async () => {
+            _pcpRerollOn(kind) {
+                if (!this._onServerRoll(kind === 'roll' ? undefined : kind)) return;
+                if (this.luckyUsedThisRoll || this.pcpRerollUsedThisRoll) return;
+                this.openPcpConfirm('reroll', async () => {
+                    this.pcpRerollUsedThisRoll = true;
+                    this._rerollSource = 'pcp';
                     if (!(await this._serverReroll('pcp_reroll', {}, true))) this.pcpRerollUsedThisRoll = false;
-                    return {server: true};
                 });
             },
-            _pcpServerRaise(after) {
+            _pcpServerRaise(kind, after) {
+                if (!this._onServerRoll(kind === 'roll' ? undefined : kind)) return;
                 if ((this.pcpRaisesSpentThisRoll || 0) >= 1) return;
                 this.openPcpConfirm('free_raise', async () => {
                     this.pcpRaisesSpentThisRoll++;
@@ -950,284 +573,28 @@
                         this.baseTotal -= 5;
                     }
                     if (after) after();
-                    return {server: true};
                 });
             },
-            _pcpServerTens() {
+            _pcpServerTens(kind) {
+                if (!this._onServerRoll(kind === 'roll' ? undefined : kind)) return;
                 this.openPcpConfirm('reroll_tens', async () => {
                     this.pcpTensRerolledThisRoll = true;
                     if (!(await this._serverReroll('pcp_reroll_tens', {}, false))) this.pcpTensRerolledThisRoll = false;
-                    return {server: true};
                 });
             },
-            requestPcpRerollDuelDamage() { this._pcpRerollOn('duel-damage', () => this._rerollDuelDamageCore()); },
+            requestPcpRerollDuelDamage() { this._pcpRerollOn('duel-damage'); },
 
-            async _rerollDice(rolled, rerollTens, trayId) {
-                const playSound = this.prefs.dice_sound_enabled && window.L7RDice
-                    ? (n) => window.L7RDice.playDiceSound(n) : null;
-                return window.L7RDice.rollAndAnimate(
-                    rolled, rerollTens, this.prefs.dice_animation_enabled, playSound, trayId
-                );
-            },
+            useLuckyWoundCheck() { this._luckyOn('wc'); },
 
-            async useLuckyWoundCheck() {
-                if (!this.canUseLucky()) return;
-                if (this._onServerRoll('wc')) {
-                    this.luckyUsedThisRoll = true;
-                    this._rerollSource = 'lucky';
-                    if (!(await this._serverReroll('lucky_reroll', {}, true))) this.luckyUsedThisRoll = false;
-                    return;
-                }
-                window._trackingBridge.setToggle('lucky_used', true);
-                this.luckyUsedThisRoll = true;
-                this._rerollSource = 'lucky';
-                await this._rerollWoundCheckCore();
-            },
-            async _rerollWoundCheckCore() {
-                const disc = this._wcDiscretionaryTotal();
-                const origTotal = this.wcRollTotal;
-                const origSnap = this._luckyDiceSnapshot();
-                this.luckyPrevBaseTotal = origTotal - disc;
-                this.luckyPrevTotal = origTotal;
-                // Do NOT reset discretionary state - bonuses carry over.
-                this.wcPhase = 'rolling';
-                const f = this.formula;
-                const dice = await this._rerollDice(f.rolled, f.reroll_tens, 'dice-animation-wc');
-                const sorted = [...dice].sort((a, b) => a.value - b.value);
-                const keptCount = Math.min(f.kept, sorted.length);
-                const keptDice = sorted.slice(sorted.length - keptCount);
-                this.finalDice = sorted.map((d, i) => ({ value: d.value, kept: i >= sorted.length - keptCount }));
-                this.keptDice = keptDice;
-                this.unkeptDice = sorted.slice(0, sorted.length - keptCount);
-                this.keptSum = keptDice.reduce((s, d) => s + d.value, 0);
-                const newTotal = this.keptSum + f.flat + disc;
-                // Resolve auto-use-higher: if the original beats the reroll
-                // the snapshot is restored and the wound-check math below
-                // computes off the higher (original) total.
-                const r = this._resolveLucky(origSnap, origTotal, newTotal, false);
-                this.baseTotal = r.total;
-                this.wcRollTotal = r.total;
-                const wc = window.L7RRollMath.woundCheckResult(
-                    this.wcRollTotal, this.wcLightWounds,
-                    this.formulas['wound_check']?.bayushi_5th_dan_half_lw,
-                );
-                this.wcPassed = wc.passed;
-                this.wcMargin = wc.margin;
-                this.wcSeriousWounds = wc.seriousWounds;
-                this.wcResultApplied = false;
-                this.wcPhase = 'result';
-                this._prerenderRollImage(this._buildWoundCheckImagePayload());
-                this._patchRollHistoryNow();
-            },
+            useLuckyAttack() { this._luckyOn('attack'); },
 
-            async useLuckyAttack() {
-                if (!this.canUseLucky()) return;
-                if (this._onServerRoll('attack')) {
-                    this.luckyUsedThisRoll = true;
-                    this._rerollSource = 'lucky';
-                    if (!(await this._serverReroll('lucky_reroll', {}, true))) this.luckyUsedThisRoll = false;
-                    return;
-                }
-                window._trackingBridge.setToggle('lucky_used', true);
-                this.luckyUsedThisRoll = true;
-                this._rerollSource = 'lucky';
-                await this._rerollAttackCore();
-            },
-            async _rerollAttackCore() {
-                const disc = this._atkDiscretionaryTotal();
-                const origTotal = this.atkRollTotal;
-                const origSnap = this._luckyDiceSnapshot();
-                this.luckyPrevBaseTotal = origTotal - disc;
-                this.luckyPrevTotal = origTotal;
-                // Do NOT reset discretionary state - bonuses carry over.
-                this.atkPhase = 'rolling';
-                const f = this.formula;
-                const dice = await this._rerollDice(f.rolled, f.reroll_tens, 'dice-animation-atk');
-                const sorted = [...dice].sort((a, b) => a.value - b.value);
-                const keptCount = Math.min(f.kept, sorted.length);
-                this.finalDice = sorted.map((d, i) => ({ value: d.value, kept: i >= sorted.length - keptCount }));
-                this.keptDice = sorted.filter((_, i) => i >= sorted.length - keptCount);
-                this.unkeptDice = sorted.filter((_, i) => i < sorted.length - keptCount);
-                this.keptSum = this.keptDice.reduce((s, d) => s + d.value, 0);
-                const newTotal = this.keptSum + f.flat + disc;
-                // Auto-use-higher: if reroll loses, restore original and
-                // ``_atkUpdateHitState`` below will compute hit/extra-dice
-                // off the higher original total. This is the fix for the
-                // followup-on-lower-reroll bug.
-                const r = this._resolveLucky(origSnap, origTotal, newTotal, false);
-                this.baseTotal = r.total;
-                this.atkRollTotal = r.total;
-                this.atkFailedParry = false;
-                this._atkUpdateHitState();
-                this.atkPhase = 'result';
-                // Refresh annotation + image off the effective state.
-                this._annotateSpentActionDie(this._describeAttackForDie(false));
-                this._prerenderRollImage(this._buildAttackImagePayload());
-                this._patchRollHistoryNow();
-            },
+            useLuckyDamage() { this._luckyOn('damage'); },
 
-            async useLuckyDamage() {
-                if (!this.canUseLucky()) return;
-                if (this._onServerRoll('damage')) {
-                    this.luckyUsedThisRoll = true;
-                    this._rerollSource = 'lucky';
-                    if (!(await this._serverReroll('lucky_reroll', {}, true))) this.luckyUsedThisRoll = false;
-                    return;
-                }
-                window._trackingBridge.setToggle('lucky_used', true);
-                this.luckyUsedThisRoll = true;
-                this._rerollSource = 'lucky';
-                await this._rerollDamageCore();
-            },
-            async _rerollDamageCore() {
-                const origTotal = this.atkDamageTotal;
-                const origShosuro = this.atkDamageShosuroBonus;
-                const origSnap = this._luckyDiceSnapshot();
-                this.luckyPrevTotal = origTotal;
-                this.mirumotoPointsSpentThisRoll = 0;
-                this.atkPhase = 'damage-rolling';
-                const f = this.formula;
-                const dice = await this._rerollDice(f.rolled, true, 'dice-animation-atk');
-                const sorted = [...dice].sort((a, b) => a.value - b.value);
-                const keptCount = Math.min(f.kept, sorted.length);
-                this.finalDice = sorted.map((d, i) => ({ value: d.value, kept: i >= sorted.length - keptCount }));
-                this.keptDice = sorted.filter((_, i) => i >= sorted.length - keptCount);
-                this.keptSum = this.keptDice.reduce((s, d) => s + d.value, 0);
-                // Shosuro 5th Dan: recompute lowest-3 bonus on rerolled damage.
-                this.atkDamageShosuroBonus = 0;
-                if (this.atkFormula?.shosuro_5th_dan) {
-                    const allValues = sorted.map(d => d.value);
-                    const lowest3 = allValues.slice(0, Math.min(3, allValues.length));
-                    this.atkDamageShosuroBonus = lowest3.reduce((s, v) => s + v, 0);
-                }
-                const newTotal = this.keptSum + (f.flat || 0) + this.atkDamageShosuroBonus + this.convictionSpentThisRoll + this.totalPriestAllySpentThisRoll();
-                const r = this._resolveLucky(origSnap, origTotal, newTotal, false);
-                // Companion state not covered by the dice snapshot: when
-                // the original wins, also restore the Shosuro bonus so the
-                // breakdown bullets match the kept dice.
-                if (!r.keepReroll) {
-                    this.atkDamageShosuroBonus = origShosuro;
-                }
-                this.atkDamageTotal = r.total;
-                this.atkPhase = 'damage-result';
-                this._annotateSpentActionDie(this._describeAttackForDie(true));
-                this._prerenderRollImage(this._buildAttackDamageImagePayload());
-                this._patchRollHistoryNow();
-            },
+            useLuckyDuelContested() { this._luckyOn('duel-contested'); },
 
-            async useLuckyDuelContested() {
-                if (!this.canUseLucky()) return;
-                if (this._onServerRoll('duel-contested')) {
-                    this.luckyUsedThisRoll = true;
-                    this._rerollSource = 'lucky';
-                    if (!(await this._serverReroll('lucky_reroll', {}, true))) this.luckyUsedThisRoll = false;
-                    return;
-                }
-                window._trackingBridge.setToggle('lucky_used', true);
-                this.luckyUsedThisRoll = true;
-                this._rerollSource = 'lucky';
-                await this._rerollDuelContestedCore();
-            },
-            async _rerollDuelContestedCore() {
-                const origTotal = this.duelContestedRoll;
-                const origSnap = this._luckyDiceSnapshot();
-                this.luckyPrevTotal = origTotal;
-                this.duelPhase = 'contested-rolling';
-                const f = this.formula;
-                const dice = await this._rerollDice(f.rolled, f.reroll_tens, 'dice-animation-duel');
-                const sorted = [...dice].sort((a, b) => a.value - b.value);
-                const keptCount = Math.min(f.kept, sorted.length);
-                this.finalDice = sorted.map((d, i) => ({ value: d.value, kept: i >= sorted.length - keptCount }));
-                this.keptDice = sorted.filter((_, i) => i >= sorted.length - keptCount);
-                this.unkeptDice = sorted.filter((_, i) => i < sorted.length - keptCount);
-                this.keptSum = this.keptDice.reduce((s, d) => s + d.value, 0);
-                // Conviction + any PCP free raise carry through the reroll.
-                const newTotal = this.keptSum + f.flat + (this.convictionSpentThisRoll || 0)
-                    + (this.pcpRaisesSpentThisRoll || 0) * 5;
-                const r = this._resolveLucky(origSnap, origTotal, newTotal, false);
-                this.baseTotal = r.total;
-                this.duelContestedRoll = r.total;
-                this.duelPhase = 'contested-result';
-                this._prerenderRollImage(this._buildDuelContestedImagePayload());
-                this._patchRollHistoryNow();
-            },
+            useLuckyDuelStrike() { this._luckyOn('duel-strike'); },
 
-            async useLuckyDuelStrike() {
-                if (!this.canUseLucky()) return;
-                if (this._onServerRoll('duel-strike')) {
-                    this.luckyUsedThisRoll = true;
-                    this._rerollSource = 'lucky';
-                    if (!(await this._serverReroll('lucky_reroll', {}, true))) this.luckyUsedThisRoll = false;
-                    return;
-                }
-                window._trackingBridge.setToggle('lucky_used', true);
-                this.luckyUsedThisRoll = true;
-                this._rerollSource = 'lucky';
-                await this._rerollDuelStrikeCore();
-            },
-            async _rerollDuelStrikeCore() {
-                const origTotal = this.duelStrikeRoll;
-                const origSnap = this._luckyDiceSnapshot();
-                this.luckyPrevTotal = origTotal;
-                this.duelPhase = 'strike-rolling';
-                const f = this.formula;
-                const dice = await this._rerollDice(f.rolled, false, 'dice-animation-duel');
-                const sorted = [...dice].sort((a, b) => a.value - b.value);
-                const keptCount = Math.min(f.kept, sorted.length);
-                this.finalDice = sorted.map((d, i) => ({ value: d.value, kept: i >= sorted.length - keptCount }));
-                this.keptDice = sorted.filter((_, i) => i >= sorted.length - keptCount);
-                this.unkeptDice = sorted.filter((_, i) => i < sorted.length - keptCount);
-                this.keptSum = this.keptDice.reduce((s, d) => s + d.value, 0);
-                // Conviction + any PCP free raise carry through the reroll.
-                const newTotal = this.keptSum + f.flat + (this.convictionSpentThisRoll || 0)
-                    + (this.pcpRaisesSpentThisRoll || 0) * 5;
-                const r = this._resolveLucky(origSnap, origTotal, newTotal, false);
-                this.baseTotal = r.total;
-                this.duelStrikeRoll = r.total;
-                // Hit / excess feed the damage step, so they MUST be
-                // computed off the effective (higher) strike total.
-                const excess = this.duelStrikeRoll - this.duelOpponentTN;
-                this.duelStrikeHit = excess >= 0;
-                this.duelStrikeExcess = excess;
-                this.duelPhase = 'strike-result';
-                this._prerenderRollImage(this._buildDuelStrikeImagePayload());
-                this._patchRollHistoryNow();
-            },
-
-            async useLuckyDuelDamage() {
-                if (!this.canUseLucky()) return;
-                if (this._onServerRoll('duel-damage')) {
-                    this.luckyUsedThisRoll = true;
-                    this._rerollSource = 'lucky';
-                    if (!(await this._serverReroll('lucky_reroll', {}, true))) this.luckyUsedThisRoll = false;
-                    return;
-                }
-                window._trackingBridge.setToggle('lucky_used', true);
-                this.luckyUsedThisRoll = true;
-                this._rerollSource = 'lucky';
-                await this._rerollDuelDamageCore();
-            },
-            async _rerollDuelDamageCore() {
-                const origTotal = this.duelDamageTotal;
-                const origSnap = this._luckyDiceSnapshot();
-                this.luckyPrevTotal = origTotal;
-                this.duelPhase = 'damage-rolling';
-                const dmg = this.duelComputeDamage();
-                const dice = await this._rerollDice(dmg.rolled, true, 'dice-animation-duel');
-                const sorted = [...dice].sort((a, b) => a.value - b.value);
-                const keptCount = Math.min(dmg.kept, sorted.length);
-                this.finalDice = sorted.map((d, i) => ({ value: d.value, kept: i >= sorted.length - keptCount }));
-                this.keptDice = sorted.filter((_, i) => i >= sorted.length - keptCount);
-                this.unkeptDice = sorted.filter((_, i) => i < sorted.length - keptCount);
-                this.keptSum = this.keptDice.reduce((s, d) => s + d.value, 0);
-                // Conviction spent on the damage carries through the reroll.
-                const newTotal = this.keptSum + dmg.flat + (this.convictionSpentThisRoll || 0);
-                const r = this._resolveLucky(origSnap, origTotal, newTotal, false);
-                this.duelDamageTotal = r.total;
-                this.duelPhase = 'damage-result';
-                this._prerenderRollImage(this._buildDuelDamageImagePayload());
-                this._patchRollHistoryNow();
-            },
+            useLuckyDuelDamage() { this._luckyOn('duel-damage'); },
 
             // Threshold data for wound check notifications
             _earthRing: {{ ring_map['Earth'] }},
@@ -2199,59 +1566,12 @@
             },
 
             async merchant5thConfirm() {
-                if (!this.merchant5thCanConfirm()) return;
-                if (this._onServerRoll()) {
-                    const values = this.merchant5thSelections.map(i => this.finalDice[i]?.value);
-                    this.merchant5thPhase = 'rerolling';
-                    await this._serverReroll('merchant_5th', {values: values}, false);
-                    this.merchant5thPhase = 'idle';
-                    this.merchant5thSelections = [];
-                    return;
-                }
-                const selected = [...this.merchant5thSelections].sort((a, b) => a - b);
-                const oldKeptSum = this.keptSum;
-                // Reconstitute the pool with parts preserved (finalDice drops the
-                // exploded-parts array; kept/unkept retain it).
-                const allWithParts = [...this.keptDice, ...this.unkeptDice];
-                const partsByValue = new Map();
-                for (const d of allWithParts) {
-                    if (!partsByValue.has(d.value)) partsByValue.set(d.value, []);
-                    partsByValue.get(d.value).push(d.parts);
-                }
-                const pool = this.finalDice.map(d => {
-                    const arr = partsByValue.get(d.value);
-                    const parts = (arr && arr.length > 0) ? arr.shift() : [d.value];
-                    return { value: d.value, parts };
-                });
+                if (!this.merchant5thCanConfirm() || !this._onServerRoll()) return;
+                const values = this.merchant5thSelections.map(i => this.finalDice[i]?.value);
                 this.merchant5thPhase = 'rerolling';
-                this.phase = 'rolling';
-                const newDice = await this._rerollDice(
-                    selected.length, this.formula.reroll_tens, 'dice-animation'
-                );
-                selected.forEach((idx, j) => {
-                    pool[idx] = { value: newDice[j].value, parts: newDice[j].parts };
-                });
-                // Re-sort and re-select kept
-                const sortedAsc = pool.slice().sort((a, b) => a.value - b.value);
-                const keptCount = Math.min(this.formula.kept, sortedAsc.length);
-                const isInit = this.formula.is_initiative;
-                const keptSet = new Set();
-                if (isInit) {
-                    for (let i = 0; i < keptCount; i++) keptSet.add(i);
-                } else {
-                    for (let i = sortedAsc.length - keptCount; i < sortedAsc.length; i++) keptSet.add(i);
-                }
-                this.finalDice = sortedAsc.map((d, i) => ({ value: d.value, kept: keptSet.has(i) }));
-                this.keptDice = sortedAsc.filter((_, i) => keptSet.has(i));
-                this.unkeptDice = sortedAsc.filter((_, i) => !keptSet.has(i));
-                this.keptSum = this.keptDice.reduce((s, d) => s + d.value, 0);
-                const delta = this.keptSum - oldKeptSum;
-                this.baseTotal += delta;
-                this.formula.merchant_5th_dan_bonus = delta;
-                this.formula.merchant_5th_dan_used = true;
+                await this._serverReroll('merchant_5th', {values: values}, false);
                 this.merchant5thPhase = 'idle';
                 this.merchant5thSelections = [];
-                this.phase = 'done';
             },
 
             merchant5thCancel() {
@@ -2261,61 +1581,8 @@
 
             async merchantSpendOneVp() {
                 const t = window._trackingBridge;
-                if (!t || !this.merchantVpStillAvailable()) return;
-                if (this._onServerRoll()) {
-                    await this._serverReroll('merchant_vp', {}, false);
-                    return;
-                }
-                // Pick source in priority order: temp > regular > worldliness
-                let opt;
-                if ((t.tempVoidPoints || 0) > 0) {
-                    opt = { count: 1, fromTemp: 1, fromRegular: 0, fromWorldliness: 0 };
-                } else if ((t.voidPoints || 0) > 0) {
-                    opt = { count: 1, fromTemp: 0, fromRegular: 1, fromWorldliness: 0 };
-                } else {
-                    opt = { count: 1, fromTemp: 0, fromRegular: 0, fromWorldliness: 1 };
-                }
-                // Snapshot discretionary bonuses already applied to baseTotal so we can re-add.
-                const disc = this._genericDiscretionaryTotal();
-                // Physical dice currently in the pool
-                const oldPhysical = this.finalDice.length;
-                // Update formula dimensions + apply 10k10 caps
-                this.formula.rolled += 1;
-                this.formula.kept += 1;
-                const _cap = window.L7RRollMath.applyDiceCap(this.formula.rolled, this.formula.kept, this.formula.flat);
-                this.formula.rolled = _cap.rolled; this.formula.kept = _cap.kept; this.formula.flat = _cap.flat;
-                this.formula.void_spent = (this.formula.void_spent || 0) + 1;
-                this.formula.merchant_vp_spent = (this.formula.merchant_vp_spent || 0) + 1;
-                this.deductVoidPoints(opt);
-                // Roll the new physical die(s) - 0 (cap hit) or 1 - and merge into pool.
-                // Use keptDice/unkeptDice as the source since they retain the exploded
-                // .parts breakdown that the template renders; finalDice drops that field.
-                const newCount = Math.max(0, this.formula.rolled - oldPhysical);
-                const existing = [...(this.keptDice || []), ...(this.unkeptDice || [])];
-                let pool = existing.map(d => ({ parts: d.parts, value: d.value }));
-                if (newCount > 0) {
-                    this.phase = 'rolling';
-                    const newDice = await this._rerollDice(
-                        newCount, this.formula.reroll_tens, 'dice-animation'
-                    );
-                    pool = pool.concat(newDice.map(d => ({ parts: d.parts, value: d.value })));
-                }
-                // Re-sort and re-select kept (top N for normal, bottom N for initiative)
-                const sortedAsc = pool.slice().sort((a, b) => a.value - b.value);
-                const keptCount = Math.min(this.formula.kept, sortedAsc.length);
-                const isInit = this.formula.is_initiative;
-                const keptSet = new Set();
-                if (isInit) {
-                    for (let i = 0; i < keptCount; i++) keptSet.add(i);
-                } else {
-                    for (let i = sortedAsc.length - keptCount; i < sortedAsc.length; i++) keptSet.add(i);
-                }
-                this.finalDice = sortedAsc.map((d, i) => ({ value: d.value, kept: keptSet.has(i) }));
-                this.keptDice = sortedAsc.filter((_, i) => keptSet.has(i));
-                this.unkeptDice = sortedAsc.filter((_, i) => !keptSet.has(i));
-                this.keptSum = this.keptDice.reduce((s, d) => s + d.value, 0);
-                this.baseTotal = this.keptSum + this.formula.flat + disc;
-                this.phase = 'done';
+                if (!t || !this.merchantVpStillAvailable() || !this._onServerRoll()) return;
+                await this._serverReroll('merchant_vp', {}, false);
             },
 
             // Pre-roll void-spend options for a specific formula, honoring the
@@ -2614,70 +1881,10 @@
             },
 
             executeRollWithExtraFlat(key, voidSpent, option, extraFlat, reason, useKitsuneSwap = false) {
-                // The server adds the predeclared parry's +5 as a choice of
-                // the roll it makes (Phase 6).
-                if (reason === 'predeclared parry' && this.formulas[key]?.server_rolled) {
-                    this._predeclaredNext = true;
-                    this.executeRoll(key, voidSpent, option, 0, useKitsuneSwap);
-                    return;
-                }
-                this.rollMenuOpen = false;
-                this.parryHoverRow = null;
-                if (this._keyAutoSpendsAction(key)) this._autoSpendActionDie(this._initialSpendLabel(key), this._isAthleticsActionKey(key));
-                this.luckyUsedThisRoll = false; this.pcpRerollUsedThisRoll = false; this.pcpRaisesSpentThisRoll = 0; this.pcpTensRerolledThisRoll = false;
-                this.togashiRerollUsed = false;
-                this.convictionSpentThisRoll = 0;
-                this.togashiRaisesSpentThisRoll = 0;
-                this.priestAllySpentThisRoll = {};
-                this.preceptsPoolSwapBonuses = [];
-                this.courtier5thApplied = false;
-                this.dojiOpponentResult = 0;
-                this.dojiTnRollApplied = false;
-                this._postRollHooksFired = false;
-                this.luckyOriginalWasHigher = false;
-                this.luckyRollPair = null;
-                this.mirumotoPointsSpentThisRoll = 0;
-                this.akodoPostRollVpSpent = 0;
-                this.akodoPostRollVpSources = [];
-                this.currentRollKey = key;
-                const f = { ...this.formulas[key] };
-                // Kitsune Warden Special Ability swap (Phase 10): predeclared
-                // parry path. Apply the swap before the predeclared +5 stacks.
-                if (useKitsuneSwap && f.kitsune_swap) {
-                    f.rolled = f.kitsune_swap.rolled;
-                    f.kept = f.kitsune_swap.kept;
-                    f.label = f.kitsune_swap.label;
-                    f.kitsune_swap_from_ring = f.kitsune_swap.kitsune_swap_from_ring;
-                    f.kitsune_swap_to_ring = f.kitsune_swap.kitsune_swap_to_ring;
-                }
-                f.flat += extraFlat;
-                f.bonuses = [...(f.bonuses || []), { label: reason, amount: extraFlat }];
-                this._captureShinjoParryDieValue(f);
-
-                if (voidSpent > 0 && option) {
-                    f.rolled += voidSpent;
-                    f.kept += voidSpent;
-                    f.void_spent = voidSpent;
-                    const _cap = window.L7RRollMath.applyDiceCap(f.rolled, f.kept, f.flat);
-                    f.rolled = _cap.rolled; f.kept = _cap.kept; f.flat = _cap.flat;
-                    let overflowBonus = _cap.overflowFlat;
-                    f.void_overflow_bonus = overflowBonus;
-                    // Mirumoto 5th Dan: +10 per VP on combat rolls
-                    const combatBonus = this.voidSpendConfig.combat_vp_flat_bonus || 0;
-                    if (combatBonus > 0) {
-                        f.flat += voidSpent * combatBonus;
-                    }
-                    this.deductVoidPoints(option);
-                }
-
-                this.formula = f;
-                this.title = f.label;
-                this.formulaText = f.flat > 0
-                    ? `${f.rolled}k${f.kept} + ${f.flat}`
-                    : `${f.rolled}k${f.kept}`;
-                this.raisesSpentThisRoll = 0;
-                this.open = true;
-                this.runRoll();
+                // The only extra flat a roll takes this way is the predeclared
+                // parry's +5, which the server adds as a choice of the roll.
+                this._predeclaredNext = reason === 'predeclared parry' && extraFlat === 5;
+                this.executeRoll(key, voidSpent, option, 0, useKitsuneSwap);
             },
 
             executeRoll(key, voidSpent, option, owSpent = 0, useKitsuneSwap = false) {
@@ -2706,8 +1913,7 @@
                 this._lastPayloadSig = '';
                 // Reset roll-history state so a stale PATCH timer can't
                 // overwrite the previous roll's row with this new roll's
-                // mid-animation payload. _saveRollHistoryCreate fires after
-                // runRoll finishes and sets _rollHistoryId again.
+                // mid-animation payload. runRoll adopts the new roll's row.
                 this._rollHistoryId = null;
                 clearTimeout(this._rollHistoryUpdateTimer);
                 if (this._keyAutoSpendsAction(key)) this._autoSpendActionDie(this._initialSpendLabel(key), this._isAthleticsActionKey(key));
@@ -2726,6 +1932,7 @@
                 this.mirumotoPointsSpentThisRoll = 0;
                 this.akodoPostRollVpSpent = 0;
                 this.akodoPostRollVpSources = [];
+                this.atkCourtierVpTaken = false;
                 this.currentRollKey = key;
                 const f = { ...this.formulas[key] };
                 // Kitsune Warden Special Ability: the user opted in to roll
@@ -2745,107 +1952,21 @@
                 // The SERVER makes this roll (server-rolls-design): it checks
                 // and applies the void / otherworldliness / activation spends
                 // and rolls the dice; this tab animates and displays them.
-                if (f.server_rolled) {
-                    this._serverRollRequest = {
-                        roll_key: key,
-                        void: voidSpent > 0 && option ? voidSpent : 0,
-                        otherworldliness: owSpent || 0,
-                        kitsune_swap: !!(useKitsuneSwap && f.kitsune_swap_to_ring),
-                        predeclared: !!this._predeclaredNext,
-                        request_id: this._newRequestId(),
-                    };
-                    this._predeclaredNext = false;
-                    this.formula = f;
-                    this.title = f.label;
-                    this.formulaText = f.flat > 0 ? `${f.rolled}k${f.kept} + ${f.flat}` : `${f.rolled}k${f.kept}`;
-                    this.raisesSpentThisRoll = 0;
-                    this.open = true;
-                    this._runServerRoll();
-                    return;
-                }
-
-                if (owSpent > 0) {
-                    const cap = f.otherworldliness_capacity || 0;
-                    const applied = Math.min(owSpent, cap);
-                    f.rolled += applied;
-                    f.ow_spent = applied;
-                    const t = window._trackingBridge;
-                    if (t && applied > 0) {
-                        t.setCount('otherworldliness', (t.getCount('otherworldliness') || 0) + applied);
-                    }
-                    // Spending OW on an unskilled roll grants the skill for this roll,
-                    // so 10s reroll - unless the character is also Impaired.
-                    if (applied > 0 && f.no_reroll_reason === 'unskilled') {
-                        const sw = (t && typeof t.seriousWounds === 'number') ? t.seriousWounds : 0;
-                        const impaired = window.L7RRollMath.isImpaired(sw, this._earthRing || 0);
-                        if (impaired) {
-                            f.no_reroll_reason = 'impaired';
-                        } else {
-                            f.reroll_tens = true;
-                            f.no_reroll_reason = '';
-                        }
-                    }
-                }
-
-                // Fold any activation cost into the same spend as the dice
-                // points so the pools are debited (and school side effects
-                // fire) exactly once. The activation draw is re-derived from
-                // the live pool; because the draw order is fixed it lands on
-                // the same points the menu reserved when it built ``option``.
-                let spendOption = option;
-                if (activationCost > 0) {
-                    const pools = this.voidPools();
-                    const act = window.L7RRollMath.allocateVoidSpend(
-                        activationCost, pools.temp, pools.regular, pools.worldliness
-                    );
-                    f.void_activation_cost = act.allocated;
-                    spendOption = {
-                        count: (option?.count || 0) + act.allocated,
-                        fromTemp: (option?.fromTemp || 0) + act.fromTemp,
-                        fromRegular: (option?.fromRegular || 0) + act.fromRegular,
-                        fromWorldliness: (option?.fromWorldliness || 0) + act.fromWorldliness,
-                    };
-                }
-
-                if (voidSpent > 0 && option) {
-                    f.rolled += voidSpent;
-                    f.kept += voidSpent;
-                    f.void_spent = voidSpent;
-
-                    // Mirumoto 5th Dan: +10 per VP on COMBAT rolls only. This
-                    // is the generic roller, so most of what comes through
-                    // here (skills, ring rolls, social knacks) is not one;
-                    // the server stamps ``is_combat_roll`` on each formula
-                    // (dice.is_combat_roll) and this reads it.
-                    const combatBonus = f.is_combat_roll
-                        ? (this.voidSpendConfig.combat_vp_flat_bonus || 0) : 0;
-                    if (combatBonus > 0) {
-                        f.flat += voidSpent * combatBonus;
-                    }
-                }
-
-                // Deduct void points via tracking bridge
-                if (spendOption && ((spendOption.fromTemp || 0) + (spendOption.fromRegular || 0)
-                                    + (spendOption.fromWorldliness || 0)) > 0) {
-                    this.deductVoidPoints(spendOption);
-                }
-
-                // Apply 10k10 caps client-side (after both OW and VP additions)
-                if (voidSpent > 0 || owSpent > 0) {
-                    const _cap = window.L7RRollMath.applyDiceCap(f.rolled, f.kept, f.flat);
-                    f.rolled = _cap.rolled; f.kept = _cap.kept; f.flat = _cap.flat;
-                    let overflowBonus = _cap.overflowFlat;
-                    f.void_overflow_bonus = overflowBonus;
-                }
-
+                this._serverRollRequest = {
+                    roll_key: key,
+                    void: voidSpent > 0 && option ? voidSpent : 0,
+                    otherworldliness: owSpent || 0,
+                    kitsune_swap: !!(useKitsuneSwap && f.kitsune_swap_to_ring),
+                    predeclared: !!this._predeclaredNext,
+                    request_id: this._newRequestId(),
+                };
+                this._predeclaredNext = false;
                 this.formula = f;
                 this.title = f.label;
-                this.formulaText = f.flat > 0
-                    ? `${f.rolled}k${f.kept} + ${f.flat}`
-                    : `${f.rolled}k${f.kept}`;
+                this.formulaText = f.flat > 0 ? `${f.rolled}k${f.kept} + ${f.flat}` : `${f.rolled}k${f.kept}`;
                 this.raisesSpentThisRoll = 0;
                 this.open = true;
-                this.runRoll();
+                this._runServerRoll();
             },
 
             _newRequestId() {
@@ -2914,43 +2035,6 @@
 
             retryServerRoll() {
                 if (this._serverRollRequest) this._runServerRoll();
-            },
-
-            deductVoidPoints(option) {
-                const t = window._trackingBridge;
-                if (!t) return;
-                // Read-only Roll Mode: non-editors get no bridge mutations
-                // from VP spends. The roll-modal's local +5/raise/etc.
-                // computation happens in the caller before this hook fires,
-                // so the displayed roll total still reflects the spend.
-                if (!t.canEdit) return;
-                const nonTempSpent = (option.fromRegular || 0) + (option.fromWorldliness || 0);
-                if (option.fromTemp > 0) t.tempVoidPoints -= option.fromTemp;
-                if (option.fromRegular > 0) t.voidPoints -= option.fromRegular;
-                if (option.fromWorldliness > 0) {
-                    t.setCount('worldliness', (t.getCount('worldliness') || 0) + option.fromWorldliness);
-                }
-                // Ide 5th Dan: gain temp VP when spending non-technique VP
-                if (this.schoolAbilities.ide_temp_vp_on_spend && nonTempSpent > 0) {
-                    t.tempVoidPoints += nonTempSpent;
-                }
-                // Yogo Warden 3rd Dan: each VP spent reduces light wounds by 2*attack
-                const yogoHeal = this.schoolAbilities.yogo_vp_heal_amount || 0;
-                if (yogoHeal > 0) {
-                    const totalSpent = (option.fromTemp || 0) + nonTempSpent;
-                    t.lightWounds = window.L7RRollMath.yogoHealLightWounds(t.lightWounds, totalSpent, yogoHeal);
-                    window.dispatchEvent(new CustomEvent('wound-changed', { detail: { serious: t.seriousWounds } }));
-                }
-                // Matsu 3rd Dan: bank 3*attack per VP for future wound check bonus
-                if (this.schoolAbilities.matsu_vp_wc_bonus) {
-                    const totalSpent = (option.fromTemp || 0) + nonTempSpent;
-                    const perVp = this.schoolAbilities.matsu_vp_wc_amount || 0;
-                    for (let i = 0; i < totalSpent; i++) {
-                        this.matsuBankedWcBonuses.push({ amount: perVp, spent: false });
-                    }
-                    t.saveBankedBonuses();
-                }
-                t.save();
             },
 
             // Pure result-state computation shared by the early
@@ -3022,7 +2106,7 @@
                 this.keptSum = 0;
 
                 const { rolled, kept, flat, reroll_tens } = this.formula;
-                // Sound is played once per round from inside rollAndAnimate so
+                // Sound is played once per round from inside animateDice so
                 // each reroll wave gets its own sound.
                 const playSound = this.prefs.dice_sound_enabled && window.L7RDice
                     ? (n) => window.L7RDice.playDiceSound(n)
@@ -3031,7 +2115,7 @@
                 // Overlap the Copy-as-image render with the dice animation.
                 // The dice are final the instant they're generated (the
                 // animation is cosmetic), so ``onDiceReady`` - fired by
-                // rollAndAnimate before its ~3.2s of sleeps - lets us
+                // animateDice before its ~3.2s of sleeps - lets us
                 // compute the result and kick off the PNG pre-render in
                 // parallel with the animation, so the image is ready by the
                 // time the result panel appears. Initiative builds a
@@ -3045,31 +2129,15 @@
                     this._prerenderRollImage(this._buildRollImagePayload());
                     this._earlyRendered = true;
                 };
-                const dice = opts.serverDice
-                    ? await window.L7RDice.animateDice(
-                        opts.serverDice, reroll_tens, this.prefs.dice_animation_enabled,
-                        playSound, undefined, onDiceReady)
-                    : await window.L7RDice.rollAndAnimate(
-                        rolled, reroll_tens, this.prefs.dice_animation_enabled,
-                        playSound, undefined, onDiceReady);
+                // The dice are the server's (``opts.serverDice``); this plays them.
+                const dice = await window.L7RDice.animateDice(
+                    opts.serverDice || [], reroll_tens, this.prefs.dice_animation_enabled,
+                    playSound, undefined, onDiceReady);
                 // Compute the result state if onDiceReady didn't (initiative,
                 // skipImageRender, or the no-animation path where there's
                 // nothing to overlap). Idempotent on the same dice.
                 if (!this._earlyRendered) {
                     this._computeResultState(dice, kept, flat);
-                }
-
-                // W5 (Wave Man): let the allotted number of 10s explode
-                // before anything downstream reads the total.
-                // (Server dice already carry it: roll_engine explodes them.)
-                if (this.formula?.wave_man_freed_dice && !opts.serverDice) {
-                    const gain = await this._applyWaveManFreedTens(this.formula);
-                    if (gain) {
-                        this.baseTotal += gain;
-                        if (!opts.skipImageRender && !isInit) {
-                            this._prerenderRollImage(this._buildRollImagePayload());
-                        }
-                    }
                 }
 
                 // Initiative: compute action dice with school effects
@@ -3087,58 +2155,6 @@
                             this.prefs.dice_animation_enabled, playSound);
                     }
                     this.actionDice = opts.serverActionDice.map(d => ({ ...d }));
-                } else if (isInit) {
-                    // Hiruma 4th Dan (-2, min 1), Shinjo 4th Dan (highest
-                    // := 1) and Kakita (10 -> Phase 0), in that order. The
-                    // arithmetic lives in roll_math.js because the server
-                    // rolls initiative too (the Discord /initiative command)
-                    // and the two are pinned to one table of cases.
-                    const actions = window.L7RRollMath.initiativeActionValues(
-                        this.keptDice.map(d => d.value), this.formula
-                    );
-                    // Togashi Ise Zumi all-athletics variant: every action die
-                    // is restricted to athletics actions, so flag each one so
-                    // it renders in blue and its per-die menu offers only the
-                    // athletics variants.
-                    const allAthletics = !!this.formula.togashi_athletics_only;
-                    const dice = actions.map(v => allAthletics
-                        ? {value: v, athletics_only: true}
-                        : {value: v});
-
-                    // Togashi Ise Zumi normal variant: roll one additional
-                    // standalone athletics-only action die alongside the
-                    // main initiative roll (same animation area so players
-                    // see it appear after the main dice settle). The extra
-                    // die is flagged so it renders distinctly in the Actions
-                    // tracker and is skipped by the non-athletics auto-spend.
-                    if (this.formula.togashi_athletics_extra_die) {
-                        const athDice = await window.L7RDice.rollAndAnimate(
-                            1, false, this.prefs.dice_animation_enabled, playSound
-                        );
-                        const athV = athDice[0]?.value || 0;
-                        if (athV > 0) dice.push({value: athV, athletics_only: true});
-                    }
-
-                    // Mantis Wave-Treader 4th Dan: append a deterministic
-                    // value-1 die restricted to movement / athletics / the
-                    // Mantis 3rd Dan technique. Not rolled - always 1.
-                    // Reuses the `athletics_only` auto-spend skip; the
-                    // `mantis_4th_dan` flag picks the right tooltip.
-                    if (this.formula.mantis_4th_dan_athletics_die) {
-                        dice.push({
-                            value: 1,
-                            athletics_only: true,
-                            mantis_4th_dan: true,
-                        });
-                    }
-
-                    this.actionDice = dice;
-                    // Persist the rolled action dice to the Tracking section
-                    // so they're visible (and spendable) until Clear is clicked
-                    // or the next initiative roll replaces them.
-                    if (window._trackingBridge) {
-                        window._trackingBridge.setActionDice(this.actionDice);
-                    }
                 }
 
                 // Post-roll school ability hooks (non-initiative only)
@@ -3147,60 +2163,9 @@
                     this._postRollHooksFired = true;
                     const t = window._trackingBridge;
                     const key = this.currentRollKey;
-                    // A roll the server made had these hooks applied there
-                    // (parry_feint.apply_post_roll_hooks); the tab adopted
-                    // the result with the roll's tracking snapshot.
-                    if (!opts.serverDice) {
-                    // Mirumoto Special: gain 1 temp VP after any parry roll
-                    // (editor-only: a non-editor walking through the parry
-                    // sees the roll compute, but the auto-grant doesn't
-                    // touch the displayed VP count).
-                    if (key === 'parry' && this.schoolAbilities.mirumoto_temp_vp_on_parry && t && t.canEdit) {
-                        t.tempVoidPoints += 1;
-                        t.save();
-                    }
-                    // Shinjo 5th Dan: bank parry excess for future wound check
-                    if (key === 'parry' && this.schoolAbilities.shinjo_bank_parry_excess) {
-                        // Parry TN is not tracked, so this banked bonus is informational.
-                        // Player enters the excess manually or we show a prompt.
-                        // For now we store roll total so it can be used.
-                    }
-                    // Shinjo Bushi 3rd Dan: after a parry, decrement every
-                    // remaining unspent action die by X (attack skill). The
-                    // reduced value feeds the Special Ability's phases-held
-                    // math on later rolls this round.
-                    if ((key === 'parry' || key === 'athletics:parry')
-                            && this.schoolAbilities.shinjo_3rd_dan_parry_decrement > 0
-                            && t && t.canEdit) {
-                        const dec = this.schoolAbilities.shinjo_3rd_dan_parry_decrement;
-                        (t.actionDice || []).forEach(d => {
-                            if (!d.spent) d.value = (d.value || 0) - dec;
-                        });
-                        t.save();
-                    }
-                    // Hiruma 3rd Dan: bank 2*attack for next attack and damage after parry (stacks)
-                    if (key === 'parry' && this.schoolAbilities.hiruma_post_parry_bonus && t?.canEdit) {
-                        this.hirumaBankedAttackBonus += this.schoolAbilities.hiruma_post_parry_amount || 0;
-                        if (t) t.hirumaBankedAttackBonus = this.hirumaBankedAttackBonus;
-                        t?.saveBankedBonuses();
-                    }
-                    // Akodo Special: feint roll triggers temp VP (success/failure decided by user)
-                    // Ide Special: feint triggers TN reduction
-                    // These are handled in the result display via buttons (see template below)
-                    // Non-Akodo feint schools: auto-grant 1 temp VP on feint
-                    if (key === 'knack:feint' && this.schoolAbilities.feint_temp_vp && t && t.canEdit) {
-                        t.tempVoidPoints += 1;
-                        t.save();
-                    }
-                    // Bayushi 4th Dan: auto-bank +5 for a future attack after feint.
-                    // The ``key`` guard matters: without it this banked a free
-                    // raise after EVERY roll - a Sincerity check included.
-                    if (key === 'knack:feint' && this.schoolAbilities.bayushi_post_feint_raise && t?.canEdit) {
-                        this.bayushiBankedFeintRaise += 5;
-                        if (t) t.bayushiBankedFeintRaise = this.bayushiBankedFeintRaise;
-                        t?.saveBankedBonuses();
-                    }
-                    }
+                    // The roll's school hooks (Mirumoto / feint temp void,
+                    // Shinjo 3rd Dan, the Hiruma / Bayushi banks) were applied
+                    // by the server; the tab adopted them with the snapshot.
 
                     // If this roll auto-spent an action die (parry/feint),
                     // annotate it with the result so the die's tooltip shows
@@ -3231,21 +2196,13 @@
                             : this._buildRollImagePayload()
                     );
                 }
-                // Persist the roll to the character's Roll History (the
-                // server gates on the owner/non-admin-editor rule; non-
-                // recording cases get 204 and _rollHistoryId stays null).
-                if (opts.serverDice) {
-                    // The server wrote the history row from the roll it
-                    // made (or none: see should_record_roll). Post-roll
-                    // changes PATCH it the usual way.
-                    this._rollHistoryReqId++;
-                    this._rollHistoryId = opts.historyId || null;
-                    this._rollHistoryPendingPayload = null;
-                    this._lastRollHistorySig = this._rollHistoryId
-                        ? JSON.stringify(this._currentRollHistoryPayload().payload) : '';
-                } else if (!opts.skipHistoryCreate) {
-                    this._saveRollHistoryCreate();
-                }
+                // The server wrote the history row from the roll it made (or
+                // none: see should_record_roll). Post-roll changes PATCH it.
+                this._rollHistoryReqId++;
+                this._rollHistoryId = opts.historyId || null;
+                this._rollHistoryPendingPayload = null;
+                this._lastRollHistorySig = this._rollHistoryId
+                    ? JSON.stringify(this._currentRollHistoryPayload().payload) : '';
             },
 
             // Copy-as-image: build the payload, post it to the server's
@@ -4071,39 +3028,6 @@
                 };
             },
 
-            _saveRollHistoryCreate() {
-                const t = window._trackingBridge;
-                if (!t || !t._charId) return;
-                const reqId = ++this._rollHistoryReqId;
-                this._rollHistoryId = null;
-                this._lastRollHistorySig = '';
-                this._rollHistoryPendingPayload = null;
-                const body = this._currentRollHistoryPayload();
-                fetch('/characters/' + t._charId + '/rolls', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify(body),
-                }).then(r => (r.status === 204 ? null : r.json()))
-                  .then(data => {
-                      if (reqId !== this._rollHistoryReqId) return;  // stale
-                      if (data && data.id) {
-                          this._rollHistoryId = data.id;
-                          this._lastRollHistorySig = JSON.stringify(body.payload);
-                          // A choice handler (Keep LW / Take 1 SW / failure
-                          // auto-apply) may have fired AND captured a
-                          // snapshot BEFORE this POST returned. PATCH with
-                          // the snapshot directly - it's immune to the
-                          // modal having closed in the meantime.
-                          if (this._rollHistoryPendingPayload) {
-                              const pending = this._rollHistoryPendingPayload;
-                              this._rollHistoryPendingPayload = null;
-                              this._patchRollHistory(pending);
-                          }
-                      }
-                  })
-                  .catch(() => { /* non-fatal: roll-history write is best-effort */ });
-            },
-
             _maybeUpdateRollHistory() {
                 if (!this._rollHistoryId) {
                     // Create POST hasn't resolved yet - snapshot the
@@ -4166,7 +3090,7 @@
             // ``keepalive`` so a navigation in mid-flight doesn't abort it.
             // If the initial-roll POST hasn't yet returned (rare race
             // when Lucky fires before its response lands), stash the
-            // payload so ``_saveRollHistoryCreate``'s .then() PATCHes it
+            // payload so it is PATCHed
             // as soon as the id arrives.
             _patchRollHistoryNow() {
                 const body = this._currentRollHistoryPayload();
@@ -4274,7 +3198,14 @@
             // A post-roll action on the server-made roll in the result panel
             // (server-rolls-design Phase 3). The display has already changed
             // (S2); a refusal returns false so the caller puts it back.
-            async _act(action, args) {
+            // Actions reach the server in the order they were made (a spend
+            // and its undo, clicked quickly, must not cross on the wire).
+            _act(action, args) {
+                const run = () => this._actNow(action, args);
+                this._actChain = (this._actChain || Promise.resolve()).then(run, run);
+                return this._actChain;
+            },
+            async _actNow(action, args) {
                 const t = window._trackingBridge;
                 if (!this._serverSessionId || !t) return true;
                 let data = null, ok = false;
@@ -4314,7 +3245,12 @@
             // (a full reroll) rather than just the ones that changed.
             // Resolves to the answer, or null when refused (with the error
             // shown and nothing changed).
-            async _serverReroll(action, args, whole) {
+            _serverReroll(action, args, whole) {
+                const run = () => this._serverRerollNow(action, args, whole);
+                this._actChain = (this._actChain || Promise.resolve()).then(run, run);
+                return this._actChain;
+            },
+            async _serverRerollNow(action, args, whole) {
                 const t = window._trackingBridge;
                 if (!this._serverSessionId || !t) return null;
                 const before = this._serverDice || [];
@@ -4360,8 +3296,15 @@
                         kind === 'roll' ? undefined : (kind === 'wc' ? 'dice-animation-wc'
                             : (kind.startsWith('duel') ? 'dice-animation-duel' : 'dice-animation-atk')));
                 }
-                this._adoptServerResult(data);
                 setPhase(false);
+                this._adoptSessionAnswer(kind, data);
+                this._patchRollHistoryNow();
+                return data;
+            },
+            // Show a session's rescored dice and total in the panel of the
+            // roll it belongs to (after a reroll or a precepts swap).
+            _adoptSessionAnswer(kind, data) {
+                this._adoptServerResult(data);
                 if (kind === 'attack') {
                     this.atkRollTotal = this.baseTotal;
                     this._adoptAttackOutcome(data.attack);
@@ -4381,9 +3324,8 @@
                     this._prerenderRollImage(this.formula?.is_initiative
                         ? this._buildInitiativeImagePayload() : this._buildRollImagePayload());
                 }
-                this._patchRollHistoryNow();
-                return data;
             },
+
             // Show the session's dice and total as the server scored them.
             _adoptServerResult(data) {
                 this._serverDice = data.dice;
@@ -4425,27 +3367,11 @@
             // Togashi Ise Zumi 4th Dan: reroll a contested roll; the new
             // result stands.
             useTogashiReroll() {
-                if (this._onServerRoll()) {
-                    this.togashiRerollUsed = true;
-                    this._serverReroll('togashi_4th', {}, true).then(d => {
-                        if (!d) this.togashiRerollUsed = false;
-                    });
-                    return;
-                }
-                this.togashiOrigTotal = this.baseTotal;
+                if (!this._onServerRoll()) return;
                 this.togashiRerollUsed = true;
-                this.runRoll();
-            },
-            // The session-less flows (attack, wound check, duel - still rolled in
-            // the browser) spend their pools through a tracking operation.
-            _poolStep(poolId, delta) {
-                const t = window._trackingBridge;
-                if (!t || !t.op || !t.canEdit) return;
-                // Shown at once (the availability checks read it); the
-                // operation's answer replaces it with the server's count.
-                const key = poolId + '_used';
-                t.adventureState = { ...t.adventureState, [key]: Math.max(0, (t.adventureState[key] || 0) + delta) };
-                t.op('counter', {id: poolId, delta: delta});
+                this._serverReroll('togashi_4th', {}, true).then(d => {
+                    if (!d) this.togashiRerollUsed = false;
+                });
             },
             // Whether the action targets the roll the server made: the dice
             // roller's own roll (no target), an attack, or its damage.
@@ -4463,8 +3389,6 @@
                     if (!(await this._act('raise'))) {
                         this.raisesSpentThisRoll--; this.baseTotal -= 5; this.advRaisesConfig.used--;
                     }
-                } else {
-                    this._poolStep('adventure_raises', 1);
                 }
             },
             async undoRaise() {
@@ -4476,8 +3400,6 @@
                     if (!(await this._act('undo_raise'))) {
                         this.raisesSpentThisRoll++; this.baseTotal += 5; this.advRaisesConfig.used++;
                     }
-                } else {
-                    this._poolStep('adventure_raises', -1);
                 }
             },
 
@@ -4513,8 +3435,6 @@
                     this._act('conviction').then(ok => {
                         if (!ok) { this.convictionSpentThisRoll--; this.baseTotal -= 1; }
                     });
-                } else {
-                    this._poolStep('conviction', 1);
                 }
                 if (target === 'attack' && typeof this._atkUpdateHitState === 'function') {
                     this._atkUpdateHitState();
@@ -4537,8 +3457,6 @@
                     this._act('undo_conviction').then(ok => {
                         if (!ok) { this.convictionSpentThisRoll++; this.baseTotal += 1; }
                     });
-                } else {
-                    this._poolStep('conviction', -1);
                 }
                 if (target === 'attack' && typeof this._atkUpdateHitState === 'function') {
                     this._atkUpdateHitState();
@@ -4550,49 +3468,35 @@
             // --- Attack result panel choices (server-made attack, Phase 7) ---
             atkAkodoBankSpend(i) {
                 const b = this.akodoBankedBonuses[i];
-                if (!b || b.spent) return;
+                if (!b || b.spent || !this._onServerRoll('attack')) return;
                 b.spent = true;
                 this.akodoSpentThisRoll += b.amount;
                 this.atkRollTotal += b.amount;
                 this.baseTotal += b.amount;
                 this._atkUpdateHitState();
-                if (this._onServerRoll('attack')) {
-                    this._atkAkodoStack.push(b.amount);
-                    this._act('akodo_bank', {amount: b.amount}).then(ok => {
-                        if (ok) return;
-                        this._atkAkodoStack.pop();
-                        b.spent = false; this.akodoSpentThisRoll -= b.amount;
-                        this.atkRollTotal -= b.amount; this.baseTotal -= b.amount; this._atkUpdateHitState();
-                    });
-                } else {
-                    window._trackingBridge?.saveBankedBonuses();
-                }
+                // The server's bank list comes back without spent markers,
+                // so the amounts spent here are kept aside for the undo.
+                this._atkAkodoStack.push(b.amount);
+                this._act('akodo_bank', {amount: b.amount}).then(ok => {
+                    if (ok) return;
+                    this._atkAkodoStack.pop();
+                    b.spent = false; this.akodoSpentThisRoll -= b.amount;
+                    this.atkRollTotal -= b.amount; this.baseTotal -= b.amount; this._atkUpdateHitState();
+                });
             },
             atkAkodoBankUndo() {
-                if (this._onServerRoll('attack')) {
-                    // The server's bank list comes back without spent
-                    // markers, so the amounts spent here are kept aside.
-                    const amount = this._atkAkodoStack.pop();
-                    if (amount === undefined) return;
-                    this.akodoSpentThisRoll -= amount;
-                    this.atkRollTotal -= amount;
-                    this.baseTotal -= amount;
-                    this._atkUpdateHitState();
-                    this._act('undo_akodo_bank');
-                    return;
-                }
-                const last = [...this.akodoBankedBonuses].reverse().find(b => b.spent);
-                if (!last) return;
-                const amount = last.amount;
-                last.spent = false;
+                if (!this._onServerRoll('attack')) return;
+                const amount = this._atkAkodoStack.pop();
+                if (amount === undefined) return;
                 this.akodoSpentThisRoll -= amount;
                 this.atkRollTotal -= amount;
                 this.baseTotal -= amount;
                 this._atkUpdateHitState();
-                window._trackingBridge?.saveBankedBonuses();
+                this._act('undo_akodo_bank');
             },
             atkBayushiSpend(n) {
                 // n = +1 to spend a banked raise, -1 to put one back.
+                if (!this._onServerRoll('attack')) return;
                 if (n > 0 && (this.bayushiBankedFeintRaise || 0) < 5) return;
                 if (n < 0 && (this.bayushiRaisesSpentThisRoll || 0) < 5) return;
                 this.bayushiBankedFeintRaise -= 5 * n;
@@ -4600,13 +3504,7 @@
                 this.atkRollTotal += 5 * n;
                 this.baseTotal += 5 * n;
                 this._atkUpdateHitState();
-                const t = window._trackingBridge;
-                if (this._onServerRoll('attack')) {
-                    this._act(n > 0 ? 'bayushi_raise' : 'undo_bayushi_raise');
-                } else if (t) {
-                    t.bayushiBankedFeintRaise = this.bayushiBankedFeintRaise;
-                    t.saveBankedBonuses();
-                }
+                this._act(n > 0 ? 'bayushi_raise' : 'undo_bayushi_raise');
             },
             atkIsawaToggle() {
                 const amt = this.schoolAbilities.isawa_tn_trade_bonus || 0;
@@ -4616,16 +3514,13 @@
                 this._atkUpdateHitState();
                 if (this._onServerRoll('attack')) this._act('isawa', {on: !!this.atkIsawaTnTrade});
             },
-            async atkCourtierVp(el) {
-                if (this.atkCourtierVpTaken) return;
+            // Courtier 4th Dan: a temp void point after a successful attack
+            // (``kind`` 'attack') or Manipulation roll ('roll').
+            async atkCourtierVp(kind) {
+                kind = kind || 'attack';
+                if (this.atkCourtierVpTaken || !this._onServerRoll(kind === 'roll' ? undefined : kind)) return;
                 this.atkCourtierVpTaken = true;
-                const t = window._trackingBridge;
-                if (this._onServerRoll('attack')) {
-                    if (!(await this._act('courtier_vp'))) this.atkCourtierVpTaken = false;
-                } else if (t && t.canEdit) {
-                    t.tempVoidPoints += 1;
-                    t.save();
-                }
+                if (!(await this._act('courtier_vp'))) this.atkCourtierVpTaken = false;
             },
             async hidaRerollConfirm() {
                 if (!this.hidaRerollSelections.length) return;
@@ -4645,8 +3540,6 @@
                 this._mirumotoStep(target, 1);
                 if (this._onServerRoll(target === 'roll' ? undefined : target)) {
                     if (!(await this._act('mirumoto_point'))) this._mirumotoStep(target, -1);
-                } else if (t.canEdit) {
-                    t.op('mirumoto_points', {delta: -1});
                 }
             },
             async undoMirumotoPoint(target) {
@@ -4655,8 +3548,6 @@
                 this._mirumotoStep(target, -1);
                 if (this._onServerRoll(target === 'roll' ? undefined : target)) {
                     if (!(await this._act('undo_mirumoto_point'))) this._mirumotoStep(target, 1);
-                } else if (t.canEdit) {
-                    t.op('mirumoto_points', {delta: 1});
                 }
             },
             _mirumotoStep(target, n) {
@@ -4672,43 +3563,25 @@
             // Akodo Special: a feint's temp void points, 4 on success, 1 on
             // failure.
             async akodoFeintVp(succeeded) {
-                if (this.akodoFeintDone) return;
+                if (this.akodoFeintDone || !this._onServerRoll()) return;
                 this.akodoFeintDone = true;
-                const t = window._trackingBridge;
-                if (this._onServerRoll()) {
-                    if (!(await this._act('akodo_feint', {succeeded: !!succeeded}))) this.akodoFeintDone = false;
-                } else if (t && t.canEdit) {
-                    t.tempVoidPoints += succeeded ? 4 : 1;
-                    t.save();
-                }
+                if (!(await this._act('akodo_feint', {succeeded: !!succeeded}))) this.akodoFeintDone = false;
             },
             // Ide Special: bank -10 to the target's TN for the next attack.
             async ideBankTn() {
-                if (this.ideBankedThisRoll) return;
+                if (this.ideBankedThisRoll || !this._onServerRoll()) return;
                 this.ideBankedThisRoll = true;
-                if (this._onServerRoll()) {
-                    if (!(await this._act('ide_bank'))) this.ideBankedThisRoll = false;
-                } else {
-                    this.ideBankedTnReduce += 10;
-                    window._trackingBridge?.saveBankedBonuses();
-                }
+                if (!(await this._act('ide_bank'))) this.ideBankedThisRoll = false;
             },
             // Shinjo 5th Dan: bank this parry's excess over the attack roll.
             async shinjoBankExcess() {
-                if (this.shinjoParryBankedThisRoll !== null) return;
-                if (this._onServerRoll()) {
-                    this.shinjoParryBankedThisRoll = 0;
-                    if (await this._act('shinjo_bank', {opponent: this.shinjoParryOpponentRoll || 0})) {
-                        this.shinjoParryBankedThisRoll = this._lastAct.banked;
-                    } else {
-                        this.shinjoParryBankedThisRoll = null;
-                    }
-                    return;
+                if (this.shinjoParryBankedThisRoll !== null || !this._onServerRoll()) return;
+                this.shinjoParryBankedThisRoll = 0;
+                if (await this._act('shinjo_bank', {opponent: this.shinjoParryOpponentRoll || 0})) {
+                    this.shinjoParryBankedThisRoll = this._lastAct.banked;
+                } else {
+                    this.shinjoParryBankedThisRoll = null;
                 }
-                const banked = window.L7RRollMath.bankExcess(this.baseTotal, this.shinjoParryOpponentRoll || 0);
-                if (banked > 0) this.bankedWcExcess.push({amount: banked, spent: false});
-                this.shinjoParryBankedThisRoll = banked;
-                window._trackingBridge?.saveBankedBonuses();
             },
             _duelUpdateStrikeState() {
                 // Hit / excess feed the damage step (extra dice), so they
@@ -4738,8 +3611,6 @@
                 this.baseTotal += 5;
                 if (this._onServerRoll()) {
                     if (!(await this._act('togashi_raise'))) { this.togashiRaisesSpentThisRoll--; this.baseTotal -= 5; }
-                } else {
-                    this._poolStep('togashi_daily_athletics_raises', 1);
                 }
             },
             async undoTogashiRaise() {
@@ -4748,8 +3619,6 @@
                 this.baseTotal -= 5;
                 if (this._onServerRoll()) {
                     if (!(await this._act('undo_togashi_raise'))) { this.togashiRaisesSpentThisRoll++; this.baseTotal += 5; }
-                } else {
-                    this._poolStep('togashi_daily_athletics_raises', -1);
                 }
             },
 
@@ -4907,119 +3776,29 @@
                 }
                 this.preceptsPoolMenuOpen = key;
             },
-            swapPreceptsDie(priest, poolDieIndex, rolledValue) {
-                // Commit a swap: the clicked pool die moves into finalDice,
-                // the replaced rolled die returns to the priest's pool. Kept
-                // set is recomputed (top-N by value), totals shift by the
-                // change in keptSum, and a structured bonus-source entry is
-                // appended for display. Pool change is persisted per-owner.
-                if (!Array.isArray(this.finalDice)) return;
-                const rolledIdx = this.finalDice.findIndex(
-                    d => d && d.value === rolledValue
-                );
-                if (rolledIdx < 0) return;
-                const pool = priest && Array.isArray(priest.pool) ? priest.pool : null;
-                if (!pool) return;
-                const poolDie = pool[poolDieIndex];
-                if (!poolDie) return;
-                const poolValue = poolDie.value;
-                // Equal-value swap is a no-op (excluded for both self/ally).
-                if (poolValue === rolledValue) return;
-                // Ally swap: strictly greater. Priest can help allies but
-                // never impair their rolls.
-                if (!priest.isSelf && poolValue < rolledValue) return;
-
-                const prevRolledValue = this.finalDice[rolledIdx].value;
-
-                this.finalDice.splice(rolledIdx, 1, {
-                    value: poolValue,
-                    kept: false,
-                    parts: [poolValue],
-                });
-                pool.splice(poolDieIndex, 1, { value: prevRolledValue });
-
-                // Re-kept: keep the top-N by value.
-                const keptCount = this._preceptsModalKeptCount();
-                const sortedIdx = this.finalDice
-                    .map((d, i) => ({ i, v: d.value }))
-                    .sort((a, b) => a.v - b.v);
-                const keptIdxSet = new Set(
-                    sortedIdx.slice(sortedIdx.length - keptCount).map(x => x.i)
-                );
-                for (let i = 0; i < this.finalDice.length; i++) {
-                    this.finalDice[i] = {
-                        ...this.finalDice[i],
-                        kept: keptIdxSet.has(i),
-                    };
-                }
-                this.keptDice = this.finalDice.filter(d => d.kept);
-                const newKeptSum = this.keptDice.reduce((s, d) => s + d.value, 0);
-
-                // Propagate the new keptSum to the active modal's total.
+            async swapPreceptsDie(priest, poolDieIndex, rolledValue) {
                 const modal = this._preceptsActiveModal();
-                const delta = newKeptSum - this.keptSum;
-                this.keptSum = newKeptSum;
-                this.baseTotal += delta;
-                if (modal === 'attack') {
-                    this.atkRollTotal += delta;
-                    if (typeof this._atkUpdateHitState === 'function') {
-                        this._atkUpdateHitState();
-                    }
-                    if (typeof this._refreshAttackDieTooltip === 'function') {
-                        this._refreshAttackDieTooltip();
-                    }
-                } else if (modal === 'damage') {
-                    this.atkDamageTotal += delta;
-                    if (typeof this._refreshAttackDieTooltip === 'function') {
-                        this._refreshAttackDieTooltip();
-                    }
-                } else if (modal === 'wc') {
-                    this.wcRollTotal += delta;
-                    if (typeof this._wcUpdateMargin === 'function') {
-                        this._wcUpdateMargin();
-                    }
+                if (!this._onServerRoll(modal === 'roll' ? undefined : modal)) return;
+                {
+                    // The server swaps the die, rescores the roll (keeping its
+                    // bonuses) and moves the priest's pool.
+                    const pool = priest && Array.isArray(priest.pool) ? priest.pool : null;
+                    const poolValue = pool && pool[poolDieIndex] ? pool[poolDieIndex].value : null;
+                    this.preceptsPoolMenuOpen = null;
+                    if (!(await this._act('precepts_swap', {
+                        priest_id: priest.priest_id, pool_index: poolDieIndex, rolled_value: rolledValue,
+                    }))) return;
+                    const data = this._lastAct;
+                    this._adoptSessionAnswer(this._serverSessionKind || 'roll', data);
+                    if (pool && data.precepts) pool.splice(0, pool.length, ...data.precepts.pool);
+                    this.preceptsPoolSwapBonuses = [
+                        ...(this.preceptsPoolSwapBonuses || []),
+                        {
+                            priestId: priest.priest_id, priestName: priest.name, isSelf: !!priest.isSelf,
+                            rolledValueBefore: rolledValue, poolValueAfter: poolValue,
+                        },
+                    ];
                 }
-
-                this.preceptsPoolSwapBonuses = [
-                    ...(this.preceptsPoolSwapBonuses || []),
-                    {
-                        priestId: priest.priest_id,
-                        priestName: priest.name,
-                        isSelf: !!priest.isSelf,
-                        rolledValueBefore: prevRolledValue,
-                        poolValueAfter: poolValue,
-                    },
-                ];
-
-                if (priest.isSelf) {
-                    const t = window._trackingBridge;
-                    if (t) {
-                        t.preceptsPool = pool;
-                        t.save();
-                    }
-                } else {
-                    this._postPreceptsPoolReplace(priest.priest_id, pool);
-                }
-
-                this.preceptsPoolMenuOpen = null;
-            },
-            _postPreceptsPoolReplace(priestId, pool) {
-                // Phase 7 read-only shim: non-editors of the rolling
-                // character never persist cross-character pool swaps.
-                // The in-modal swap UI still updates local Alpine
-                // state; the banner on the affected roll result
-                // explains that the priest's resource isn't actually
-                // depleted.
-                const t = window._trackingBridge;
-                if (!t || !t.canEdit) return;
-                fetch('/characters/' + priestId + '/precepts-pool', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({
-                        pool,
-                        rolling_character_id: t._charId,
-                    }),
-                }).catch(() => { /* best-effort */ });
             },
 
             // --- Priest 5th Dan ally conviction ---
@@ -5101,39 +3880,24 @@
             // --- Sub-damage roll (feint damage, parry damage) ---
 
             async rollSubDamage(rolled, kept, label) {
+                // The Shiba / Bayushi damage roll: the server rolls it and
+                // records it (5.5).
+                if (!this._onServerRoll()) return;
                 this.subDamageLabel = label;
                 const playSound = this.prefs.dice_sound_enabled && window.L7RDice
                     ? (n) => window.L7RDice.playDiceSound(n) : null;
-                if (this._onServerRoll()) {
-                    // The server rolls it and records it (5.5).
-                    this.phase = 'sub-damage-rolling';
-                    const ok = await this._act('sub_damage');
-                    const sd = ok && this._lastAct ? this._lastAct.sub_damage : null;
-                    if (!sd) { this.phase = 'done'; return; }
-                    const shown = await window.L7RDice.animateDice(
-                        sd.dice, true, this.prefs.dice_animation_enabled, playSound, 'dice-animation');
-                    const sorted = [...shown].sort((a, b) => a.value - b.value);
-                    this.subDamageDice = sorted.map((d, i) => ({
-                        value: d.value, kept: i >= sorted.length - Math.min(sd.kept, sorted.length),
-                    }));
-                    this.subDamageLabel = sd.label;
-                    this.subDamageTotal = sd.total;
-                    this.phase = 'sub-damage-result';
-                    return;
-                }
                 this.phase = 'sub-damage-rolling';
-                const dice = await window.L7RDice.rollAndAnimate(
-                    rolled, true,
-                    this.prefs.dice_animation_enabled, playSound, 'dice-animation'
-                );
-                const sorted = [...dice].sort((a, b) => a.value - b.value);
-                const keptCount = Math.min(kept, sorted.length);
+                const ok = await this._act('sub_damage');
+                const sd = ok && this._lastAct ? this._lastAct.sub_damage : null;
+                if (!sd) { this.phase = 'done'; return; }
+                const shown = await window.L7RDice.animateDice(
+                    sd.dice, true, this.prefs.dice_animation_enabled, playSound, 'dice-animation');
+                const sorted = [...shown].sort((a, b) => a.value - b.value);
                 this.subDamageDice = sorted.map((d, i) => ({
-                    value: d.value,
-                    kept: i >= sorted.length - keptCount
+                    value: d.value, kept: i >= sorted.length - Math.min(sd.kept, sorted.length),
                 }));
-                const keptDice = sorted.slice(sorted.length - keptCount);
-                this.subDamageTotal = keptDice.reduce((s, d) => s + d.value, 0);
+                this.subDamageLabel = sd.label;
+                this.subDamageTotal = sd.total;
                 this.phase = 'sub-damage-result';
             },
 
@@ -6188,82 +4952,35 @@
             // dice-roller modal). Read-only Roll Mode: a non-editor sees the
             // +5 reflected in the roll total but their VP counter and DB state
             // never move (the deduction is gated on t.canEdit).
+            // Akodo Bushi 4th Dan: a void point after the roll for a free raise
+            // (+5) on a VP-eligible combat roll - not bound by the per-roll
+            // cap. ``mode`` is the panel: 'roll', 'attack' or
+            // 'duel-contested'. The server draws the point (school
+            // consequences included) and refunds it on undo.
             akodoVpSpend(mode) {
                 const t = window._trackingBridge;
                 if (!t || (t.anyVPAvailable?.() || 0) <= 0) return;
-                if (this._onServerRoll(mode === 'roll' ? undefined : mode)) {
-                    const atk = mode === 'attack';
-                    this.akodoPostRollVpSources.push('server');
-                    this.akodoPostRollVpSpent++;
-                    this.baseTotal += 5;
-                    if (atk) { this.atkRollTotal += 5; this._atkUpdateHitState(); }
-                    if (mode === 'duel-contested') this.duelContestedRoll += 5;
-                    this._act('akodo_vp').then(ok => {
-                        if (ok) return;
-                        this.akodoPostRollVpSources.pop(); this.akodoPostRollVpSpent--; this.baseTotal -= 5;
-                        if (atk) { this.atkRollTotal -= 5; this._atkUpdateHitState(); }
-                    });
-                    return;
-                }
-                let src;
-                if ((t.tempVoidPoints || 0) > 0) src = 'temp';
-                else if ((t.voidPoints || 0) > 0) src = 'regular';
-                else src = 'worldliness';
-                if (t.canEdit) {
-                    if (src === 'temp') t.tempVoidPoints--;
-                    else if (src === 'regular') t.voidPoints--;
-                    else t.setCount('worldliness', (t.getCount('worldliness') || 0) + 1);
-                    t.save();
-                }
-                this.akodoPostRollVpSources.push(src);
-                this.akodoPostRollVpSpent++;
-                if (mode === 'attack') {
-                    this.atkRollTotal += 5;
-                    this.baseTotal += 5;
-                    this._atkUpdateHitState();
-                } else if (mode === 'duel-contested') {
-                    // The duel contested roll tracks its own total (like the
-                    // conviction spend here, which only bumps duelContestedRoll).
-                    this.duelContestedRoll += 5;
-                } else {
-                    this.baseTotal += 5;
-                }
+                if (!this._onServerRoll(mode === 'roll' ? undefined : mode)) return;
+                this._akodoVpStep(mode, 1);
+                this._act('akodo_vp').then(ok => { if (!ok) this._akodoVpStep(mode, -1); });
             },
 
             akodoVpUndo(mode) {
                 if ((this.akodoPostRollVpSpent || 0) <= 0) return;
-                if (this._onServerRoll(mode === 'roll' ? undefined : mode)) {
-                    const atk = mode === 'attack';
-                    this.akodoPostRollVpSources.pop();
-                    this.akodoPostRollVpSpent--;
-                    this.baseTotal -= 5;
-                    if (atk) { this.atkRollTotal -= 5; this._atkUpdateHitState(); }
-                    if (mode === 'duel-contested') this.duelContestedRoll -= 5;
-                    this._act('undo_akodo_vp').then(ok => {
-                        if (ok) return;
-                        this.akodoPostRollVpSources.push('server'); this.akodoPostRollVpSpent++; this.baseTotal += 5;
-                        if (atk) { this.atkRollTotal += 5; this._atkUpdateHitState(); }
-                    });
+                if (!this._onServerRoll(mode === 'roll' ? undefined : mode)) return;
+                this._akodoVpStep(mode, -1);
+                this._act('undo_akodo_vp').then(ok => { if (!ok) this._akodoVpStep(mode, 1); });
+            },
+            _akodoVpStep(mode, n) {
+                if (n > 0) this.akodoPostRollVpSources.push('server');
+                else this.akodoPostRollVpSources.pop();
+                this.akodoPostRollVpSpent += n;
+                if (mode === 'duel-contested') {
+                    this.duelContestedRoll += 5 * n;
                     return;
                 }
-                const t = window._trackingBridge;
-                const src = this.akodoPostRollVpSources.pop();
-                if (t && t.canEdit) {
-                    if (src === 'temp') t.tempVoidPoints++;
-                    else if (src === 'worldliness') t.setCount('worldliness', Math.max(0, (t.getCount('worldliness') || 0) - 1));
-                    else t.voidPoints++;
-                    t.save();
-                }
-                this.akodoPostRollVpSpent--;
-                if (mode === 'attack') {
-                    this.atkRollTotal -= 5;
-                    this.baseTotal -= 5;
-                    this._atkUpdateHitState();
-                } else if (mode === 'duel-contested') {
-                    this.duelContestedRoll -= 5;
-                } else {
-                    this.baseTotal -= 5;
-                }
+                this.baseTotal += 5 * n;
+                if (mode === 'attack') { this.atkRollTotal += 5 * n; this._atkUpdateHitState(); }
             },
 
             // Whether the current dice-roller roll is a VP-eligible combat roll
@@ -6669,8 +5386,6 @@
                     this._act('raise').then(ok => {
                         if (!ok) { this.atkRaisesSpent--; this.baseTotal -= 5; this.atkRollTotal -= 5; this._atkUpdateHitState(); }
                     });
-                } else {
-                    this._poolStep('adventure_raises', 1);
                 }
             },
 
@@ -6686,8 +5401,6 @@
                     this._act('undo_raise').then(ok => {
                         if (!ok) { this.atkRaisesSpent++; this.baseTotal += 5; this.atkRollTotal += 5; this._atkUpdateHitState(); }
                     });
-                } else {
-                    this._poolStep('adventure_raises', -1);
                 }
             },
 
@@ -6702,8 +5415,6 @@
                 this.atkRollTotal += 5;
                 if (this._onServerRoll('attack')) {
                     this._act('togashi_raise');
-                } else {
-                    this._poolStep('togashi_daily_athletics_raises', 1);
                 }
                 this._atkUpdateHitState();
             },
@@ -6715,8 +5426,6 @@
                 this.atkRollTotal -= 5;
                 if (this._onServerRoll('attack')) {
                     this._act('undo_togashi_raise');
-                } else {
-                    this._poolStep('togashi_daily_athletics_raises', -1);
                 }
                 this._atkUpdateHitState();
             },
@@ -7034,77 +5743,37 @@
             },
             // Akodo / Yogo 4th Dan: +5 per void point after the check (n = 1
             // to spend, -1 to take one back).
+            // Akodo / Yogo 4th Dan: +5 per void point after the check (n = 1
+            // to spend, -1 to take one back); the server draws and refunds.
             wcVpStep(n) {
-                const t = window._trackingBridge;
-                if (!t) return;
                 if (n < 0 && (this.wcPostRollVpSpent || 0) <= 0) return;
-                if (this._onServerRoll('wc')) {
-                    this.wcPostRollVpSpent += n;
-                    this.baseTotal += 5 * n;
-                    this.wcRollTotal += 5 * n;
+                if (!this._onServerRoll('wc')) return;
+                const step = (k) => {
+                    this.wcPostRollVpSpent += k;
+                    this.baseTotal += 5 * k;
+                    this.wcRollTotal += 5 * k;
                     this._wcRecompute();
-                    this._act(n > 0 ? 'wc_vp' : 'undo_wc_vp').then(ok => {
-                        if (ok) return;
-                        this.wcPostRollVpSpent -= n; this.baseTotal -= 5 * n; this.wcRollTotal -= 5 * n;
-                        this._wcRecompute();
-                    });
-                    return;
-                }
-                if (n > 0) {
-                    let src;
-                    if ((t.tempVoidPoints || 0) > 0) src = 'temp';
-                    else if ((t.voidPoints || 0) > 0) src = 'regular';
-                    else src = 'worldliness';
-                    if (t.canEdit) {
-                        if (src === 'temp') t.tempVoidPoints--;
-                        else if (src === 'regular') t.voidPoints--;
-                        else t.setCount('worldliness', (t.getCount('worldliness') || 0) + 1);
-                        t.save();
-                    }
-                    this.wcPostRollVpSources.push(src);
-                } else {
-                    const src = this.wcPostRollVpSources.pop();
-                    if (t.canEdit) {
-                        if (src === 'temp') t.tempVoidPoints++;
-                        else if (src === 'worldliness') t.setCount('worldliness', Math.max(0, (t.getCount('worldliness') || 0) - 1));
-                        else t.voidPoints++;
-                        t.save();
-                    }
-                }
-                this.wcPostRollVpSpent += n;
-                this.baseTotal += 5 * n;
-                this.wcRollTotal += 5 * n;
-                this._wcRecompute();
+                };
+                step(n);
+                this._act(n > 0 ? 'wc_vp' : 'undo_wc_vp').then(ok => { if (!ok) step(-n); });
             },
             // A banked excess (Isawa 5th Dan / Shinjo 5th Dan) spent on the check.
             wcExcessSpend(i) {
                 const b = this.bankedWcExcess[i];
-                if (!b || b.spent) return;
+                if (!b || b.spent || !this._onServerRoll('wc')) return;
                 b.spent = true;
                 this.wcExcessSpentThisRoll += b.amount;
                 this.baseTotal += b.amount;
                 this.wcRollTotal += b.amount;
                 this._wcRecompute();
-                if (this._onServerRoll('wc')) {
-                    this._wcExcessStack.push(b.amount);
-                    this._act('wc_excess', {amount: b.amount});
-                } else {
-                    window._trackingBridge?.saveBankedBonuses();
-                }
+                this._wcExcessStack.push(b.amount);
+                this._act('wc_excess', {amount: b.amount});
             },
             wcExcessUndo() {
-                let amount;
-                if (this._onServerRoll('wc')) {
-                    amount = this._wcExcessStack.pop();
-                    if (amount === undefined) return;
-                    this._act('undo_wc_excess');
-                } else {
-                    const last = [...this.bankedWcExcess].reverse().find(b => b.spent);
-                    if (!last) return;
-                    last.spent = false;
-                    amount = last.amount;
-                    window._trackingBridge?.saveBankedBonuses();
-                }
+                if (!this._onServerRoll('wc')) return;
+                const amount = this._wcExcessStack.pop();
+                if (amount === undefined) return;
+                this._act('undo_wc_excess');
                 this.wcExcessSpentThisRoll -= amount;
                 this.baseTotal -= amount;
                 this.wcRollTotal -= amount;
@@ -7138,49 +5807,29 @@
                 this.wcPassed = wc.passed;
                 this.wcMargin = wc.margin;
                 this.wcSeriousWounds = wc.seriousWounds;
-                // Deduct the raise from tracking
-                if (!this._onServerRoll('wc')) this._poolStep('adventure_raises', 1);
             },
 
             wcSpendMatsuBonus(idx) {
                 const b = this.matsuBankedWcBonuses[idx];
-                if (!b || b.spent) return;
+                if (!b || b.spent || !this._onServerRoll('wc')) return;
                 b.spent = true;
                 this.wcMatsuBonusApplied += b.amount;
                 this.baseTotal += b.amount;
                 this.wcRollTotal += b.amount;
                 this._wcRecompute();
-                if (this._onServerRoll('wc')) {
-                    this._wcMatsuStack.push(b.amount);
-                    this._act('matsu_bank', {amount: b.amount});
-                } else {
-                    window._trackingBridge?.saveBankedBonuses();
-                }
+                this._wcMatsuStack.push(b.amount);
+                this._act('matsu_bank', {amount: b.amount});
             },
 
             wcUndoMatsuBonus() {
-                if (this.wcMatsuBonusApplied <= 0) return;
-                if (this._onServerRoll('wc')) {
-                    const amount = this._wcMatsuStack.pop();
-                    if (amount === undefined) return;
-                    this.wcMatsuBonusApplied -= amount;
-                    this.baseTotal -= amount;
-                    this.wcRollTotal -= amount;
-                    this._wcRecompute();
-                    this._act('undo_matsu_bank');
-                    return;
-                }
-                const last = [...this.matsuBankedWcBonuses].reverse().find(b => b.spent);
-                if (!last) return;
-                last.spent = false;
-                this.wcMatsuBonusApplied -= last.amount;
-                this.baseTotal -= last.amount;
-                this.wcRollTotal -= last.amount;
-                const wc = window.L7RRollMath.woundCheckResult(this.wcRollTotal, this.wcLightWounds, this.formulas['wound_check']?.bayushi_5th_dan_half_lw);
-                this.wcPassed = wc.passed;
-                this.wcMargin = wc.margin;
-                this.wcSeriousWounds = wc.seriousWounds;
-                window._trackingBridge?.saveBankedBonuses();
+                if (this.wcMatsuBonusApplied <= 0 || !this._onServerRoll('wc')) return;
+                const amount = this._wcMatsuStack.pop();
+                if (amount === undefined) return;
+                this.wcMatsuBonusApplied -= amount;
+                this.baseTotal -= amount;
+                this.wcRollTotal -= amount;
+                this._wcRecompute();
+                this._act('undo_matsu_bank');
             },
 
             // wcSpendBankedExcess is now handled inline in the template buttons
@@ -7194,83 +5843,39 @@
                 this.wcRollTotal -= 5;
                 this._wcRecompute();
                 if (this._onServerRoll('wc')) this._act('undo_raise');
-                else this._poolStep('adventure_raises', -1);
             },
 
             applyWoundCheckFailure() {
+                // The server takes the serious wounds (and a Yogo's temp
+                // void points); the tab adopts its state.
                 const t = window._trackingBridge;
-                if (!t || this.wcResultApplied) return;
-                if (this._onServerRoll('wc')) {
-                    // The server takes the serious wounds (and a Yogo's temp
-                    // void points); the tab adopts its state.
-                    this.wcResultApplied = true;
-                    this.wcResultChoice = 'failure_applied';
-                    this._act('wc_resolve', {choice: 'fail'}).then(() => {
-                        window.dispatchEvent(new CustomEvent('wound-changed', { detail: { serious: t.seriousWounds } }));
-                    });
-                    this._flushRollHistoryUpdate();
-                    return;
-                }
-                // Non-editors: the WC walk-through is informational only -
-                // never mutate the bridge's lightWounds / seriousWounds /
-                // tempVoidPoints. The save shim already rejects the POST,
-                // but we also want the displayed counters on the sheet to
-                // stay anchored at the persisted values throughout.
-                if (t.canEdit) {
-                    const swGained = this.wcSeriousWounds;
-                    t.seriousWounds += swGained;
-                    t.lightWounds = 0;
-                    // Yogo Warden: gain 1 temp VP per serious wound taken
-                    if (this.schoolAbilities.yogo_temp_vp_on_sw && swGained > 0) {
-                        t.tempVoidPoints += swGained;
-                    }
-                    t.save();
-                    window.dispatchEvent(new CustomEvent('wound-changed', { detail: { serious: t.seriousWounds } }));
-                }
+                if (!t || this.wcResultApplied || !this._onServerRoll('wc')) return;
                 this.wcResultApplied = true;
                 this.wcResultChoice = 'failure_applied';
+                this._act('wc_resolve', {choice: 'fail'}).then(() => {
+                    window.dispatchEvent(new CustomEvent('wound-changed', { detail: { serious: t.seriousWounds } }));
+                });
                 this._flushRollHistoryUpdate();
             },
 
             wcKeepLightWounds() {
-                // Passed - player chooses to keep their light wounds.
-                // Non-editors get no banked-bonus side effects (those would
-                // bloat the priest/ally's adventureState without permission).
-                const t = window._trackingBridge;
-                if (this._onServerRoll('wc')) {
-                    this._act('wc_resolve', {choice: 'keep'});
-                } else if (t?.canEdit) {
-                    if (this.schoolAbilities.isawa_bank_wc_excess && this.wcPassed && this.wcMargin > 0) {
-                        this.bankedWcExcess.push({ amount: this.wcMargin, spent: false });
-                    }
-                    if (this.schoolAbilities.akodo_wc_attack_bonus && this.wcPassed && this.wcMargin > 0) {
-                        const bonus = window.L7RRollMath.akodoBankedBonus(this.wcMargin, this.schoolAbilities.akodo_attack_skill || 0);
-                        if (bonus > 0) t.akodoBankedBonuses.push({ amount: bonus, spent: false });
-                    }
-                    if (t.saveBankedBonuses) t.saveBankedBonuses();
-                }
+                // Passed - keep the light wounds (the server banks the margin
+                // for an Isawa 5th Dan / Akodo 3rd Dan).
+                if (this._onServerRoll('wc')) this._act('wc_resolve', {choice: 'keep'});
                 this.wcResultChoice = 'keep_lw';
                 this._flushRollHistoryUpdate();
                 this.wcModalOpen = false;
             },
 
             wcTakeSeriousAndReset() {
-                // Passed - player chooses to take 1 serious, reset light to 0.
-                // Non-editors: no mutation of the displayed sheet state.
+                // Passed - take 1 serious wound, light wounds back to 0 (on
+                // the server; the tab adopts its state).
                 const t = window._trackingBridge;
                 if (!t) return;
                 if (this._onServerRoll('wc')) {
                     this._act('wc_resolve', {choice: 'take_sw'}).then(() => {
                         window.dispatchEvent(new CustomEvent('wound-changed', { detail: { serious: t.seriousWounds } }));
                     });
-                } else if (t.canEdit) {
-                    t.seriousWounds += 1;
-                    if (this.schoolAbilities.yogo_temp_vp_on_sw) {
-                        t.tempVoidPoints += 1;
-                    }
-                    t.lightWounds = 0;
-                    t.save();
-                    window.dispatchEvent(new CustomEvent('wound-changed', { detail: { serious: t.seriousWounds } }));
                 }
                 this.wcResultChoice = 'take_1_sw';
                 this._flushRollHistoryUpdate();
@@ -7286,74 +5891,12 @@
             },
 
             async rerollImpairedTens(priest) {
-                // Priest "sick or impaired" ritual: reroll the impaired 10s on
-                // the CURRENT result. Visible only when the character rolled an
-                // Impaired roll (``no_reroll_reason === 'impaired'``) AND at
-                // least one 10 is sitting in the final pool. Discretionary
-                // spends (raises, Conviction, Mirumoto round points, etc.)
-                // made before clicking the button carry through unchanged.
+                // Priest "sick or impaired" ritual: reroll the Impaired 10s
+                // on the current result (the server does it, keeping every
+                // bonus already taken).
                 if (!this.formula || this.formula.no_reroll_reason !== 'impaired') return;
-                if (this._onServerRoll()) {
-                    await this._serverReroll('priest_ritual', {priest_id: priest.priest_id}, false);
-                    return;
-                }
-                // Rebuild the parts-preserving pool from kept + unkept
-                // (finalDice drops the exploded-parts array).
-                const pool = [...(this.unkeptDice || []), ...(this.keptDice || [])]
-                    .map(d => ({ value: d.value, parts: d.parts ? [...d.parts] : [d.value] }));
-                const tenIndices = pool
-                    .map((d, i) => d.value === 10 ? i : -1)
-                    .filter(i => i >= 0);
-                if (tenIndices.length === 0) return;
-
-                const disc = this._genericDiscretionaryTotal();
-                const convictionCarry = this.convictionSpentThisRoll || 0;
-                const priestAllyCarry = this.totalPriestAllySpentThisRoll();
-
-                this.phase = 'rolling';
-                // New dice explode on 10 (the whole point of the ritual is
-                // that the character ignores their impaired penalty).
-                const newDice = await this._rerollDice(
-                    tenIndices.length, true, 'dice-animation'
-                );
-                tenIndices.forEach((idx, j) => {
-                    pool[idx] = { value: newDice[j].value, parts: newDice[j].parts };
-                });
-
-                const sortedAsc = pool.slice().sort((a, b) => a.value - b.value);
-                const keptCount = Math.min(this.formula.kept, sortedAsc.length);
-                const isInit = this.formula.is_initiative;
-                const keptSet = new Set();
-                if (isInit) {
-                    for (let i = 0; i < keptCount; i++) keptSet.add(i);
-                } else {
-                    for (let i = sortedAsc.length - keptCount; i < sortedAsc.length; i++) {
-                        keptSet.add(i);
-                    }
-                }
-                this.finalDice = sortedAsc.map((d, i) => ({ value: d.value, kept: keptSet.has(i) }));
-                this.keptDice = sortedAsc.filter((_, i) => keptSet.has(i));
-                this.unkeptDice = sortedAsc.filter((_, i) => !keptSet.has(i));
-                this.keptSum = this.keptDice.reduce((s, d) => s + d.value, 0);
-
-                // Shosuro 5th Dan "lowest 3" bonus depends on the full pool
-                // and must be recomputed against the new dice.
-                this.shosuroLowest3Bonus = 0;
-                if (this.schoolAbilities.shosuro_add_lowest_3 && !isInit) {
-                    const lowest3 = sortedAsc
-                        .slice(0, Math.min(3, sortedAsc.length))
-                        .map(d => d.value);
-                    this.shosuroLowest3Bonus = lowest3.reduce((s, v) => s + v, 0);
-                }
-
-                this.baseTotal = this.keptSum
-                    + (this.formula.flat || 0)
-                    + (this.shosuroLowest3Bonus || 0)
-                    + convictionCarry
-                    + priestAllyCarry
-                    + disc;
-
-                this.phase = 'done';
+                if (!this._onServerRoll()) return;
+                await this._serverReroll('priest_ritual', {priest_id: priest.priest_id}, false);
             },
 
             async rollBless(ritual) {

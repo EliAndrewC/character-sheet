@@ -1,44 +1,14 @@
-/* L7R dice rolling: rolls dice with reroll-10s, animates a tray of dice,
- * and plays synthesized sounds via Web Audio API. The Alpine "diceRoller"
- * component on the character sheet calls into these helpers.
+/* L7R dice display: animates a tray of dice and plays synthesized sounds
+ * via Web Audio API. The server rolls every die (server-rolls-design); the
+ * Alpine "diceRoller" component on the character sheet plays them here.
  *
  * Exports (attached to window):
- *   rollD10()                                  -> int 1..10
- *   rollOneDie(rerollTens)                     -> {parts:int[], value:int}
- *   rollAllDice(rolled, rerollTens)            -> [{parts, value}, ...]
- *   rollAndAnimate(rolled, rerollTens, anim)   -> Promise<dice[]>
- *   animateDice(dice, rerollTens, anim)        -> Promise<dice[]> (dice rolled by the server)
+ *   animateDice(dice, rerollTens, anim)        -> Promise<dice[]>
  *   playDiceSound(numDice)
  */
 
 (function () {
     'use strict';
-
-    function rollD10() {
-        return Math.floor(Math.random() * 10) + 1;
-    }
-
-    function rollOneDie(rerollTens) {
-        const parts = [];
-        let v = rollD10();
-        parts.push(v);
-        if (rerollTens) {
-            while (v === 10) {
-                v = rollD10();
-                parts.push(v);
-            }
-        }
-        const value = parts.reduce((a, b) => a + b, 0);
-        return { parts, value };
-    }
-
-    function rollAllDice(rolled, rerollTens) {
-        const out = [];
-        for (let i = 0; i < rolled; i++) {
-            out.push(rollOneDie(rerollTens));
-        }
-        return out;
-    }
 
     // ----------------------------------------------------------------------
     // Animation
@@ -120,14 +90,10 @@
     const ROLLING_MS = 1200;
     const SETTLE_MS = 2000;
 
-    async function rollAndAnimate(rolled, rerollTens, animate, playSound, trayId, onDiceReady) {
-        return animateDice(rollAllDice(rolled, rerollTens), rerollTens, animate, playSound, trayId, onDiceReady);
-    }
-
     // Animate dice that were rolled elsewhere - the server rolls every die
     // the sheet shows (server-rolls-design), and this plays them. ``dice``
-    // is the ``[{parts, value}, ...]`` shape rollOneDie produces, which is
-    // also what POST /characters/{id}/roll answers with.
+    // is the ``[{parts, value}, ...]`` shape POST /characters/{id}/roll
+    // answers with.
     async function animateDice(dice, rerollTens, animate, playSound, trayId, onDiceReady) {
         const rolled = dice.length;
         // The dice are final the instant they're generated - the
@@ -295,10 +261,6 @@
     // Export
     // ----------------------------------------------------------------------
     window.L7RDice = {
-        rollD10,
-        rollOneDie,
-        rollAllDice,
-        rollAndAnimate,
         animateDice,
         playDiceSound,
     };

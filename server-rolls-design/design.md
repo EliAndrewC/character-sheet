@@ -1,6 +1,6 @@
 # Server-side Rolls and State Changes - Design
 
-Status: **Phases 1-9 done; Phase 10 next.** Decisions S1-S7 in section 8.
+Status: **Complete (Phases 1-10).** Decisions S1-S7 in section 8.
 
 ## 1. Goal
 
@@ -303,10 +303,30 @@ removes the old ones.
       the Kakita 5th Dan tests now wait for / force the server's roll
 
 ### Phase 10 - Precepts pool and retirement
-- [ ] Precepts pool roll and swaps (own and ally) as operations
-- [ ] Retire `/track` (blob), browser dice generation, the result-computing JS in `roll_math.js` and
-      its shared tables; update CLAUDE.md (Read-only Roll Mode, tracking revision, roll history)
-- [ ] One full clicktest run with a stated reason (the only time this project runs the whole suite)
+- [x] Precepts pool roll and swaps (own and ally) as operations: the pool is rolled by the
+      `precepts_pool_roll` operation (server dice) and cleared by `precepts_pool_clear`; a swap is
+      the `precepts_swap` session action on an attack / parry / attack-damage / wound-check roll,
+      which rescores the roll (bonuses kept) and moves the priest's pool - an ally's only upward.
+      `/precepts-pool` is no longer called by the sheet
+- [x] Retire `/track` (blob), browser dice generation, the result-computing JS in `roll_math.js` and
+      its shared tables; update CLAUDE.md (Read-only Roll Mode, tracking revision, roll history).
+      `/track` answers 404 in production and stays only as the clicktest server's setup seam; the
+      tracking section's bank edits are the `bank` operation. `dice.js` no longer generates dice
+      (only `animateDice` and the sound). The browser branches of every roll flow were deleted
+      (about 2,300 lines), with the fourteen `roll_math.js` functions only they used and their JS
+      tests; the shared tables keep every case on the Python side. The client no longer creates
+      history rows (the server records each roll; the tab PATCHes its post-roll display)
+- [x] One full clicktest run with a stated reason (the only time this project runs the whole suite):
+      1438 passed, 55 failed, 4 skipped (1h31m). The failures were tests (and a few real races)
+      exposed by the move: tests setting action dice / banks / pools only on the tab or calling
+      retired browser code (`setActionDice` is back as a test-setup helper beside `save()`), roll
+      history tests staging fake modal state (rewritten on real rolls), the precepts swap tests
+      (rewritten on real rolls; the pool is now rolled as a roll so a non-editor can test-drive it),
+      a keepalive test that depended on the wall clock. Two real bugs: a history row's display
+      lines were overwritten by the next action (the row's extras are now rewritten only when the
+      dice change), and quick action pairs (spend + undo) could cross on the wire (roll actions are
+      now queued). All 55 rerun green, then the action-heavy files (154) and the raise / Conviction /
+      Lucky selection
 
 ## 7. Out of scope
 

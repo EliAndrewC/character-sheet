@@ -103,15 +103,19 @@ Mechanics:
 - **Pool storage** lives on the Character model as a JSON column
   `precepts_pool` (`[{"value": int}, ...]`). Migration in `database.py::_migrate_add_columns`.
 - **Pool creation** is manual: a "Roll Pool" button in the Tracking panel
-  rolls X dice (X = precepts skill rank), all kept, 10s reroll on. The
-  resulting values are stored as the pool.
+  asks the server to roll X dice (X = precepts skill rank), all kept, 10s
+  reroll on - the `precepts_pool_roll` tracking operation
+  (server-rolls-design Phase 10); the tab animates what it rolled. "Clear"
+  is `precepts_pool_clear`.
+- **Swaps** are the `precepts_swap` action on the roll's session: the
+  server swaps the die (own roll: any different die; an ally's: only a
+  higher one), rescores the roll with every bonus kept, and saves the
+  priest's pool. Tests: `tests/test_precepts_pool.py`.
 - **Pool persistence:** pool survives combat ends and page reloads. NOT
   wiped by the action-dice "Clear" button or by rolling initiative. IS
   wiped by the per-adventure Reset modal (listed as "Clear precepts pool
   (N dice)"). IS wiped server-side in `publish_character` /
-  `revert_character` if a knack change drops the priest below 3rd Dan;
-  `/track` defensively coerces to `[]` if a stale tab tries to persist a
-  non-priest / sub-3rd-Dan pool.
+  `revert_character` if a knack change drops the priest below 3rd Dan.
 - **Party broadcast:** `priest_precepts_allies` context mirrors the 5th
   Dan `priest_conviction_allies`. Filters: priest school, dan >= 3,
   non-empty pool, shared gaming group, excludes self.

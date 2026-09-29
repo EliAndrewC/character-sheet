@@ -3248,15 +3248,36 @@ def _stage_swap_context(page, pool, rolled, kept_count):
     page.wait_for_timeout(100)
 
 
+def _real_parry_for_swap(page, pool, high, low):
+    """A real (server-made) parry for a swap: the pool is saved, and the
+    roll's kept dice all show ``high`` and the rest ``low`` (forced on the
+    server, which makes the roll and the swap)."""
+    from tests.e2e.dice_control import force_dice, restore_dice
+    page.evaluate("""async (values) => {
+        const t = window._trackingBridge;
+        t.preceptsPool = values.map(v => ({value: v}));
+        await t.save();
+        await t.whenSaved();
+    }""", pool)
+    f = page.evaluate("() => window._diceRoller.formulas['parry']")
+    force_dice(page, [high] * f["kept"] + [low] * (f["rolled"] - f["kept"]))
+    page.locator('[data-roll-key="parry"]').click()
+    page.wait_for_selector('[data-modal="parry"]', state='visible', timeout=5000)
+    page.locator('[data-action="roll-parry-go"]').click()
+    page.wait_for_function("() => window._diceRoller.phase === 'done'", timeout=10000)
+    restore_dice(page)
+    return f
+
+
 def _priest_swap_self(page, pool_die_index, rolled_value):
-    """Invoke swapPreceptsDie for the priest's own pool."""
+    """Swap a die of the priest's own pool in, on the server."""
     return page.evaluate(
-        """({pi, rv}) => {
+        """async ({pi, rv}) => {
             const d = window._diceRoller;
             const allies = d.preceptsPoolAlliesForThisRoll('roll');
             const self = allies.find(a => a.isSelf);
             if (!self) return {error: 'no self pool'};
-            d.swapPreceptsDie(self, pi, rv);
+            await d.swapPreceptsDie(self, pi, rv);
             return {
                 pool: window._trackingBridge.preceptsPool.map(x => x.value),
                 finalDice: d.finalDice.map(x => ({v: x.value, kept: !!x.kept})),
@@ -3270,43 +3291,36 @@ def _priest_swap_self(page, pool_die_index, rolled_value):
 
 
 def test_priest_3rd_dan_swap_pool_die_with_lower_rolled_die(page, live_server_url):
-    """The simplest case: priest swaps a pool 9 for a rolled 3. The pool 9
-    becomes a kept die; the replaced 3 returns to the pool. keptSum grows
-    by 9-3=6."""
+    """The simplest case: the priest swaps a pool 9 for a kept 3. The pool 9
+    becomes a kept die; the replaced 3 returns to the pool; the total grows
+    by 9 - 3 = 6. The server makes the swap."""
     _create_priest_3rd_dan(page, live_server_url, "PriestSwap1", precepts=2)
-    _stage_swap_context(page, pool=[9, 2], rolled=[8, 3], kept_count=2)
+    _real_parry_for_swap(page, pool=[9, 2], high=3, low=1)
     before_total = page.evaluate("window._diceRoller.baseTotal")
     result = _priest_swap_self(page, pool_die_index=0, rolled_value=3)
-    # Pool: first entry was 9 (now replaced by the rolled 3).
-    assert result["pool"][0] == 3
-    assert result["pool"][1] == 2
-    # finalDice: the rolled 3 got replaced by the pool 9; kept set is now
-    # {8, 9}. keptSum went from 8+3=11 to 8+9=17, delta +6.
-    kept_values = sorted([d["v"] for d in result["finalDice"] if d["kept"]])
-    assert kept_values == [8, 9]
-    assert result["keptSum"] == 17
+    assert result["pool"] == [3, 2]
+    assert 9 in [d["v"] for d in result["finalDice"] if d["kept"]]
     assert result["baseTotal"] == before_total + 6
-    # One structured bonus-entry recorded.
     assert len(result["bonuses"]) == 1
     assert result["bonuses"][0]["rolledValueBefore"] == 3
     assert result["bonuses"][0]["poolValueAfter"] == 9
+    page.reload()
+    page.wait_for_function("() => window._trackingBridge.preceptsPool.map(d => d.value).join() === '3,2'",
+                           timeout=5000)
 
 
 def test_priest_3rd_dan_swap_promotes_unkept_die_into_kept(page, live_server_url):
-    """Swapping a pool die for a currently-unkept rolled die promotes the
-    new high value into the kept set. Here kept is only {5}; rolled 1 is
-    unkept; pool 9 swaps with rolled 1 and promotes into kept (pushing 5
-    out)."""
+    """Swapping a pool die for an UNKEPT rolled die promotes the new high
+    value into the kept set (pushing a lower kept die out)."""
     _create_priest_3rd_dan(page, live_server_url, "PriestSwap2", precepts=1)
-    _stage_swap_context(page, pool=[9], rolled=[5, 1], kept_count=1)
+    f = _real_parry_for_swap(page, pool=[9], high=5, low=1)
+    if f["rolled"] == f["kept"]:
+        pytest.skip("the parry keeps every die rolled")
+    before = page.evaluate("window._diceRoller.keptSum")
     result = _priest_swap_self(page, pool_die_index=0, rolled_value=1)
-    # Pool: 9 replaced by the rolled 1.
     assert result["pool"] == [1]
-    # finalDice values are {5, 9}; only 9 is kept (top 1 by value).
-    kept_values = [d["v"] for d in result["finalDice"] if d["kept"]]
-    assert kept_values == [9]
-    # keptSum went from 5 to 9.
-    assert result["keptSum"] == 9
+    assert 9 in [d["v"] for d in result["finalDice"] if d["kept"]]
+    assert result["keptSum"] == before + 4
 
 
 def test_priest_3rd_dan_swap_menu_dedupes_rolled_values(page, live_server_url):
@@ -3379,17 +3393,12 @@ def test_priest_3rd_dan_self_swap_can_impair_roll_to_refresh_pool(page, live_ser
     pool die in for a HIGH kept die. Net: their roll drops, and the pool
     gains a high die it can later lend to allies."""
     _create_priest_3rd_dan(page, live_server_url, "PriestSelfImpair", precepts=1)
-    # Pool has a 2; rolled dice are [9, 7] both kept.
-    _stage_swap_context(page, pool=[2], rolled=[9, 7], kept_count=2)
+    _real_parry_for_swap(page, pool=[2], high=9, low=1)
     before = page.evaluate("window._diceRoller.keptSum")
     result = _priest_swap_self(page, pool_die_index=0, rolled_value=9)
-    # The 9 moves into the pool; the 2 moves into the kept set.
     assert result["pool"] == [9]
-    # Kept is now {7, 2}; keptSum dropped from 9+7=16 to 7+2=9.
-    kept_values = sorted([d["v"] for d in result["finalDice"] if d["kept"]])
-    assert kept_values == [2, 7]
-    assert result["keptSum"] == 9
-    assert result["keptSum"] < before
+    assert 2 in [d["v"] for d in result["finalDice"] if d["kept"]]
+    assert result["keptSum"] == before - 7
 
 
 def test_priest_3rd_dan_equal_value_rolled_die_excluded_from_menu(page, live_server_url):
@@ -3497,11 +3506,10 @@ def test_priest_3rd_dan_swap_dropdown_opens_and_closes(page, live_server_url):
 
 
 def test_ally_swaps_priest_pool_die_and_broadcasts(page, live_server_url):
-    """When an ally swaps with a priest's pool die, the swap:
+    """When an ally swaps with a priest's pool die, the server:
        - updates the ally's own rolled dice + total,
-       - broadcasts the new pool to the priest's character via
-         POST /characters/{priest_id}/precepts-pool,
-       - persists so both sheets see the updated pool on reload.
+       - saves the new pool on the priest's character,
+       - so both sheets see the updated pool on reload.
     """
     # Set up a priest with a pool in Tuesday Group.
     page.goto(live_server_url)
@@ -3537,42 +3545,30 @@ def test_ally_swaps_priest_pool_die_and_broadcasts(page, live_server_url):
     page.wait_for_timeout(500)
 
     page.goto(ally_url)
-    # Stage an attack-result state on the ally so the pool can swap into it.
-    # (The priestPreceptsAllies array is seeded by the context at page load.)
-    page.evaluate("""() => {
-        const d = window._diceRoller;
-        // Pretend the attack modal is open with finalDice from a roll.
-        d.finalDice = [
-            {value: 8, kept: true, parts: [8]},
-            {value: 2, kept: false, parts: [2]},
-        ];
-        d.keptDice = [d.finalDice[0]];
-        d.keptSum = 8;
-        d.baseTotal = 8;
-        d.atkRollTotal = 8;
-        d.atkFormula = {kept: 1, is_attack_type: true};
-        d.atkPhase = 'result';
-        d.atkModalOpen = true;
-        d.currentRollKey = 'attack';
-        d.preceptsPoolSwapBonuses = [];
-    }""")
-    page.wait_for_timeout(100)
-    # Invoke the swap via the exposed helper. The ally can only swap with
-    # a strictly-lower rolled die, so pool 10 swaps with rolled 2.
-    result = page.evaluate("""() => {
+    # A real (server-made) attack: its dice are forced so there is one 8
+    # and the rest 2s, which the priest's 10 can replace.
+    from tests.e2e.dice_control import force_dice, restore_dice
+    force_dice(page, [8, 2])
+    page.locator('[data-roll-key="attack"]').click()
+    page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=5000)
+    page.locator('[data-modal="attack"] select:visible').first.select_option("5")
+    page.locator('[data-modal="attack"] [data-action="roll-attack"]').click()
+    page.wait_for_function("() => window._diceRoller.atkPhase === 'result'", timeout=10000)
+    restore_dice(page)
+    before = page.evaluate("() => window._diceRoller.atkRollTotal")
+    # The ally can only swap with a strictly-lower rolled die: pool 10 for a 2.
+    result = page.evaluate("""async () => {
         const d = window._diceRoller;
         const priest = d.priestPreceptsAllies.find(p => p.name === 'Swap Priest');
-        d.swapPreceptsDie(priest, 0, 2);
+        await d.swapPreceptsDie(priest, 0, 2);
         return {
             finalDice: d.finalDice.map(x => ({v: x.value, kept: !!x.kept})),
             atkRollTotal: d.atkRollTotal,
             priestPool: priest.pool.map(x => x.value),
         };
     }""")
-    # Ally's kept set is now {10}; total went from 8 to 10 (+2).
-    kept_values = [d["v"] for d in result["finalDice"] if d["kept"]]
-    assert kept_values == [10]
-    assert result["atkRollTotal"] == 10
+    assert 10 in [d["v"] for d in result["finalDice"] if d["kept"]]
+    assert result["atkRollTotal"] > before
     # The priest's pool on the ally's local reference now has {2, 3}.
     assert sorted(result["priestPool"]) == [2, 3]
     # Wait for the POST to flush, then load the priest's sheet - DB should
@@ -5149,7 +5145,7 @@ def test_kakita_5th_dan_uses_rollandanimate_for_contest(page, live_server_url):
     """The contest roll's (server) dice are animated through animateDice so
     animation + sound preferences apply. With animation disabled (test default), the path
     still returns dice synchronously; this test monkey-patches to verify
-    rollAndAnimate is the one called."""
+    animateDice is the one called."""
     _make_kakita_dan_5(page, live_server_url, "Kakita5RAA")
     page.locator('[data-action="kakita-5th-dan-contest"]').click()
     page.wait_for_selector('[data-modal="kakita-5th-dan"]', state='visible', timeout=5000)
@@ -5176,7 +5172,7 @@ def test_kakita_5th_dan_uses_rollandanimate_for_contest(page, live_server_url):
         "() => window._diceRoller?.k5Phase === 'damage-result'", timeout=5000)
     _restore_dice(page)
     # Both the contest roll and the damage roll should have gone through
-    # rollAndAnimate.
+    # animateDice (the server rolls; the tab animates).
     assert page.evaluate("() => window._k5RAACalls") == 2
 
 
@@ -7545,7 +7541,9 @@ def test_otaku_5th_dan_trade_dice_behavioral(page, live_server_url):
     """Otaku 5th Dan: trade-for-SW checkbox appears before damage roll and reduces dice."""
     _create_char(page, live_server_url, "Otaku5TB", "otaku_bushi",
                  knack_overrides={"double_attack": 5, "iaijutsu": 5, "lunge": 5})
-    _mock_dice_high(page)
+    # 10s explode into long chains: a big excess, so plenty of extra damage
+    # dice (the server judges the attack, so they must be earned).
+    force_dice(page, [10, 10, 10, 9])
     # Roll attack with low TN to guarantee hit
     page.locator('[data-roll-key="attack"]').click()
     page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=10000)
@@ -7553,16 +7551,6 @@ def test_otaku_5th_dan_trade_dice_behavioral(page, live_server_url):
     modal.locator('select:visible').select_option("5")
     modal.locator('[data-action="roll-attack"]').click()
     _wait_attack_result(page)
-    # Boost extra dice so total damage dice > 10 (base damage is ~7, need 11+)
-    page.evaluate("""() => {
-        const els = document.querySelectorAll('[x-data]');
-        for (const el of els) {
-            const d = window.Alpine && window.Alpine.$data(el);
-            if (d && d.atkExtraDice !== undefined && d.atkPhase === 'result') { d.atkExtraDice = 8; break; }
-        }
-    }""")
-    page.wait_for_timeout(500)
-    page.wait_for_timeout(200)
     # Get rawRolled to verify we have enough dice for trade
     raw_rolled = page.evaluate("""() => {
         const els = document.querySelectorAll('[x-data]');
@@ -7647,28 +7635,27 @@ def test_shinjo_5th_dan_banked_excess_in_tracking_section(page, live_server_url)
     'Apply +N' buttons carry a '5th Dan bonus' label."""
     _create_char(page, live_server_url, "Shinjo5Track", "shinjo_bushi",
                  knack_overrides={"double_attack": 5, "iaijutsu": 5, "lunge": 5})
-    page.evaluate("""() => {
-        window._trackingBridge.bankedWcExcess.push(
+    page.evaluate("""async () => {
+        const t = window._trackingBridge;
+        t.bankedWcExcess.push(
             {amount: 10, spent: false},
             {amount: 7, spent: false},
         );
-        window._diceRoller.bankedWcExcess = window._trackingBridge.bankedWcExcess;
-        window._trackingBridge.save();
+        window._diceRoller.bankedWcExcess = t.bankedWcExcess;
+        t.saveBankedBonuses();
+        await t.whenSaved();
     }""")
-    page.wait_for_timeout(200)
     tracking_block = page.locator('[data-testid="banked-wc-excess-tracking"]')
     tracking_block.wait_for(state="visible", timeout=5000)
     assert tracking_block.is_visible(), \
         "Shinjo 5th Dan banked excess should surface in tracking section"
     body = tracking_block.text_content()
     assert "+10" in body and "+7" in body
-    # Mark spent from tracking: the remaining entry stays visible, spent one strikes through.
+    # Mark spent from tracking: the server takes it out of the bank; the
+    # other entry stays.
     tracking_block.locator('button:has-text("Mark spent")').first.click()
-    page.wait_for_timeout(200)
-    remaining = page.evaluate("""() =>
-        window._trackingBridge.bankedWcExcess.filter(b => !b.spent).length
-    """)
-    assert remaining == 1, f"Expected 1 unspent entry after marking, got {remaining}"
+    page.wait_for_function("""() =>
+        window._trackingBridge.bankedWcExcess.filter(b => !b.spent).length === 1""", timeout=5000)
     # Trigger a wound check to verify the Apply button carries the 5th Dan label.
     page.locator('[data-action="lw-plus"]').click()
     page.wait_for_selector('input[placeholder="Amount"]', timeout=10000)

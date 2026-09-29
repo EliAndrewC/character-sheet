@@ -212,26 +212,6 @@
       });
     },
 
-    /**
-     * Kakita 5th Dan contested-damage dice adjustment: +/- floor(|diff| / 5),
-     * rounded toward zero (so a negative diff truncates toward 0, not down).
-     */
-    damageDiceContestAdjust: function (diff) {
-      if (diff >= 0) return Math.floor(diff / 5);
-      return -Math.floor(-diff / 5) || 0; // `|| 0` avoids -0 for small negatives
-    },
-
-    /**
-     * A failed parry reduces the attacker's extra damage dice by the parry
-     * skill - fully ("full"), by half rounded down ("half", Mirumoto 4th Dan),
-     * or not at all ("none", Brotherhood 4th Dan). Never below 0.
-     */
-    failedParryDiceReduction: function (totalExtra, parrySkill, mode) {
-      if (mode === "none") return totalExtra;
-      var reduce = mode === "half" ? Math.floor(parrySkill / 2) : parrySkill;
-      return Math.max(0, totalExtra - reduce);
-    },
-
     /** Otaku 5th Dan: trade dice for an auto serious wound, never below 2 rolled. */
     tradeDiceFloor: function (rolled, tradeDice) {
       return Math.max(2, rolled - tradeDice);
@@ -263,16 +243,6 @@
     /** Contested-roll free raises: +5 per rank your skill exceeds theirs. */
     contestSkillRaiseBonus: function (ourRank, theirRank) {
       return Math.max(0, ourRank - theirRank) * 5;
-    },
-
-    /** Bank the excess of our roll over the opponent's, clamped at 0. */
-    bankExcess: function (ourRoll, opponentRoll) {
-      return Math.max(0, ourRoll - opponentRoll);
-    },
-
-    /** Yogo Warden 3rd Dan: heal light wounds by vpSpent * healPerVp, min 0. */
-    yogoHealLightWounds: function (lightWounds, vpSpent, healPerVp) {
-      return Math.max(0, lightWounds - vpSpent * healPerVp);
     },
 
     // ----------------------------------------------------------------- //
@@ -320,59 +290,6 @@
     },
 
     /**
-     * Sum of the highest ``k`` values in ``values`` (a kept-dice pool). Used
-     * when recomputing a roll after a PCP "reroll 10s while impaired" explodes
-     * some dice and may change which dice are kept. ``k`` is clamped to the
-     * pool size; a non-positive ``k`` keeps nothing.
-     */
-    keepHighestSum: function (values, k) {
-      if (!(k > 0)) return 0;
-      var sorted = values.slice().sort(function (a, b) { return a - b; });
-      var kept = sorted.slice(Math.max(0, sorted.length - k));
-      return kept.reduce(function (a, b) { return a + b; }, 0);
-    },
-
-    /**
-     * PCP "reroll 10s while impaired" (rules/10). The impaired roll's 10s never
-     * exploded, so this is NOT a full reroll: KEEP every die and let each one
-     * showing a 10 explode (reroll-and-add). ``dice`` is the rolled pool
-     * ([{value, parts?}]); ``rerolls`` are the exploding rerolls ({value, parts})
-     * for the 10s, in order; ``keptCount`` is how many dice are kept. A 10 whose
-     * reroll chain is [10, 3] (value 13) becomes 10 + 13 = 23 with parts
-     * [10, 10, 3]. Returns {dice: [{value, parts, kept}], keptSum} with the
-     * highest ``keptCount`` dice flagged kept.
-     */
-    pcpExplodeTens: function (dice, rerolls, keptCount) {
-      var out = [], ri = 0;
-      for (var i = 0; i < dice.length; i++) {
-        var d = dice[i];
-        if (d.value === 10) {
-          var rr = rerolls[ri++] || { value: 0, parts: [] };
-          var chain = (rr.parts && rr.parts.length) ? rr.parts : [rr.value];
-          out.push({ value: 10 + rr.value, parts: [10].concat(chain), kept: false });
-        } else {
-          out.push({
-            value: d.value,
-            parts: (d.parts && d.parts.length) ? d.parts.slice() : [d.value],
-            kept: false,
-          });
-        }
-      }
-      var keptSum = this.keepHighestSum(out.map(function (d) { return d.value; }), keptCount);
-      // Flag the highest ``keptCount`` dice as kept (same ordering keepHighestSum
-      // sums, so the flagged dice and keptSum always agree).
-      var order = out
-        .map(function (d, i) { return { i: i, v: d.value }; })
-        .sort(function (a, b) { return a.v - b.v; });
-      var keep = Math.max(0, Math.min(keptCount, out.length));
-      for (var k = order.length - keep; k < order.length; k++) {
-        out[order[k].i].kept = true;
-      }
-      return { dice: out, keptSum: keptSum };
-    },
-
-
-    /**
      * ---- Wave Man profession abilities (profession-design/design.md) ----
      *
      * Every helper below takes a COPY COUNT rather than a boolean: an
@@ -398,57 +315,6 @@
     },
 
     /**
-     * W4: "Round your damage rolls up to the nearest multiple of 5.  If the
-     * roll is already a multiple of 5, then raise it by 3."
-     *
-     * Applied once per copy, chained: 14 -> 15 -> 18 with two copies, and
-     * 15 -> 18 -> 20. Apply this LAST, after every other damage bonus
-     * (D5) - rounding an intermediate value gives a different, higher
-     * answer.
-     */
-    waveManRoundDamage: function (total, copies) {
-      var v = Math.max(0, Math.floor(Number(total) || 0));
-      var n = Math.max(0, Math.floor(Number(copies) || 0));
-      for (var i = 0; i < n; i++) {
-        v = (v % 5 === 0) ? v + 3 : Math.ceil(v / 5) * 5;
-      }
-      return v;
-    },
-
-    /**
-     * W1: "When you make an attack roll that would miss, raise it by 5."
-     *
-     * Raises are applied one at a time and stop the moment the roll lands
-     * (D10), so a spare copy goes unused rather than overshooting. Returns
-     * the adjusted total, how many raises were consumed, and whether the
-     * attack now hits.
-     */
-    waveManMissRaise: function (total, tn, copies) {
-      var v = Number(total) || 0;
-      var target = Number(tn) || 0;
-      var n = Math.max(0, Math.floor(Number(copies) || 0));
-      var used = 0;
-      while (v < target && used < n) {
-        v += 5;
-        used++;
-      }
-      return { total: v, raisesUsed: used, hit: v >= target };
-    },
-
-    /**
-     * W1's damage side (D11): the raise gets you to the TN and no further,
-     * so extra damage dice for exceeding the TN are computed from the
-     * UNRAISED total. A roll that only hit because of a raise therefore
-     * yields zero excess, while a roll that hit on its own is unaffected.
-     */
-    waveManExcessForDamage: function (rawTotal, tn, copies) {
-      var v = Number(rawTotal) || 0;
-      var target = Number(tn) || 0;
-      if (v < target) return 0;
-      return Math.max(0, v - target);
-    },
-
-    /**
      * W9: "When someone unsuccessfully tries to parry an attack, you may
      * roll 2 of the extra damage dice that you would have rolled had they
      * not attempted to parry."
@@ -461,51 +327,6 @@
       var removed = Math.max(0, Math.floor(Number(parrySkill) || 0));
       var n = Math.max(0, Math.floor(Number(copies) || 0));
       return Math.min(2 * n, removed);
-    },
-
-    /**
-     * W5: "You may reroll 10s on a single die when impaired." One die per
-     * copy. The die is selected automatically (D13) - every 10 is
-     * interchangeable at reroll time, so there is nothing to choose.
-     */
-    waveManFreedDice: function (copies) {
-      return Math.max(0, Math.floor(Number(copies) || 0));
-    },
-
-    /**
-     * W5's roll surgery: like ``pcpExplodeTens``, but only the first
-     * ``maxDice`` dice showing a 10 explode. The freed die chains
-     * normally, which is why the rule frees a *die* rather than a *ten*
-     * (D13) - a chain arrives as one reroll whose ``parts`` hold every
-     * link.
-     */
-    waveManExplodeTens: function (dice, rerolls, keptCount, maxDice) {
-      var budget = Math.max(0, Math.floor(Number(maxDice) || 0));
-      var out = [], ri = 0;
-      for (var i = 0; i < dice.length; i++) {
-        var d = dice[i];
-        if (d.value === 10 && budget > 0) {
-          budget--;
-          var rr = rerolls[ri++] || { value: 0, parts: [] };
-          var chain = (rr.parts && rr.parts.length) ? rr.parts : [rr.value];
-          out.push({ value: 10 + rr.value, parts: [10].concat(chain), kept: false });
-        } else {
-          out.push({
-            value: d.value,
-            parts: (d.parts && d.parts.length) ? d.parts.slice() : [d.value],
-            kept: false,
-          });
-        }
-      }
-      var keptSum = this.keepHighestSum(out.map(function (d) { return d.value; }), keptCount);
-      var order = out
-        .map(function (d, i) { return { i: i, v: d.value }; })
-        .sort(function (a, b) { return a.v - b.v; });
-      var keep = Math.max(0, Math.min(keptCount, out.length));
-      for (var k = order.length - keep; k < order.length; k++) {
-        out[order[k].i].kept = true;
-      }
-      return { dice: out, keptSum: keptSum };
     },
 
     /**
@@ -731,36 +552,6 @@
       return s.indexOf(".") === -1 ? s + ".0" : s;
     },
 
-    /**
-     * Akodo Bushi 3rd Dan: bank floor(margin / 5) * attackSkill as a future
-     * attack bonus. Returns 0 for a non-positive margin or attack skill.
-     */
-    akodoBankedBonus: function (margin, attackSkill) {
-      if (!(margin > 0) || !(attackSkill > 0)) return 0;
-      return Math.floor(margin / 5) * attackSkill;
-    },
-
-    /**
-     * Lucky reroll resolution. Lucky lets you reroll and keep the better
-     * result; for every roll except initiative the higher total always wins -
-     * there is never a reason to keep a strictly-lower roll, so the choice is
-     * automatic (no "you may keep the original" prompt). A tie keeps the
-     * reroll (either is equivalent).
-     *
-     * Initiative is exempt: a fresh initiative roll produces a different
-     * action-die layout that isn't strictly comparable, so the player keeps
-     * BOTH sets and chooses per the rules. We report keepReroll=true (so the
-     * fresh roll is shown as the live result) and never flag the original as
-     * the auto-winner; the modal lets the player switch.
-     *
-     * @returns {{keepReroll: boolean, originalHigher: boolean}}
-     */
-    luckyResolveReroll: function (originalTotal, rerollTotal, isInitiative) {
-      if (isInitiative) return { keepReroll: true, originalHigher: false };
-      var originalHigher = originalTotal > rerollTotal;
-      return { keepReroll: !originalHigher, originalHigher: originalHigher };
-    },
-
     // ----------------------------------------------------------------- //
     // Initiative. The server rolls initiative too (the Discord            //
     // /initiative command, app/services/roll_engine.py), so both of these //
@@ -776,28 +567,6 @@
      */
     initiativeSortValue: function (value, kakitaPhaseZero) {
       return (kakitaPhaseZero && value === 10) ? 0 : value;
-    },
-
-    /**
-     * Kept initiative dice -> the phases the character acts in, ascending.
-     * flags: {hiruma_4th_dan, shinjo_4th_dan, kakita_phase_zero} as emitted
-     * by build_initiative_formula. Order matters and is part of the rule:
-     * Hiruma lowers every die by 2 (min 1), THEN Shinjo sets the highest
-     * to 1, THEN a Kakita 10 becomes Phase 0.
-     */
-    initiativeActionValues: function (keptValues, flags) {
-      flags = flags || {};
-      var actions = (keptValues || []).slice().sort(function (a, b) { return a - b; });
-      if (flags.hiruma_4th_dan) {
-        actions = actions.map(function (v) { return Math.max(1, v - 2); });
-      }
-      if (flags.shinjo_4th_dan && actions.length > 0) {
-        actions[actions.length - 1] = 1;
-      }
-      if (flags.kakita_phase_zero) {
-        actions = actions.map(function (v) { return v === 10 ? 0 : v; });
-      }
-      return actions.sort(function (a, b) { return a - b; });
     },
 
     /**

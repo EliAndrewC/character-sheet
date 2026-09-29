@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from sqlalchemy.orm import Session
 
+import os
 import json
 
 from app.database import get_db, prefetch_body
@@ -2019,7 +2020,17 @@ async def track_op(request: Request, char_id: int, db: Session = Depends(get_db)
 async def track_state(
     request: Request, char_id: int, db: Session = Depends(get_db)
 ):
-    """Update mutable combat/adventure state from the character sheet."""
+    """Set a character's whole tracking state - a TEST-SETUP seam only.
+
+    The sheet used to post its whole copy of the tracking state here; every
+    change is now a tracking operation (``/track/op``) or a roll action
+    (server-rolls-design Phase 10), and in production this answers 404. The
+    clicktest server (``TEST_AUTH_BYPASS=true``) keeps it so a test can put a
+    character in a given state in one call, the way ``X-Test-Dice`` forces
+    the dice. It still requires the revision (``rev``) it was built from.
+    """
+    if os.environ.get("TEST_AUTH_BYPASS") != "true":
+        return JSONResponse({"error": "Not found"}, status_code=404)
     user = getattr(request.state, "user", None)
     if not user:
         return JSONResponse({"error": "Not authenticated"}, status_code=401)

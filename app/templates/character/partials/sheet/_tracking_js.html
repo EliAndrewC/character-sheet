@@ -277,6 +277,11 @@
                     }
                 },
 
+                // TEST SETUP ONLY: save(), saveBankedBonuses(), setCount() and
+                // setToggle() post the tab's whole state to /track, which only
+                // the clicktest server answers (production: 404). Nothing on the
+                // sheet calls them - every change is an operation (op()) or a
+                // roll action (server-rolls-design Phase 10).
                 async save() {
                     // Read-only viewers get an in-memory shim: no POST, but
                     // the Impaired indicator still fires so local wound-state
@@ -466,22 +471,10 @@
                     window.dispatchEvent(new CustomEvent('pcp-spent', { detail: data }));
                 },
 
+                // TEST SETUP ONLY (like save()): replace the action dice, all
+                // unspent, and clear the round's Mantis / Kakita state, as a
+                // new round would. The sheet starts rounds on the server.
                 setActionDice(dice) {
-                    // Initiative rolls are the end-of-round trigger: replace
-                    // action dice and reset Mantis round state in one shot.
-                    // Accepts either a list of numeric values (legacy) or
-                    // a list of dice objects ``{value, athletics_only?, mantis_4th_dan?}``
-                    // so callers can persist the Togashi athletics-only die
-                    // and the Mantis 4th Dan bonus die.
-                    //
-                    // Read-only Roll Mode: non-editors get nothing here.
-                    // Their initiative roll plays the dice-modal animation
-                    // (so they can see what they rolled) but the action
-                    // dice section on the sheet stays anchored at whatever
-                    // the editor's persisted state was - empty if the
-                    // editor hasn't rolled yet, or the editor's actual
-                    // dice if they have. A non-editor cannot make dice
-                    // appear or disappear from the sheet display.
                     if (!this.canEdit) return;
                     this.resetMantisRound();
                     this.actionDice = (dice || []).map(d => {
@@ -494,7 +487,7 @@
                     this.actionMenuOpen = null;
                     this.kakita5thDanUsed = false;
                     delete this.adventureState.kakita_5th_dan_used;
-                    this.save();
+                    return this.save();
                 },
                 // Mirumoto 3rd Dan points, stepped or refilled by hand.
                 stepMirumoto(delta) {
@@ -513,27 +506,43 @@
                     this.op('clear_action_dice');
                 },
                 async rollPreceptsPool() {
-                    // Priest 3rd Dan: roll X dice (X = precepts skill rank),
-                    // all kept, 10s reroll on. The resulting values form the
-                    // pool that persists across combat rounds and is cleared
-                    // only by the per-adventure reset.
-                    const n = {{ school_abilities.get('priest_precepts_pool_size', 0) }};
-                    if (n <= 0) return;
+                    // Priest 3rd Dan: the SERVER rolls the pool (X dice, 10s
+                    // rerolled); the tab animates what it rolled. An editor's
+                    // roll becomes the pool (it persists across combat rounds
+                    // until the per-adventure reset); anyone else's is only
+                    // shown (Read-only Roll Mode).
                     let animEnabled = true, soundEnabled = true;
                     try {
                         const p = JSON.parse(document.getElementById('user-prefs').textContent || '{}');
                         animEnabled = p.dice_animation_enabled !== false;
                         soundEnabled = p.dice_sound_enabled !== false;
                     } catch (e) { /* keep defaults */ }
+                    if (this.canEdit) await this.whenSaved();
+                    let data = null;
+                    try {
+                        const resp = await fetch('/characters/' + this._charId + '/roll', {
+                            method: 'POST', headers: {'Content-Type': 'application/json'},
+                            body: JSON.stringify({roll_key: 'precepts_pool'}),
+                        });
+                        data = await resp.json().catch(() => null);
+                        if (!resp.ok || !data || !data.pool) {
+                            this._showOpError((data && data.error) || 'The pool could not be rolled.');
+                            return;
+                        }
+                    } catch (e) {
+                        this._showOpError('Could not reach the server - the pool was not rolled.');
+                        return;
+                    }
                     const playSound = soundEnabled && window.L7RDice
                         ? (k) => window.L7RDice.playDiceSound(k) : null;
-                    const dice = await window.L7RDice.rollAndAnimate(
-                        n, true, animEnabled, playSound, 'dice-animation-precepts'
-                    );
-                    this.preceptsPool = dice
-                        .map(d => ({ value: d.value }))
-                        .sort((a, b) => b.value - a.value);
-                    this.save();
+                    if (window.L7RDice) {
+                        await window.L7RDice.animateDice(data.dice, true, animEnabled, playSound, 'dice-animation-precepts');
+                    }
+                    if (this.canEdit && data.mode === 'live' && data.tracking) {
+                        this.adoptServerState(data.tracking, false);
+                    } else {
+                        this.preceptsPool = data.pool;
+                    }
                 },
                 clearPreceptsPool() {
                     if (!this.canEdit) return;
@@ -542,7 +551,7 @@
                     // the tray is empty when the Roll Pool button reappears.
                     const tray = document.getElementById('dice-animation-precepts');
                     if (tray) tray.innerHTML = '';
-                    this.save();
+                    this.op('precepts_pool_clear');
                 },
                 // Mantis Wave-Treader posture tracker helpers.
                 currentPosture() {

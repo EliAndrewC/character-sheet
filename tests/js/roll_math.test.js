@@ -271,20 +271,6 @@ test("visibleAlternatives: tolerates null rows and a null list", () => {
                    [{extra_flat: 5}]);
 });
 
-test("damageDiceContestAdjust: round toward zero on both signs", () => {
-  assert.equal(M.damageDiceContestAdjust(12), 2);
-  assert.equal(M.damageDiceContestAdjust(0), 0);
-  assert.equal(M.damageDiceContestAdjust(-12), -2); // -floor(12/5) = -2, not -3
-  assert.equal(M.damageDiceContestAdjust(-4), 0);
-});
-
-test("failedParryDiceReduction: full / half / none", () => {
-  assert.equal(M.failedParryDiceReduction(8, 3, "full"), 5);
-  assert.equal(M.failedParryDiceReduction(8, 5, "half"), 6); // 8 - floor(5/2)=2
-  assert.equal(M.failedParryDiceReduction(8, 99, "none"), 8); // unchanged
-  assert.equal(M.failedParryDiceReduction(2, 5, "full"), 0); // clamps at 0
-});
-
 test("tradeDiceFloor = max(2, rolled - tradeDice)", () => {
   assert.equal(M.tradeDiceFloor(12, 10), 2);
   assert.equal(M.tradeDiceFloor(8, 3), 5);
@@ -309,16 +295,6 @@ test("kakitaDefenderPhaseBonus = x * max(0, def - atk)", () => {
 test("contestSkillRaiseBonus = max(0, ours-theirs) * 5", () => {
   assert.equal(M.contestSkillRaiseBonus(5, 2), 15);
   assert.equal(M.contestSkillRaiseBonus(2, 5), 0);
-});
-
-test("bankExcess = max(0, ours - opponent)", () => {
-  assert.equal(M.bankExcess(40, 25), 15);
-  assert.equal(M.bankExcess(20, 25), 0);
-});
-
-test("yogoHealLightWounds = max(0, lw - vpSpent*healPerVp)", () => {
-  assert.equal(M.yogoHealLightWounds(15, 2, 4), 7);
-  assert.equal(M.yogoHealLightWounds(5, 3, 4), 0); // clamps
 });
 
 // --- Group E: thresholds / misc ---
@@ -346,53 +322,6 @@ test("pcpNextCost = count + 1 (clamped)", () => {
   assert.equal(M.pcpNextCost(0), 1);
   assert.equal(M.pcpNextCost(4), 5);
   assert.equal(M.pcpNextCost(-2), 1);
-});
-
-test("keepHighestSum keeps the highest k values", () => {
-  assert.equal(M.keepHighestSum([3, 9, 1, 7], 2), 16); // 9 + 7
-  assert.equal(M.keepHighestSum([5], 1), 5);
-  assert.equal(M.keepHighestSum([5, 8], 5), 13); // k clamps to pool size
-  assert.equal(M.keepHighestSum([5, 8], 0), 0); // keep nothing
-  assert.equal(M.keepHighestSum([5, 8], -1), 0);
-});
-
-test("pcpExplodeTens explodes only the 10s and adds them (the canonical example)", () => {
-  // 7k4 rolled [10,10,10,6,5,3,2] = 36; reroll-10s adds 13, 8, 2 -> 59.
-  // The first 10's reroll chain is [10,3] (=13), so that die -> 10+13 = 23
-  // with parts [10,10,3]; the others -> 18 and 12.
-  const dice = [10, 10, 10, 6, 5, 3, 2].map((v) => ({ value: v }));
-  const rerolls = [
-    { value: 13, parts: [10, 3] },
-    { value: 8, parts: [8] },
-    { value: 2, parts: [2] },
-  ];
-  const res = M.pcpExplodeTens(dice, rerolls, 4);
-  assert.equal(res.keptSum, 59); // 23 + 18 + 12 + 6
-  // The exploded 10 keeps its face and shows the chain.
-  assert.deepEqual(res.dice[0], { value: 23, parts: [10, 10, 3], kept: true });
-  // Non-10 dice are untouched (just gain a single-part array).
-  assert.deepEqual(res.dice[3], { value: 6, parts: [6], kept: true });
-  assert.equal(res.dice[6].value, 2);   // a 2 stays a 2
-  assert.equal(res.dice[6].kept, false); // and isn't kept
-  // Exactly keptCount dice flagged kept.
-  assert.equal(res.dice.filter((d) => d.kept).length, 4);
-});
-
-test("pcpExplodeTens preserves existing parts on non-10 dice and handles no-part rerolls", () => {
-  const dice = [{ value: 10 }, { value: 7, parts: [7] }];
-  // reroll with only a value (no parts array) still works.
-  const res = M.pcpExplodeTens(dice, [{ value: 4 }], 2);
-  assert.deepEqual(res.dice[0], { value: 14, parts: [10, 4], kept: true });
-  assert.deepEqual(res.dice[1], { value: 7, parts: [7], kept: true });
-  assert.equal(res.keptSum, 21);
-});
-
-test("pcpExplodeTens is defensive when fewer rerolls than 10s are supplied", () => {
-  // Shouldn't happen (the caller supplies one reroll per 10), but a missing
-  // reroll must not crash - it contributes nothing.
-  const res = M.pcpExplodeTens([{ value: 10 }], [], 1);
-  assert.deepEqual(res.dice[0], { value: 10, parts: [10, 0], kept: true });
-  assert.equal(res.keptSum, 10);
 });
 
 test("pcpSpendBreakdown splits unspent vs debt", () => {
@@ -498,43 +427,7 @@ test("formatKoku: one decimal normally, two when there are zeni", () => {
 
 // --- Akodo (already wired in the sheet) ---
 
-test("akodoBankedBonus = floor(margin/5) * attackSkill, 0 if non-positive", () => {
-  assert.equal(M.akodoBankedBonus(19, 4), 12);
-  assert.equal(M.akodoBankedBonus(4, 4), 0);
-  assert.equal(M.akodoBankedBonus(19, 0), 0);
-  assert.equal(M.akodoBankedBonus(0, 4), 0);
-});
-
 // --- Lucky reroll resolution ---
-
-test("luckyResolveReroll: reroll higher -> keep reroll, original not higher", () => {
-  assert.deepEqual(M.luckyResolveReroll(15, 22, false),
-                   { keepReroll: true, originalHigher: false });
-});
-
-test("luckyResolveReroll: reroll lower -> keep original (auto)", () => {
-  // The whole point of the auto-use-higher rule: a strictly-lower reroll
-  // returns keepReroll=false so the modal restores the original dice/total
-  // and the followup step (damage, serious wounds) reads the higher value.
-  assert.deepEqual(M.luckyResolveReroll(22, 15, false),
-                   { keepReroll: false, originalHigher: true });
-});
-
-test("luckyResolveReroll: tie keeps the reroll (either is equivalent)", () => {
-  assert.deepEqual(M.luckyResolveReroll(18, 18, false),
-                   { keepReroll: true, originalHigher: false });
-});
-
-test("luckyResolveReroll: initiative keeps both - never auto-pick", () => {
-  // Initiative produces two action-die layouts that aren't strictly
-  // comparable. Whatever the totals look like, we report keepReroll=true
-  // (so the live result shows the fresh roll) and never mark the original
-  // as the winner - the modal lets the player choose which set to keep.
-  assert.deepEqual(M.luckyResolveReroll(22, 15, true),
-                   { keepReroll: true, originalHigher: false });
-  assert.deepEqual(M.luckyResolveReroll(15, 22, true),
-                   { keepReroll: true, originalHigher: false });
-});
 
 // --- Void-point allocation (spend menu + Commune's activation cost) ---
 

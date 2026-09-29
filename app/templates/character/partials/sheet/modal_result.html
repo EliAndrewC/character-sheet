@@ -688,9 +688,10 @@
                     <div x-show="phase === 'done' && currentRollKey === 'skill:manipulation' && schoolAbilities.courtier_temp_vp_on_hit" x-cloak
                          class="bg-accent/5 border border-accent/20 rounded p-2 text-sm">
                         <button type="button"
-                                @click="const t = window._trackingBridge; if (t && t.canEdit) { t.tempVoidPoints += 1; t.save(); } $el.disabled = true; $el.textContent = 'Gained 1 temp VP';"
+                                @click="atkCourtierVp('roll')" :disabled="atkCourtierVpTaken" data-action="courtier-manipulation-vp"
                                 class="bg-success hover:bg-success-dark text-white px-3 py-1 rounded text-xs">
-                            Gain 1 temp VP (Courtier 4th Dan - once per target)
+                            <span x-show="!atkCourtierVpTaken">Gain 1 temp VP (Courtier 4th Dan - once per target)</span>
+                            <span x-show="atkCourtierVpTaken" x-cloak>Gained 1 temp VP</span>
                         </button>
                     </div>
 

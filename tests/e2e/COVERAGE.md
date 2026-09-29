@@ -395,7 +395,7 @@ The three failures were:
 - [x] 5th Dan contested-roll skill bonus is 0 when ranks are equal -> `test_school_abilities.py::test_kakita_5th_dan_contest_skill_bonus_when_equal`
 - [x] 5th Dan contested-roll skill bonus clamps to 0 when opponent rank is higher -> `test_school_abilities.py::test_kakita_5th_dan_contest_skill_bonus_when_lower`
 - [x] 5th Dan pre-roll bonus includes the skill gap; post-roll breakdown labels it -> `test_school_abilities.py::test_kakita_5th_dan_contest_skill_bonus_shown_in_prebonus_and_breakdown`
-- [x] 5th Dan contest + damage rolls route through rollAndAnimate (so animation / sound prefs apply) -> `test_school_abilities.py::test_kakita_5th_dan_uses_rollandanimate_for_contest`
+- [x] 5th Dan contest + damage rolls (made by the server) are animated through animateDice (so animation / sound prefs apply) -> `test_school_abilities.py::test_kakita_5th_dan_uses_rollandanimate_for_contest`
 - [x] 5th Dan section hidden before initiative is rolled (no action dice) -> `test_school_abilities.py::test_kakita_5th_dan_section_hidden_before_initiative`
 - [x] 5th Dan section appears once action dice exist on the tracking bridge -> `test_school_abilities.py::test_kakita_5th_dan_section_appears_after_initiative`
 - [x] 5th Dan section disappears when the Actions-panel Clear wipes all action dice -> `test_school_abilities.py::test_kakita_5th_dan_section_disappears_when_action_dice_cleared`
@@ -2200,6 +2200,8 @@ The server rolls the sheet's dice (skills, knacks, rings, athletics, bless, the 
 - [x] A failed wound-check request shows the modal's error and Retry, which re-sends the same request - `test_server_rolls.py::test_a_failed_wound_check_request_offers_retry`
 - [x] The duel's contested roll and strike are made by the server; the strike's hit / excess and the recorded row are the server's - `test_server_rolls.py::test_the_duels_rolls_are_the_servers`
 - [x] Kakita 5th Dan's contest is made by the server, which latches the once-per-round use (survives a reload) - `test_server_rolls.py::test_kakita_5th_dan_is_latched_by_the_server`
+- [x] Precepts pool swaps (own, and an ally's upward-only) are made by the server on a real roll, and the priest's pool is saved - `test_school_abilities.py::test_priest_3rd_dan_swap_pool_die_with_lower_rolled_die`, `test_priest_3rd_dan_swap_promotes_unkept_die_into_kept`, `test_priest_3rd_dan_self_swap_can_impair_roll_to_refresh_pool`, `test_ally_swaps_priest_pool_die_and_broadcasts`
+- [x] Roll History rows come from the server's rolls: attack / damage keys and TN, the wound check's outcome lines, the damage breakdown, no void leak into damage - `test_roll_history_clicktest.py` (the attack / damage / wound-check tests, rewritten on real rolls)
 
 ---
 

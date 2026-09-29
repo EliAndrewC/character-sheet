@@ -157,7 +157,8 @@ def damage_pool(
         extra_k += spent
 
     total_extra = extra_dice + (1 if is_lunge else 0) + (2 if is_double and failed_parry else 0)
-    parts: List[str] = [f"{wm_weapon}k{base_kept} {weapon}", f"+{ring_val}k0 from {ring_name}"]
+    parts: List[str] = [f"{wm_weapon}k{base_kept} {'weapon' if weapon_dice else weapon}",
+                        f"+{ring_val}k0 from {ring_name}"]
     if extra_r or extra_k:
         parts.append(f"+{extra_r}k{extra_k} from school")
     if extra_dice:

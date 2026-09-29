@@ -331,3 +331,15 @@ def test_akodo_5th_dan_reflect_spends_void(client):
     assert "reflect" in _op(client, cid, "akodo_reflect", count=5).json()["error"]
     low = _char(client)
     assert "cannot reflect" in _op(client, low, "akodo_reflect", count=1).json()["error"]
+
+
+def test_bank_hand_edits(client):
+    cid = _char(client, adventure_state={"akodo_banked_bonuses": [4, 6], "hiruma_banked_attack_bonus": 8})
+    t = _op(client, cid, "bank", key="akodo_banked_bonuses", spend=6).json()["tracking"]
+    assert t["adventure_state"]["akodo_banked_bonuses"] == [4]
+    assert "no banked +9" in _op(client, cid, "bank", key="akodo_banked_bonuses", spend=9).json()["error"]
+    t = _op(client, cid, "bank", key="hiruma_banked_attack_bonus", spend=5).json()["tracking"]
+    assert t["adventure_state"]["hiruma_banked_attack_bonus"] == 3
+    t = _op(client, cid, "bank", key="hiruma_banked_attack_bonus", clear=True).json()["tracking"]
+    assert "hiruma_banked_attack_bonus" not in t["adventure_state"]
+    assert "no such bank" in _op(client, cid, "bank", key="lucky_used", clear=True).json()["error"]
