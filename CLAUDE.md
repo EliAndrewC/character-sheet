@@ -2,7 +2,7 @@
 
 A character sheet and character builder web app for L7R, a Legend of the Five Rings homebrew tabletop RPG system.
 
-<!-- Dev-container config consumed by launch-container.sh (lives in the sibling gm-assistant repo). Format is HOST:CONTAINER. -->
+<!-- Dev-container config consumed by launch-container (lives in the this-laptop repo: ~/this-laptop/host-scripts/launch-container.sh; /host-scripts, read-only, in the container). Format is HOST:CONTAINER. -->
 <!-- Primary = the FastAPI/uvicorn app (container 8080). Secondary (container 8090) is reserved for a future blind-eval webapp; nothing listens there yet. Host ports are unique across the GM's repos so several containers can run at once. -->
 <!-- container-ports: 8081:8080 8092:8090 -->
 <!-- Mount the parent l7r repo at /host-l7r-repo; its rules/ dir holds the canonical L7R rules this project encodes. -->
