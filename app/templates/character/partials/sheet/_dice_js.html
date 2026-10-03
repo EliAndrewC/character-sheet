@@ -2873,16 +2873,14 @@
             },
 
             _buildDuelDamageImagePayload() {
-                const dice = (this.duelDamageDice || this.atkDamageDice || [])
-                    .map(d => ({
-                        parts: Array.isArray(d.parts) && d.parts.length
-                            ? d.parts : [d.value],
-                    }));
+                // keptDice / unkeptDice are the damage session's dice
+                // (_adoptServerResult). Do not read a duel-only dice field:
+                // none is ever set, and the card came out with no dice.
                 return {
                     title: 'Iaijutsu Duel - Damage',
-                    formula: '',
-                    kept: dice,
-                    dropped: [],
+                    formula: this.formulaText || '',
+                    kept: this._cellsFromDice(this.keptDice || []),
+                    dropped: this._cellsFromDice(this.unkeptDice || []),
                     bonuses: [],
                     // Damage rolls don't accept VP/OW; reuse the narrow helper.
                     extras: this._damageExtraBonusBullets(),

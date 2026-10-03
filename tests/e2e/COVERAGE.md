@@ -880,6 +880,7 @@ The Suzume family of the Sparrow clan is drawn from Crane Doji Artisans and merc
 - [x] Copy-as-image on the attack damage-result panel (fresh card built from damage dice + damage total, not the attack snapshot) → `test_attack_modal.py::test_attack_damage_result_has_copy_as_image_button`
 - [x] Copy-as-image on the iaijutsu duel contested-result panel → `test_iaijutsu_duel.py::test_duel_contested_result_has_copy_as_image_button`
 - [x] Copy-as-image on the iaijutsu duel strike-result panel → `test_iaijutsu_duel.py::test_duel_strike_result_has_copy_as_image_button`
+- [x] Copy-as-image on the iaijutsu duel damage-result panel carries the damage dice and pool (it used to post an empty KEPT row) → `test_iaijutsu_duel.py::test_duel_damage_copy_image_carries_the_damage_dice`
 - [x] Spending a 3rd Dan free raise on a settled skill roll re-prerenders the Copy-as-image card with the bumped total → `test_rolls.py::test_spend_3rd_dan_raise_reprerenders_copy_image`
 - [x] Undoing a free raise re-prerenders the card back to the original total → `test_rolls.py::test_undo_raise_reprerenders_back_to_original_total`
 - [x] Toggling the post-roll arbitrary attack bonus on the attack result panel re-prerenders the attack card → `test_rolls.py::test_post_roll_attack_bonus_reprerenders_attack_card`

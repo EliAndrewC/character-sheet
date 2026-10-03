@@ -587,6 +587,35 @@ def test_duel_strike_result_has_copy_as_image_button(page, live_server_url):
     _wait_duel_copy_ready(page)
 
 
+def test_duel_damage_copy_image_carries_the_damage_dice(page, live_server_url):
+    """The damage-result card shows the damage dice and the pool. It used to
+    read ``duelDamageDice``, which nothing ever set, so every copied duel
+    damage card had an empty KEPT row (the roll-history copy was fine: it
+    renders the server's recorded payload)."""
+    _create_duelist(page, live_server_url, "DuelDmgCopy")
+    _wait_alpine(page)
+    bodies = []
+    page.on("request", lambda r: bodies.append(r.post_data_json)
+            if r.url.endswith("/roll-image") else None)
+    # Opponent XP 10 -> TN 1: any strike hits, so damage is reachable.
+    modal = _walk_to_strike_result(page, 10)
+    modal.locator('button:text-is("Roll Damage")').click()
+    page.wait_for_function("""() => {
+        const els = document.querySelectorAll('[x-data]');
+        for (const el of els) {
+            const d = window.Alpine && window.Alpine.$data(el);
+            if (d && d.duelPhase === 'damage-result') return true;
+        }
+        return false;
+    }""", timeout=15000)
+    _wait_duel_copy_ready(page)
+    card = [b for b in bodies if b and b.get("title") == "Iaijutsu Duel - Damage"][-1]
+    state = _duel_state(page, "keptDice", "duelDamageTotal")
+    assert len(card["kept"]) == len(state["keptDice"]) > 0
+    assert card["formula"], "the damage card names its pool"
+    assert card["total"] == state["duelDamageTotal"]
+
+
 # ---------------------------------------------------------------------------
 # Conviction during the strike portion (rules quirk: discretionary bonuses
 # are banned on the strike, its wound checks, and its damage - EXCEPT the
