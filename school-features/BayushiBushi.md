@@ -24,9 +24,9 @@
 **Status:** Fully implemented.
 - Bayushi Bushi has the feint knack, so it is included in `SCHOOLS_WITH_TEMP_VOID` via the feint-knack check in `app/game_data.py`.
 - The Temp Void counter appears on the View Sheet page with +/- buttons.
-- The feint knack temp VP auto-grant (1 VP on successful feint) is now implemented via `feint_temp_vp` flag. Client shows "Feint succeeded (+1 temp VP)" button after feint rolls.
+- The feint knack's 1 temp VP is granted by the server only on a SUCCESSFUL feint (met the TN entered in the feint modal, not parried) - `feint_success_temp_vp`. Before 2026-10-03 it was granted on every feint.
 
-**Implementation:** `app/game_data.py` (SCHOOLS_WITH_TEMP_VOID membership), `app/templates/character/sheet.html` (Temp Void counter, feint_temp_vp grant).
+**Implementation:** `app/game_data.py` (SCHOOLS_WITH_TEMP_VOID membership), `app/templates/character/sheet.html` (Temp Void counter), `app/services/roll_sessions.py` (`_feint_state`: the server-decided feint temp VP).
 
 ---
 
@@ -61,7 +61,8 @@
 **Questions (ANSWERED):**
 - Damage formula: (attack_skill)k1 with NO extra damage from ring or TN excess.
 - However, the Bayushi special ability (+1k1 per VP spent on the roll) DOES apply. So if attack=4 and 1 VP spent on the feint: damage = 5k2.
-- This is a separate damage roll triggered after a successful feint.
+- This is a separate damage roll triggered after a successful feint; the "Roll Feint Damage" button shows only when the server judged the feint successful, and the server refuses the damage on an unsuccessful one.
+- The feint modal's odds table shows the damage dice and average per void spend (`feint_probs.damage_keys` / `damage_avgs` in `pages.py`).
 
 ---
 

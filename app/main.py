@@ -171,6 +171,10 @@ def _art_url_for_key(char, key_attr: str) -> str | None:
         # than ``?``. In stub mode (disk-backed test server) there is no
         # existing query string, so fall back to ``?``.
         sep = "&" if "?" in url else "?"
+        # SQLite hands back a naive datetime that is UTC; .timestamp() on a
+        # naive value would read it as the server's local time.
+        if updated.tzinfo is None:
+            updated = updated.replace(tzinfo=timezone.utc)
         url = f"{url}{sep}v={int(updated.timestamp())}"
     return url
 

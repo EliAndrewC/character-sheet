@@ -46,6 +46,7 @@ from app.services.dark_secret import (
 )
 from app.data import shosuro_lowest_3_avg
 from app.services.dice import build_all_roll_formulas, is_impaired
+from app.services.roll_engine import apply_dice_cap
 from app.services.roll_sessions import server_rolled
 from app.services.attack_rolls import attack_flags
 from app.services.tracking_ops import precepts_pool_flags
@@ -803,10 +804,6 @@ def view_character(request: Request, char_id: int, db: Session = Depends(get_db)
         ),
         # Isawa Duelist 5th Dan: bank wound check excess for future wound check
         # Shinjo 5th Dan: bank parry excess for future wound check
-        # Feint knack: 1 temp VP on successful feint (non-Akodo feint schools).
-        # Schools listed here have feint in their school_knacks; if you add or
-        # remove feint from a school's knack list in game_data.py, update this
-        # set too.
         # Hiruma 3rd Dan: bank +2*attack for next attack and damage after parry
         # Hiruma 3rd Dan: post-parry free interrupt lunge (display note).
         # The lunge is made without the normal lunge penalty. Not mechanized -
@@ -1137,6 +1134,42 @@ def view_character(request: Request, char_id: int, db: Session = Depends(get_db)
                     ]
             pp["kitsune_swap"] = swap_entry
 
+    # Feint probability slice (the feint modal). A feint succeeds when it
+    # meets the target's TN and is not parried, so the chart is the same
+    # P(roll >= target) slice as the parry's. Bayushi 3rd Dan feints also do
+    # damage: Xk1, plus 1k1 per void point put into the feint (Bayushi
+    # Special) - never extra dice from the TN - so the modal shows the
+    # average of that damage roll per void spend.
+    feint_probs = {}
+    feint_formula = roll_formulas.get("knack:feint")
+    if feint_formula:
+        pf = parry_feint_flags(char_dict)
+        vp_damage = damage_flags(char_dict)["bayushi_vp_damage"]
+        fp = {"flat": feint_formula.get("flat", 0), "void_cap": void_spend_cap,
+              "probs": {}, "void_keys": {}}
+        if pf["bayushi_feint_damage"]:
+            fp["damage_keys"] = {}
+            fp["damage_avgs"] = {}
+        for v in range(void_spend_cap + 1):
+            r, k = feint_formula["rolled"] + v, feint_formula["kept"] + v
+            if r > 10: k += r - 10; r = 10
+            if k > 10: k = 10
+            rk = f"{r},{k}"
+            fp["void_keys"][str(v)] = rk
+            if rk not in fp["probs"]:
+                fp["probs"][rk] = [
+                    round(_prob_table[reroll_for_attack][r, k, x], 4)
+                    for x in range(151)
+                ]
+            if pf["bayushi_feint_damage"]:
+                extra = v if vp_damage else 0
+                capped = apply_dice_cap(pf["bayushi_feint_damage_rolled"] + extra, 1 + extra, 0)
+                fp["damage_keys"][str(v)] = f"{capped['rolled']},{capped['kept']}"
+                fp["damage_avgs"][str(v)] = round(
+                    _prob_table[True].get((capped["rolled"], capped["kept"]), 0)
+                    + capped["flat"], 1)
+        feint_probs["knack:feint"] = fp
+
     # Damage average lookup table: avg of NkM with reroll-10s for reasonable combos
     damage_avgs = {}
     for r in range(1, 16):
@@ -1288,9 +1321,12 @@ def view_character(request: Request, char_id: int, db: Session = Depends(get_db)
             "wound_check_probs": wc_probs,
             "attack_probs": attack_probs,
             "parry_probs": parry_probs,
+            "feint_probs": feint_probs,
             "damage_avgs": damage_avgs,
             "duel_probs": duel_probs,
-            "has_temp_void": character.school in SCHOOLS_WITH_TEMP_VOID,
+            # A foreign feint knack earns temp void too (any successful feint).
+            "has_temp_void": (character.school in SCHOOLS_WITH_TEMP_VOID
+                              or bool((character.foreign_knacks or {}).get("feint"))),
             "school_abilities": school_abilities,
             "daidoji_counterattack_party": daidoji_counterattack_party,
             "priest_conviction_allies": priest_conviction_allies,

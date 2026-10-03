@@ -62,7 +62,7 @@ def fresh_limits():
     ("athletics:Water", True), ("initiative", True), ("initiative:athletics", True),
     ("initiative:other", False),
     ("parry", True), ("athletics:parry", True), ("athletics:attack", True),
-    ("knack:feint", True), ("knack:feint:athletics", True), ("attack", True),
+    ("knack:feint", True), ("attack", True),
     ("wound_check", True), ("damage", False), ("", False),
 ])
 def test_server_rolled(key, expected):
@@ -1015,38 +1015,150 @@ def test_hiruma_parry_banks_for_the_next_attack(client):
     assert _get(client, cid).adventure_state["hiruma_banked_attack_bonus"] == 8
 
 
-def test_feint_hooks(client):
-    ide = _school(client, "ide_diplomat", current_temp_void_points=0)
-    data = _roll(client, ide, roll_key="knack:feint").json()
-    assert data["tracking"]["current_temp_void_points"] == 1
+def _feint(client, cid, tn, headers=PLAYER, **body):
+    return _roll(client, cid, headers=headers, roll_key="knack:feint", tn=tn, **body)
+
+
+def test_a_feint_needs_the_targets_tn(client):
+    cid = _school(client, "akodo_bushi")
+    for body in ({}, {"tn": "x"}, {"tn": 0}, {"tn": 1000}):
+        r = _roll(client, cid, roll_key="knack:feint", **body)
+        assert r.status_code == 400 and "TN" in r.json()["error"]
+
+
+def test_akodo_feint_void_points_follow_the_outcome(client):
+    akodo = _school(client, "akodo_bushi", current_temp_void_points=0)
+    data = _feint(client, akodo, 1).json()
+    assert data["feint"]["success"] and data["tracking"]["current_temp_void_points"] == 4
     sid = data["session_id"]
+    # A parried feint is unsuccessful: 4 becomes 1, and taking it back restores 4.
+    parried = _act(client, akodo, sid, "feint_parried", parried=True).json()
+    assert parried["feint"]["met_tn"] and not parried["feint"]["success"]
+    assert parried["tracking"]["current_temp_void_points"] == 1
+    assert _act(client, akodo, sid, "feint_parried", parried=False).json()[
+        "tracking"]["current_temp_void_points"] == 4
+    missed = _feint(client, akodo, 999).json()
+    assert not missed["feint"]["met_tn"] and missed["tracking"]["current_temp_void_points"] == 5
+    assert _get(client, akodo).current_temp_void_points == 5
+
+
+def test_any_successful_feint_gives_one_temp_void_point(client):
+    ide = _school(client, "ide_diplomat", current_temp_void_points=0)
+    assert _feint(client, ide, 1).json()["tracking"]["current_temp_void_points"] == 1
+    assert _feint(client, ide, 999).json()["tracking"]["current_temp_void_points"] == 1
+    # A foreign-knack feint (no feint school at all) earns it too.
+    other = _school(client, "mirumoto_bushi", current_temp_void_points=0, foreign_knacks={"feint": 1})
+    assert _feint(client, other, 1).json()["tracking"]["current_temp_void_points"] == 1
+    # Bayushi 4th Dan banks its raise whatever the outcome.
+    bay = _school(client, "bayushi_bushi", dan=4)
+    _feint(client, bay, 999)
+    assert _get(client, bay).adventure_state["bayushi_banked_feint_raise"] == 5
+    assert _feint(client, ide, 1).json()["notes"] == []
+
+
+def test_a_successful_feint_moves_the_highest_action_to_its_phase(client):
+    dice = [{"value": 3, "spent": True}, {"value": 5, "spent": False}, {"value": 8, "spent": False}]
+    cid = _school(client, "akodo_bushi", action_dice=dice)
+    data = _feint(client, cid, 1, die_index=0).json()
+    assert data["feint"]["phase"] == 3
+    assert data["feint"]["moved"] == {"index": 2, "from": 8, "to": 3}
+    assert [d["value"] for d in data["tracking"]["action_dice"]] == [3, 5, 3]
+    # Parried: the die goes back to phase 8.
+    back = _act(client, cid, data["session_id"], "feint_parried", parried=True).json()
+    assert back["feint"]["moved"] is None
+    assert [d["value"] for d in back["tracking"]["action_dice"]] == [3, 5, 8]
+    again = _act(client, cid, data["session_id"], "feint_parried", parried=False).json()
+    assert [d["value"] for d in again["tracking"]["action_dice"]] == [3, 5, 3]
+
+
+def test_a_feint_moves_nothing_it_should_not(client):
+    # The only other die is already earlier than the phase: it stays.
+    cid = _school(client, "akodo_bushi", action_dice=[{"value": 6, "spent": True}, {"value": 4}])
+    data = _feint(client, cid, 1, die_index=0).json()
+    assert data["feint"]["moved"] is None
+    assert [d["value"] for d in data["tracking"]["action_dice"]] == [6, 4]
+    # A miss moves nothing; no die index (outside a round) has no phase.
+    cid = _school(client, "akodo_bushi", action_dice=[{"value": 2, "spent": True}, {"value": 9}])
+    assert _feint(client, cid, 999, die_index=0).json()["feint"]["moved"] is None
+    data = _feint(client, cid, 1, die_index=7).json()
+    assert data["feint"]["phase"] is None and data["feint"]["moved"] is None
+    assert _feint(client, cid, 1, die_index=True).json()["feint"]["phase"] is None
+    # A die the player moved again since is not put back.
+    cid = _school(client, "akodo_bushi", action_dice=[{"value": 2, "spent": True}, {"value": 9}])
+    sid = _feint(client, cid, 1, die_index=0).json()["session_id"]
+    s = client._test_session_factory()
+    c = s.get(Character, cid)
+    c.action_dice = [{"value": 2, "spent": True}, {"value": 2, "spent": True}]
+    s.commit()
+    s.close()
+    back = _act(client, cid, sid, "feint_parried", parried=True).json()
+    assert [d["value"] for d in back["tracking"]["action_dice"]] == [2, 2]
+
+
+def test_a_raise_that_crosses_the_tn_makes_the_feint_succeed(client, scripted):
+    cid = _school(client, "akodo_bushi", dan=4, current_void_points=2, current_temp_void_points=0,
+                  action_dice=[{"value": 4, "spent": True}, {"value": 7}])
+    first = _roll(client, cid, roll_key="knack:feint", tn=1, headers=scripted("5")).json()
+    tn = first["total"] + 5
+    data = _feint(client, cid, tn, headers=scripted("5"), die_index=0).json()
+    assert not data["feint"]["met_tn"] and data["tracking"]["current_temp_void_points"] == 4 + 1
+    up = _act(client, cid, data["session_id"], "akodo_vp").json()
+    # The raise is drawn from temp void first (5 - 1), then success adds 3 more.
+    assert up["feint"]["success"] and up["tracking"]["current_temp_void_points"] == 4 + 3
+    assert [d["value"] for d in up["tracking"]["action_dice"]] == [4, 4]
+    down = _act(client, cid, data["session_id"], "undo_akodo_vp").json()
+    assert not down["feint"]["success"] and down["tracking"]["current_temp_void_points"] == 4 + 1
+    assert [d["value"] for d in down["tracking"]["action_dice"]] == [4, 7]
+
+
+def test_temp_void_taken_back_never_goes_below_zero(client):
+    cid = _school(client, "akodo_bushi", current_temp_void_points=0)
+    sid = _feint(client, cid, 1).json()["session_id"]
+    s = client._test_session_factory()
+    c = s.get(Character, cid)
+    c.current_temp_void_points = 1  # three of the four already spent
+    s.commit()
+    s.close()
+    assert _act(client, cid, sid, "feint_parried", parried=True).json()[
+        "tracking"]["current_temp_void_points"] == 0
+
+
+def test_feint_tn_is_recorded_and_parried_is_feint_only(client):
+    cid = _school(client, "akodo_bushi")
+    data = _feint(client, cid, 17).json()
+    s = client._test_session_factory()
+    assert s.get(RollHistory, data["history_id"]).tn == 17
+    s.close()
+    psid = _roll(client, cid, roll_key="parry").json()["session_id"]
+    assert "feint" in _act(client, cid, psid, "feint_parried", parried=True).json()["error"]
+    assert "unknown" in _act(client, cid, data["session_id"], "akodo_feint").json()["error"]
+
+
+def test_ide_bank_needs_a_feint_that_met_its_tn(client):
+    ide = _school(client, "ide_diplomat")
+    missed = _feint(client, ide, 999).json()["session_id"]
+    assert "TN" in _act(client, ide, missed, "ide_bank").json()["error"]
+    sid = _feint(client, ide, 1).json()["session_id"]
+    # Met its TN: the bank stands even if the feint was parried.
+    _act(client, ide, sid, "feint_parried", parried=True)
     assert _act(client, ide, sid, "ide_bank").json()["tracking"]["adventure_state"]["ide_banked_tn_reduce"] == 10
     assert "already" in _act(client, ide, sid, "ide_bank").json()["error"]
-    bay = _school(client, "bayushi_bushi", dan=4)
-    _roll(client, bay, roll_key="knack:feint")
-    assert _get(client, bay).adventure_state["bayushi_banked_feint_raise"] == 5
-    akodo = _school(client, "akodo_bushi", current_temp_void_points=0)
-    sid = _roll(client, akodo, roll_key="knack:feint").json()["session_id"]
-    assert _act(client, akodo, sid, "akodo_feint", succeeded=True).json()["gained"] == 4
-    assert _act(client, akodo, sid, "akodo_feint", succeeded=False).status_code == 400
-    assert _get(client, akodo).current_temp_void_points == 4
-    sid = _roll(client, akodo, roll_key="knack:feint").json()["session_id"]
-    assert _act(client, akodo, sid, "akodo_feint").json()["gained"] == 1
-    assert _act(client, ide, sid if False else _roll(client, ide, roll_key="knack:feint").json()["session_id"],
-                "akodo_feint").status_code == 400
     psid = _roll(client, ide, roll_key="parry").json()["session_id"]
     assert _act(client, ide, psid, "ide_bank").status_code == 400
 
 
 def test_simulated_feint_hooks_change_nothing(client):
-    cid = _school(client, "akodo_bushi", current_temp_void_points=0)
-    data = _roll(client, cid, roll_key="knack:feint", headers=OTHER).json()
-    assert data["notes"] == []
-    assert _act(client, cid, data["session_id"], "akodo_feint", headers=OTHER, succeeded=True).json()["gained"] == 4
+    cid = _school(client, "akodo_bushi", current_temp_void_points=0,
+                  action_dice=[{"value": 3, "spent": False}, {"value": 9, "spent": False}])
+    data = _feint(client, cid, 1, headers=OTHER, die_index=0).json()
+    assert data["notes"] == [] and data["feint"]["success"] and data["feint"]["temp_vp"] == 4
+    assert data["feint"]["phase"] is None
+    _act(client, cid, data["session_id"], "feint_parried", headers=OTHER, parried=True)
     ide = _school(client, "ide_diplomat")
-    sid = _roll(client, ide, roll_key="knack:feint", headers=OTHER).json()["session_id"]
+    sid = _feint(client, ide, 1, headers=OTHER).json()["session_id"]
     _act(client, ide, sid, "ide_bank", headers=OTHER)
-    assert _get(client, cid).current_temp_void_points == 0
+    c = _get(client, cid)
+    assert c.current_temp_void_points == 0 and [d["value"] for d in c.action_dice] == [3, 9]
     assert not (_get(client, ide).adventure_state or {}).get("ide_banked_tn_reduce")
 
 
@@ -1093,9 +1205,11 @@ def test_shiba_and_bayushi_damage_rolls_are_recorded(client, scripted):
     assert row["total"] == 6 and row["title"].startswith("Shiba")
     assert "already" in _act(client, shiba, sid, "sub_damage").json()["error"]
     bay = _school(client, "bayushi_bushi", dan=3, current_void_points=2, ring_void=2)
-    sid = _roll(client, bay, roll_key="knack:feint", void=1).json()["session_id"]
+    sid = _roll(client, bay, roll_key="knack:feint", tn=1, void=1).json()["session_id"]
     dmg = _act(client, bay, sid, "sub_damage").json()["sub_damage"]
     assert dmg["label"] == "Bayushi 3rd Dan feint damage (3k2)" and dmg["kept"] == 2
+    missed = _roll(client, bay, roll_key="knack:feint", tn=999).json()["session_id"]
+    assert "unsuccessful" in _act(client, bay, missed, "sub_damage").json()["error"]
     plain = _school(client, "akodo_bushi")
     sid = _roll(client, plain, roll_key="parry").json()["session_id"]
     assert "no damage" in _act(client, plain, sid, "sub_damage").json()["error"]

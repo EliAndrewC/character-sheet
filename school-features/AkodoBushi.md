@@ -14,9 +14,10 @@
 **Status:** Fully implemented.
 - Temporary Void Points are tracked for Akodo Bushi (school is in `SCHOOLS_WITH_TEMP_VOID`).
 - The Temp Void counter appears on the View Sheet page with +/- buttons.
-- Temp VP grant after feint (4 on success, 1 on failure) is implemented.
-  - Server: `app/routes/pages.py` passes `akodo_temp_vp_on_feint: true` in school_abilities.
-  - Client: `app/templates/character/sheet.html` shows "Succeeded (+4 temp VP)" and "Failed (+1 temp VP)" buttons after feint rolls.
+- Temp VP grant after feint (4 on success, 1 on failure) is decided by the SERVER from the feint's TN (2026-10-03). The old "Succeeded / Failed" buttons were missed in a real fight, so nothing depends on a click now.
+  - The feint modal (`modal_feint.html`) requires the target's TN; `roll_sessions._feint_state` judges success (met the TN and not parried) after the roll and after every post-roll action, and applies the difference in temp VP (`parry_feint_flags`: `feint_success_temp_vp` 4, `feint_failure_temp_vp` 1).
+  - GM rulings: a parried feint is unsuccessful (the result panel's "parried" checkbox, action `feint_parried`); an Akodo gets 4 in total on success, not 4 + the knack's 1.
+  - Like any successful feint, it also moves the highest unspent action die to the phase of the die the feint spent (`parry_feint.highest_die_move`); parried puts it back.
 
 **Implementation:** `app/game_data.py`, `app/services/dice.py` (SCHOOLS_WITH_TEMP_VOID computed in `app/game_data.py`), `app/routes/pages.py` (akodo_temp_vp_on_feint flag), `app/templates/character/sheet.html` (Temp Void counter, feint result buttons).
 

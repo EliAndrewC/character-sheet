@@ -178,7 +178,7 @@ The three failures were:
 
 ### Akodo Bushi
 
-- [x] Feint roll adds temp VP -> `test_school_abilities.py::test_akodo_feint_temp_vp`
+- [x] Feint outcome decided from the TN: Akodo success +4 temp VP, a miss +1, no button to click -> `test_school_abilities.py::test_akodo_feint_temp_vp`
 - [x] 1st Dan behavioral roll formulas and bonuses -> `test_school_abilities.py::test_akodo_1st_dan_behavioral`
 - [x] 2nd Dan behavioral wound check bonus -> `test_school_abilities.py::test_akodo_2nd_dan_behavioral`
 - [x] 3rd Dan wound check banks bonus for next attack -> `test_school_abilities.py::test_akodo_3rd_dan_bank_and_apply_behavioral`
@@ -198,7 +198,7 @@ The three failures were:
 ### Bayushi Bushi
 
 - [x] 3rd Dan feint damage button visible -> `test_school_abilities.py::test_bayushi_feint_damage_button`
-- [x] Feint temp VP button for Bayushi -> `test_school_abilities.py::test_feint_temp_vp_button_for_bayushi`
+- [x] A successful feint gives a Bayushi 1 temp VP -> `test_school_abilities.py::test_feint_temp_vp_button_for_bayushi`
 - [x] 1st Dan behavioral roll formulas and bonuses -> `test_school_abilities.py::test_bayushi_1st_dan_behavioral`
 - [x] 2nd Dan behavioral double attack bonus -> `test_school_abilities.py::test_bayushi_2nd_dan_behavioral`
 - [x] 3rd Dan feint shows damage output -> `test_school_abilities.py::test_bayushi_3rd_dan_feint_shows_damage`
@@ -758,6 +758,7 @@ The Suzume family of the Sparrow clan is drawn from Crane Doji Artisans and merc
 - [x] Athletics-only die's per-die menu offers Athletics Parry; selecting it opens the parry modal and rolling spends that die -> `test_school_abilities.py::test_togashi_athletics_parry_can_spend_athletics_die`
 - [x] Per-die action menu lists core options (attack/parry); predeclared is now a checkbox in the parry modal -> `test_rolls.py::test_action_die_menu_shows_action_options`
 - [x] Per-die Parry opens the parry modal; rolling spends that specific die (not the lowest) -> `test_rolls.py::test_action_die_menu_parry_spends_that_die`
+- [x] Per-die Feint opens the feint modal; a successful feint moves the highest unspent die to that die's phase, the result names the move, the spent die is annotated, and "parried" puts the die back -> `test_feint.py::test_a_successful_feint_moves_the_highest_action_die`
 - [x] Per-die Attack opens the attack modal and commits the die on Roll -> `test_rolls.py::test_action_die_menu_attack_opens_modal_spends_on_roll`
 - [x] Cancelling the attack modal opened from a per-die menu leaves the die unspent -> `test_rolls.py::test_action_die_menu_attack_cancel_does_not_spend`
 - [x] Athletics-only die's menu omits regular attack/parry rows -> `test_rolls.py::test_athletics_only_die_menu_restricts_to_athletics`
@@ -844,6 +845,9 @@ The Suzume family of the Sparrow clan is drawn from Crane Doji Artisans and merc
 - [x] Click a skill row opens the modal with the skill name → `test_rolls.py::test_click_skill_opens_modal_with_skill_name`
 - [x] Unskilled advanced skill rolls show the -10 penalty in the breakdown → `test_rolls.py::test_unskilled_advanced_skill_shows_minus_10_in_breakdown`
 - [x] Click Attack opens attack modal → `test_rolls.py::test_click_attack_opens_attack_modal`
+- [x] Click Feint opens the feint modal: TN prompt, Roll disabled until a TN is entered, the success note names the temp VP, the odds table appears and rises with void -> `test_feint.py::test_feint_modal_needs_a_tn_and_shows_the_odds`
+- [x] Read-only viewer: a feint shows its outcome and the parried toggle works on the session, but the sheet's temp VP never moves -> `test_feint.py::test_a_non_editor_feint_shows_the_outcome_but_changes_nothing`
+- [x] Bayushi 3rd Dan feint modal shows Damage (Xk1, +1k1 per void) and Avg Damage columns; a missed feint shows no temp VP and no damage button -> `test_feint.py::test_bayushi_feint_odds_show_damage_and_a_miss_hides_it`
 - [x] Click Parry opens the dedicated parry modal (not a dropdown); TN prompt shown, chart hidden until a TN is entered, predeclared checkbox present → `test_rolls.py::test_click_parry_opens_parry_modal`
 - [x] Entering a TN reveals the parry probability chart with a None (0 void) row → `test_rolls.py::test_parry_modal_chart_appears_after_tn`
 - [x] Rolling from the parry modal produces a Parry result in the shared dice-roller modal → `test_rolls.py::test_parry_modal_rolls_with_tn`
@@ -2192,7 +2196,7 @@ The server rolls the sheet's dice (skills, knacks, rings, athletics, bless, the 
 - [x] Lucky on a server initiative replaces the action dice with the reroll and shows the original set - `test_server_rolls.py::test_lucky_on_initiative_replaces_the_action_dice`
 - [x] A predeclared parry goes to the server as a roll choice and its +5 comes back on the formula - `test_server_rolls.py::test_a_predeclared_parry_is_rolled_by_the_server`
 - [x] Mirumoto: initiative fills the 3rd Dan points on the server, a parry grants the temp void point there, and a point spent in the result panel is persisted (survives a reload) - `test_server_rolls.py::test_mirumoto_parry_hooks_and_points_are_the_servers`
-- [x] Akodo feint "Succeeded" grants 4 temp void points on the server, the choice closes, and it survives a reload - `test_server_rolls.py::test_akodo_feint_void_points_are_granted_by_the_server`
+- [x] Akodo feint that meets its TN gets 4 temp void points from the server; ticking "parried" takes it back to 1, and that survives a reload - `test_server_rolls.py::test_akodo_feint_void_points_are_granted_by_the_server`
 - [x] Shiba 3rd Dan parry damage is rolled (and recorded) by the server - `test_server_rolls.py::test_shiba_parry_damage_is_rolled_by_the_server`
 - [x] The attack goes to the server with the modal's TN; the sheet shows the server's total, hit and extra dice; "Make Damage Roll" rolls the damage on the server and adopts its history row - `test_server_rolls.py::test_the_attack_and_its_damage_are_the_servers`
 - [x] A failed attack request shows the attack modal's error and Retry, which re-sends the same request - `test_server_rolls.py::test_a_failed_attack_request_offers_retry`

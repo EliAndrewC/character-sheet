@@ -246,7 +246,6 @@
             _lastAct: null,
             _actChain: null,
             _predeclaredNext: false,
-            akodoFeintDone: false,
             atkCourtierVpTaken: false,
             _atkAkodoStack: [],
             _wcRequest: null,
@@ -780,6 +779,18 @@
             // pre-roll probability chart + the void/predeclared/variant
             // pickers. parryTN starts null so the chart stays hidden until the
             // player enters the attacker's roll result.
+            // Feint modal: the target's TN (required - the server decides the
+            // feint's success from it), the void pick and the odds. The
+            // outcome after the roll is the server's (feintState): whether
+            // it met the TN, was parried, the temp void it earned and the
+            // action die it moved.
+            feintModalOpen: false,
+            feintProbs: {},
+            feintTN: null,
+            feintVoidSelected: 0,
+            feintState: null,
+            _feintNext: null,
+            _feintDieIndex: -1,
             parryModalOpen: false,
             parryKey: 'parry',
             parryProbs: {},
@@ -1382,6 +1393,34 @@
                 // instead of the old void dropdown. On a touch device with
                 // rules text we first show a tiny menu so the player can read
                 // the rules without committing to the modal (mirrors attacks).
+                // Feint: the feint modal (TN + odds), like the parry. On a
+                // touch device with rules text, the small menu first.
+                if (key === 'knack:feint') {
+                    if (isTouch && rulesHtml) {
+                        const pos = this._computeRollMenuPos(el);
+                        this.rollMenuKey = key;
+                        this.rollMenuTitle = f.label;
+                        this.rollMenuPos = pos;
+                        this.rollMenuOptions = [];
+                        this.rollMenuHasStrike = false;
+                        this.rollMenuHasParry = false;
+                        this.rollMenuHasTogashiInit = false;
+                        this.rollMenuHasAthleticsPicker = false;
+                        this.rollMenuHasRingPicker = false;
+                        this.rollMenuHasAttackChoice = false;
+                        this.rollMenuHasMobileAttack = false;
+                        this.rollMenuHasMobileParry = true;
+                        this.rollMenuOwCapacity = 0;
+                        this.owHoverRow = null;
+                        this.athHoverRow = null;
+                        this.parryHoverRow = null;
+                        this.rollMenuOpen = true;
+                        return;
+                    }
+                    this.openFeintModal();
+                    return;
+                }
+
                 if (key === 'parry') {
                     if (isTouch && rulesHtml) {
                         const pos = this._computeRollMenuPos(el);
@@ -1674,7 +1713,7 @@
                 // roll should auto-spend the lowest unspent action die.
                 if (!key) return false;
                 if (key === 'parry' || key === 'athletics:parry') return true;
-                if (key === 'knack:feint' || key.startsWith('knack:feint:')) return true;
+                if (key === 'knack:feint') return true;
                 return false;
             },
 
@@ -1687,7 +1726,7 @@
 
             _initialSpendLabel(key) {
                 if (key === 'parry' || key === 'athletics:parry') return 'Parry (rolling...)';
-                if (key === 'knack:feint' || (key && key.startsWith('knack:feint:'))) return 'Feint (rolling...)';
+                if (key === 'knack:feint') return 'Feint (rolling...)';
                 return null;
             },
 
@@ -1747,6 +1786,10 @@
                     this.openParryModal(key, dieIndex);
                     return;
                 }
+                if (key === 'knack:feint') {
+                    this.openFeintModal(dieIndex);
+                    return;
+                }
                 // For non-modal rolls the spend fires immediately inside
                 // executeRoll / executeRollWithExtraFlat, so lingering
                 // state isn't possible.
@@ -1795,7 +1838,6 @@
                 // per combat).
                 this.shinjoParryBankedThisRoll = null;
                 this.shinjoParryOpponentRoll = 0;
-                this.akodoFeintDone = false;
                 this.ideBankedThisRoll = false;
                 const eligible = formula?.shinjo_phase_bonus_attack
                         && this.schoolAbilities?.shinjo_phase_bonus;
@@ -1853,8 +1895,21 @@
             },
 
             _describeFeintForDie(key) {
-                // key is "knack:feint" or "knack:feint:<ring>" - strip the ring.
-                return `Feint: total ${this.baseTotal}`;
+                const fs = this.feintState;
+                if (!fs) return `Feint: total ${this.baseTotal}`;
+                const outcome = fs.success ? 'succeeded'
+                    : (fs.met_tn ? 'parried' : 'missed');
+                return `Feint: rolled ${this.baseTotal} vs TN ${fs.tn} - ${outcome}`;
+            },
+
+            // Re-describe the feint's spent action die after its outcome
+            // changed (a raise crossed the TN, or it was parried).
+            _annotateFeintDie() {
+                if (this._feintDieIndex == null || this._feintDieIndex < 0) return;
+                const t = window._trackingBridge;
+                if (t && t.canEdit && typeof t.annotateActionDie === 'function') {
+                    t.annotateActionDie(this._feintDieIndex, this._describeFeintForDie('knack:feint'));
+                }
             },
 
             _describeAttackForDie(includeDamage) {
@@ -1961,6 +2016,19 @@
                     request_id: this._newRequestId(),
                 };
                 this._predeclaredNext = false;
+                this.feintState = null;
+                this._feintDieIndex = -1;
+                if (key === 'knack:feint') {
+                    // The TN decides the feint's success; the spent die's
+                    // phase is where a successful feint moves the highest
+                    // action (both on the server).
+                    this._serverRollRequest.tn = this._feintNext ? this._feintNext.tn : null;
+                    if (this._actionDieSpentIndex != null && this._actionDieSpentIndex >= 0) {
+                        this._serverRollRequest.die_index = this._actionDieSpentIndex;
+                        this._feintDieIndex = this._actionDieSpentIndex;
+                    }
+                }
+                this._feintNext = null;
                 this.formula = f;
                 this.title = f.label;
                 this.formulaText = f.flat > 0 ? `${f.rolled}k${f.kept} + ${f.flat}` : `${f.rolled}k${f.kept}`;
@@ -2026,6 +2094,7 @@
                 this._serverSessionMode = data.mode;
                 this._serverSessionKind = 'roll';
                 this._serverDice = data.dice;
+                this.feintState = data.feint || null;
                 if (data.notes) {
                     this.perRoundResetMessages = [...(this.perRoundResetMessages || []), ...data.notes];
                 }
@@ -2173,7 +2242,7 @@
                     if (this._actionDieSpentIndex != null && this._actionDieSpentIndex >= 0) {
                         if (key === 'parry' || key === 'athletics:parry') {
                             this._annotateSpentActionDie(this._describeParryForDie(key));
-                        } else if (key === 'knack:feint' || (key && key.startsWith('knack:feint:'))) {
+                        } else if (key === 'knack:feint') {
                             this._annotateSpentActionDie(this._describeFeintForDie(key));
                         }
                         this._actionDieSpentIndex = -1;
@@ -2486,7 +2555,7 @@
                 };
                 // Parry rolls made against an entered TN carry their
                 // succeeded/failed-vs-TN outcome into the card footer.
-                const parryFooter = this.parryResultText();
+                const parryFooter = this.parryResultText() || this.feintResultText();
                 if (parryFooter) payload.footer = parryFooter;
                 return payload;
             },
@@ -3238,6 +3307,11 @@
                 if (data.pcp && t._adoptPcp) t._adoptPcp(data.pcp);
                 if (data.attack && this._serverSessionKind === 'attack') this._adoptAttackOutcome(data.attack);
                 if (data.wc && this._serverSessionKind === 'wc') this._adoptWcOutcome(data.wc);
+                if (data.feint && this._serverSessionKind === 'roll') {
+                    this.feintState = data.feint;
+                    this._annotateFeintDie();
+                    this._prerenderRollImage(this._buildRollImagePayload());
+                }
             },
             // A reroll on the server-made roll in the result panel (Phase 4):
             // the server rolls the new dice and rescores the roll, keeping
@@ -3560,12 +3634,14 @@
                     this._atkUpdateHitState();
                 }
             },
-            // Akodo Special: a feint's temp void points, 4 on success, 1 on
-            // failure.
-            async akodoFeintVp(succeeded) {
-                if (this.akodoFeintDone || !this._onServerRoll()) return;
-                this.akodoFeintDone = true;
-                if (!(await this._act('akodo_feint', {succeeded: !!succeeded}))) this.akodoFeintDone = false;
+            // The target parried the feint (or the player takes that back).
+            // A parried feint is unsuccessful; the server takes back the
+            // success's temp void and puts the moved action die back.
+            async feintSetParried(parried) {
+                if (!this.feintState || !this._onServerRoll()) return;
+                const before = this.feintState;
+                this.feintState = { ...before, parried: !!parried };
+                if (!(await this._act('feint_parried', {parried: !!parried}))) this.feintState = before;
             },
             // Ide Special: bank -10 to the target's TN for the next attack.
             async ideBankTn() {
@@ -4344,6 +4420,64 @@
             // openAttackModal) so the eventual roll spends *that* die and a
             // cancelled modal's index can't leak into the next parry. Passing
             // the 'athletics:parry' key pre-selects the athletics variant.
+            // Feint modal: the target's TN and a void pick, with the odds of
+            // meeting the TN per void spend (and, for a Bayushi 3rd Dan, the
+            // damage the feint would do). preSpentDieIndex works as for the
+            // parry modal.
+            openFeintModal(preSpentDieIndex = null) {
+                if (!this.formulas['knack:feint']) return;
+                this._preSpentDieIndex = preSpentDieIndex;
+                try {
+                    this.feintProbs = JSON.parse(
+                        document.getElementById('feint-probs')?.textContent || '{}');
+                } catch (e) { this.feintProbs = {}; }
+                this.feintTN = null;
+                this.feintVoidSelected = 0;
+                this.feintModalOpen = true;
+            },
+
+            feintActiveProbs() {
+                return this.feintProbs['knack:feint'] || null;
+            },
+
+            feintVoidBlocked() {
+                return !!this.formulas['knack:feint']?.void_blocked;
+            },
+
+            feintVoidCap() {
+                if (this.feintVoidBlocked()) return 0;
+                const cap = this.feintActiveProbs()?.void_cap ?? (this.voidSpendConfig.cap || 0);
+                return Math.min(this.computeVoidOptions().length, cap);
+            },
+
+            feintTNValid() {
+                const tn = parseInt(this.feintTN, 10);
+                return Number.isFinite(tn) && tn > 0 && tn < 1000;
+            },
+
+            // P(feint roll >= TN) for a void spend (formula flat and any
+            // per-VP combat bonus folded in, as for the parry).
+            feintHitChance(voidCount) {
+                const probs = this.feintActiveProbs();
+                if (!probs || !probs.probs || !this.feintTNValid()) return null;
+                const key = probs.void_keys?.[String(voidCount)];
+                const arr = key ? probs.probs[key] : null;
+                if (!arr) return null;
+                const vpFlat = voidCount * (this.voidSpendConfig.combat_vp_flat_bonus || 0);
+                const target = window.L7RRollMath.parryEffectiveTarget(
+                    parseInt(this.feintTN, 10), (probs.flat || 0) + vpFlat);
+                return target < arr.length ? arr[target] : 0;
+            },
+
+            feintRoll() {
+                if (!this.feintTNValid()) return;
+                const v = this.feintVoidSelected;
+                const opt = v > 0 ? this.computeVoidOptions().find(o => o.count === v) : null;
+                this._feintNext = {tn: parseInt(this.feintTN, 10)};
+                this.feintModalOpen = false;
+                this.executeRoll('knack:feint', v, opt, 0);
+            },
+
             openParryModal(key = 'parry', preSpentDieIndex = null) {
                 if (!this.formulas[key]) return;
                 this._preSpentDieIndex = preSpentDieIndex;
@@ -4472,6 +4606,16 @@
                 return total >= tn
                     ? `vs TN ${tn} - Parry succeeded`
                     : `vs TN ${tn} - Parry failed by ${tn - total}`;
+            },
+
+            // The feint's outcome as the server decided it, for the card
+            // footer (and so the roll history row records it).
+            feintResultText() {
+                const fs = this.feintState;
+                if (!fs || this.currentRollKey !== 'knack:feint') return '';
+                if (fs.success) return `vs TN ${fs.tn} - Feint succeeded`;
+                if (fs.met_tn) return `vs TN ${fs.tn} - Feint parried`;
+                return `vs TN ${fs.tn} - Feint missed by ${fs.tn - (this.baseTotal || 0)}`;
             },
 
             // --- Kakita 5th Dan: Phase-0 contested iaijutsu modal ---

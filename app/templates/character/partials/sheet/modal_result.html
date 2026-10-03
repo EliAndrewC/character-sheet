@@ -586,28 +586,43 @@
                         </template>
                     </div>
 
-                    {# Akodo Special: feint grants temp VP (4 on success, 1 on failure) #}
-                    <div x-show="phase === 'done' && currentRollKey === 'knack:feint' && schoolAbilities.akodo_temp_vp_on_feint && !akodoFeintDone" x-cloak
-                         class="bg-accent/5 border border-accent/20 rounded p-2 text-sm">
-                        <div class="font-medium mb-1">Akodo Feint - Temp VP</div>
-                        <div class="flex gap-2">
-                            <button type="button"
-                                    @click="akodoFeintVp(true)" data-action="akodo-feint-succeeded"
-                                    class="bg-success hover:bg-success-dark text-white px-3 py-1 rounded text-xs">
-                                Succeeded (+4 temp VP)
-                            </button>
-                            <button type="button"
-                                    @click="akodoFeintVp(false)" data-action="akodo-feint-failed"
-                                    class="bg-red-700 hover:bg-red-800 text-white px-3 py-1 rounded text-xs">
-                                Failed (+1 temp VP)
-                            </button>
+                    {# Feint outcome, decided by the server from the TN and kept
+                       current as raises / rerolls move the total: a feint that
+                       met its TN and was not parried succeeds (1 temp VP - 4
+                       for an Akodo - and the highest action die moves to
+                       this phase); otherwise it fails (an Akodo still gets 1).
+                       The player only says whether it was parried. #}
+                    <div x-show="phase === 'done' && currentRollKey === 'knack:feint' && feintState" x-cloak
+                         data-testid="feint-outcome"
+                         class="rounded p-2 text-sm border"
+                         :class="feintState?.success ? 'bg-success/5 border-success/40' : 'bg-red-50 border-red-300'">
+                        <div class="font-medium" data-testid="feint-outcome-line">
+                            <span x-show="feintState?.success">Feint succeeded</span>
+                            <span x-show="feintState?.met_tn && feintState?.parried">Feint parried - unsuccessful</span>
+                            <span x-show="!feintState?.met_tn">Feint missed - unsuccessful</span>
+                            <span class="text-xs text-ink/60 font-normal">
+                                (<span x-text="baseTotal"></span> vs TN <span x-text="feintState?.tn"></span>)
+                            </span>
                         </div>
-                    </div>
-
-                    {# Feint knack: 1 temp VP auto-granted (non-Akodo feint schools) #}
-                    <div x-show="phase === 'done' && currentRollKey === 'knack:feint' && schoolAbilities.feint_temp_vp" x-cloak
-                         class="bg-accent/5 border border-accent/20 rounded p-2 text-sm text-ink/70">
-                        Gained 1 temp VP from feint.
+                        <ul class="text-xs text-ink/70 mt-1 space-y-0.5">
+                            <li x-show="(feintState?.temp_vp || 0) > 0" data-testid="feint-temp-vp">
+                                +<span x-text="feintState?.temp_vp"></span> temp void
+                                <span x-text="feintState?.temp_vp === 1 ? 'point' : 'points'"></span><span x-show="schoolAbilities.akodo_temp_vp_on_feint"> (Akodo Special)</span>
+                            </li>
+                            <li x-show="feintState?.moved" data-testid="feint-moved-die">
+                                Highest action die moved from phase <span x-text="feintState?.moved?.from"></span>
+                                to phase <span x-text="feintState?.moved?.to"></span>
+                            </li>
+                            <li x-show="feintState?.success && !feintState?.moved && feintState?.phase != null" class="text-ink/50">
+                                No later action die to move to this phase
+                            </li>
+                        </ul>
+                        <label x-show="feintState?.met_tn" class="flex items-center gap-2 text-xs mt-2 cursor-pointer">
+                            <input type="checkbox" data-testid="feint-parried"
+                                   :checked="!!feintState?.parried"
+                                   @change="feintSetParried($event.target.checked)" class="rounded text-accent">
+                            <span>The target parried it (a parried feint is unsuccessful)</span>
+                        </label>
                     </div>
 
                     {# Bayushi 4th Dan: feint auto-banks +5 on next attack #}
@@ -617,7 +632,7 @@
                     </div>
 
                     {# Ide Special: feint -> lower target TN by 10 #}
-                    <div x-show="phase === 'done' && currentRollKey === 'knack:feint' && schoolAbilities.ide_feint_tn_reduce" x-cloak
+                    <div x-show="phase === 'done' && currentRollKey === 'knack:feint' && schoolAbilities.ide_feint_tn_reduce && feintState?.met_tn" x-cloak
                          class="bg-accent/5 border border-accent/20 rounded p-2 text-sm">
                         <button type="button" data-action="ide-bank-tn"
                                 @click="ideBankTn()" :disabled="ideBankedThisRoll"
@@ -771,7 +786,7 @@
                     </div>
 
                     {# Bayushi 3rd Dan: feint deals Xk1 damage #}
-                    <div x-show="phase === 'done' && currentRollKey === 'knack:feint' && schoolAbilities.bayushi_feint_damage" x-cloak
+                    <div x-show="phase === 'done' && currentRollKey === 'knack:feint' && schoolAbilities.bayushi_feint_damage && feintState?.success" x-cloak
                          class="bg-accent/5 border border-accent/20 rounded p-2 text-sm">
                         <div class="text-xs text-ink/60 mb-1">Bayushi 3rd Dan: feint deals
                             <span x-text="schoolAbilities.bayushi_feint_damage_rolled + (schoolAbilities.bayushi_vp_damage ? (formula?.void_spent || 0) : 0)"></span>k<span x-text="1 + (schoolAbilities.bayushi_vp_damage ? (formula?.void_spent || 0) : 0)"></span> damage<span x-show="(formula?.void_spent || 0) > 0" x-cloak> (includes +<span x-text="formula?.void_spent"></span>k<span x-text="formula?.void_spent"></span> from VP)</span>.

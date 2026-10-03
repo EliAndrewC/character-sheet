@@ -49,7 +49,9 @@ from app.services.tracking import set_serious_wounds
 from app.services.wound_checks import (
     akodo_banked_bonus, build_wound_check, daidoji_counterattack, wound_check_flags,
 )
-from app.services.parry_feint import PARRY_KEYS, apply_post_roll_hooks, is_feint, parry_feint_flags
+from app.services.parry_feint import (
+    PARRY_KEYS, apply_post_roll_hooks, feint_outcome, highest_die_move, is_feint, parry_feint_flags,
+)
 from app.services.pcp import PcpRefused, spend_pcp
 from app.services.professions import holds_ability
 from app.services.roll_engine import (
@@ -239,6 +241,14 @@ def start_roll(
         formula["bonuses"] = list(formula.get("bonuses") or []) + [
             {"label": "predeclared parry", "amount": 5}]
 
+    # A feint is judged against the target's TN (to decide its success), and
+    # the phase of the action die it spent is the "current phase" a
+    # successful feint moves the highest action to.
+    feint = None
+    if is_feint(roll_key):
+        feint = _feint_choices(character, choices, live)
+        formula["feint_tn"] = feint["tn"]
+
     # Kitsune Warden Special Ability: roll with the school ring instead.
     swap = formula.get("kitsune_swap")
     if choices.get("kitsune_swap"):
@@ -319,7 +329,7 @@ def start_roll(
             row = RollHistory(
                 character_id=character.id, roll_key=record_key, actor_discord_id=viewer,
                 is_owner_roll=is_owner_roll, impaired_at_roll=impaired_now(char_data),
-                payload=payload, tn=effective.get("attack_tn"),
+                payload=payload, tn=effective.get("attack_tn") or effective.get("feint_tn"),
             )
             db.add(row)
             db.flush()
@@ -340,6 +350,9 @@ def start_roll(
     if effective.get("is_attack_type"):
         _after_attack_roll(character, session, consumes, live)
         _write_payload(db, session)
+    if feint is not None:
+        session.choices = dict(session.choices, feint=feint)
+        _feint_state(character, session)
     if roll_key in DUEL_KEYS or roll_key == KAKITA_5TH:
         _duel_state(session)
         if roll_key == KAKITA_5TH and live:
@@ -450,6 +463,8 @@ def _initiative_fields(session: RollSession) -> Dict[str, Any]:
         out["wc"] = choices["wc"]
     if "duel" in choices:
         out["duel"] = choices["duel"]
+    if "feint" in choices:
+        out["feint"] = choices["feint"]
     return out
 
 
@@ -612,6 +627,8 @@ def act(db: Session, session: RollSession, character: Character, action: str,
         _wc_state(session)
     if session.roll_key in DUEL_KEYS:
         _duel_state(session)
+    if "feint" in (session.choices or {}):
+        _feint_state(character, session)
     _write_payload(db, session, dice_changed=session.dice != dice_before)
     db.flush()
     return dict(extra, **_initiative_fields(session), **{
@@ -1023,22 +1040,80 @@ def _akodo_vp(db, session, character, args, rng, undo=False):
     return _void_raise(session, character, undo, "akodo_vp", "the 4th Dan raise")
 
 
-def _akodo_feint(db, session, character, args, rng):
-    """Akodo Special: a feint gives 4 temp VP if it succeeded, 1 if not."""
-    if not _flags(character)["akodo_temp_vp_on_feint"] or session.roll_key != "knack:feint":
-        raise RollRefused("no Akodo feint void points on this roll")
-    _once(session, "akodo_feint", "the Akodo feint")
-    gain = 4 if args.get("succeeded") else 1
-    _add_flag(session, "akodo_feint", gain=gain)
-    if session.mode == "live":
-        character.current_temp_void_points = (character.current_temp_void_points or 0) + gain
-    return {"gained": gain}
+def _feint_choices(character: Character, choices: Dict[str, Any], live: bool) -> Dict[str, Any]:
+    """The feint's TN (required: success is decided from it) and, live, the
+    phase of the action die the tab spent on it."""
+    try:
+        tn = int(choices.get("tn"))
+    except (TypeError, ValueError):
+        raise RollRefused("a feint needs the target's TN") from None
+    if not 1 <= tn <= 999:
+        raise RollRefused("a feint needs the target's TN")
+    index = choices.get("die_index")
+    dice = character.action_dice or []
+    phase = None
+    if live and isinstance(index, int) and not isinstance(index, bool) and 0 <= index < len(dice):
+        phase = int(dice[index].get("value") or 0)
+    else:
+        index = None
+    return {"tn": tn, "die_index": index, "phase": phase, "parried": False,
+            "met_tn": False, "success": False, "temp_vp": 0, "moved": None}
+
+
+def _feint_state(character: Character, session: RollSession) -> None:
+    """Keep a feint's effects in step with its outcome at the current total:
+    the temp void points it earned (4 / 1 for an Akodo, 1 / 0 for anyone
+    else) and, on success, the highest action die moved to the feint's
+    phase. Runs after the roll and after every action, so a raise or a
+    reroll that crosses the TN, or the "parried" toggle, settles it - the
+    player never has to remember to claim anything. Live sessions apply the
+    difference to the character; a simulated one only describes it."""
+    feint = dict((session.choices or {})["feint"])
+    live = session.mode == "live"
+    out = feint_outcome(_flags(character), _session_total(session), feint["tn"], feint["parried"])
+    if live and out["temp_vp"] != feint["temp_vp"]:
+        character.current_temp_void_points = max(
+            0, (character.current_temp_void_points or 0) + out["temp_vp"] - feint["temp_vp"])
+    moved = feint["moved"]
+    if out["success"] and moved is None and feint["phase"] is not None:
+        moved = highest_die_move(character.action_dice, feint["die_index"], feint["phase"])
+        if moved and live:
+            dice = [dict(d) for d in character.action_dice or []]
+            dice[moved["index"]]["value"] = moved["to"]
+            character.action_dice = dice
+    elif not out["success"] and moved:
+        dice = [dict(d) for d in character.action_dice or []]
+        i = moved["index"]
+        # Put it back only if it is still the die this feint moved.
+        if live and i < len(dice) and not dice[i].get("spent") and int(dice[i].get("value") or 0) == moved["to"]:
+            dice[i]["value"] = moved["from"]
+            character.action_dice = dice
+        moved = None
+    feint.update(out, moved=moved)
+    session.choices = dict(session.choices, feint=feint)
+
+
+def _feint_parried(db, session, character, args, rng):
+    """The target parried the feint (or the player takes that back): a
+    parried feint is unsuccessful (GM ruling)."""
+    if "feint" not in (session.choices or {}):
+        raise RollRefused("only a feint can be parried here")
+    feint = dict(session.choices["feint"], parried=bool(args.get("parried")))
+    session.choices = dict(session.choices, feint=feint)
+    return {}
+
+
+def _feint_met_tn(session: RollSession) -> bool:
+    feint = (session.choices or {}).get("feint")
+    return feint is None or _session_total(session) >= feint["tn"]
 
 
 def _ide_bank(db, session, character, args, rng):
     """Ide Special: a feint banks -10 to the target's TN for the next attack."""
     if not _flags(character)["ide_feint_tn_reduce"] or session.roll_key != "knack:feint":
         raise RollRefused("no Ide TN bank on this roll")
+    if not _feint_met_tn(session):
+        raise RollRefused("the feint did not meet its TN")
     _once(session, "ide_bank", "the Ide TN bank")
     _add_flag(session, "ide_bank")
     if session.mode == "live":
@@ -1091,6 +1166,8 @@ def _sub_damage(db, session, character, args, rng):
         rolled, kept, key = flags["shiba_parry_damage_rolled"], 1, "damage:shiba_parry"
         label = f"Shiba 3rd Dan parry damage ({rolled}k1)"
     elif session.roll_key == "knack:feint" and flags["bayushi_feint_damage"]:
+        if not (session.choices or {}).get("feint", {}).get("success", True):
+            raise RollRefused("an unsuccessful feint does no damage")
         extra = int(f.get("void_spent") or 0) if damage_flags(character.to_dict())["bayushi_vp_damage"] else 0
         rolled, kept, key = flags["bayushi_feint_damage_rolled"] + extra, 1 + extra, "damage:bayushi_feint"
         label = f"Bayushi 3rd Dan feint damage ({rolled}k{kept})"
@@ -1123,7 +1200,7 @@ def _sub_damage(db, session, character, args, rng):
 
 
 REROLLS.update({
-    "akodo_feint": _akodo_feint,
+    "feint_parried": _feint_parried,
     "ide_bank": _ide_bank,
     "shinjo_bank": _shinjo_bank,
     "shinjo_phase": _shinjo_phase,

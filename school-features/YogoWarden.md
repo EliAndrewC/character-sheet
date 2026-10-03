@@ -26,7 +26,7 @@
 
 **Status:** Fully implemented.
 - Yogo Warden also has the feint knack, so temp void tracking is doubly applicable.
-- The feint knack temp VP auto-grant (1 VP on successful feint) is now implemented via `feint_temp_vp` flag. Client shows "Feint succeeded (+1 temp VP)" button after feint rolls.
+- The feint knack's 1 temp VP is granted by the server only on a SUCCESSFUL feint (met the TN entered in the feint modal, not parried) - `feint_success_temp_vp`. Before 2026-10-03 it was granted on every feint.
 
 ---
 

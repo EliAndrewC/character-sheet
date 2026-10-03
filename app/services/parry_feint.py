@@ -8,7 +8,7 @@ panel's actions.
 
 from __future__ import annotations
 
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 from app.services.void_spend import school_dan
 
@@ -16,7 +16,8 @@ PARRY_KEYS = ("parry", "athletics:parry")
 
 
 def is_feint(roll_key: str) -> bool:
-    return roll_key == "knack:feint" or roll_key.startswith("knack:feint:")
+    # There is no athletics (or other-ring) feint: "knack:feint" is the only one.
+    return roll_key == "knack:feint"
 
 
 def parry_feint_flags(character_data: Dict[str, Any]) -> Dict[str, Any]:
@@ -36,8 +37,12 @@ def parry_feint_flags(character_data: Dict[str, Any]) -> Dict[str, Any]:
         # Hiruma 3rd Dan: a parry banks 2X for the next attack and damage.
         "hiruma_post_parry_bonus": school == "hiruma_scout" and dan >= 3,
         "hiruma_post_parry_amount": 2 * attack if school == "hiruma_scout" and dan >= 3 else 0,
-        # Feint: 1 temp VP for these schools; Akodo chooses 4 (success) or 1.
-        "feint_temp_vp": school in ("bayushi_bushi", "yogo_warden", "ide_diplomat"),
+        # Feint (rules/05-school_knacks.md): a successful feint - one that met
+        # its TN and was not parried - gives anyone 1 temp VP; the Akodo
+        # Special makes that 4, and 1 for an unsuccessful feint (GM ruling:
+        # 4 in total, not 4 + 1).
+        "feint_success_temp_vp": 4 if school == "akodo_bushi" else 1,
+        "feint_failure_temp_vp": 1 if school == "akodo_bushi" else 0,
         "akodo_temp_vp_on_feint": school == "akodo_bushi",
         # Bayushi 4th Dan: a feint banks a free raise for a future attack.
         "bayushi_post_feint_raise": school == "bayushi_bushi" and dan >= 4,
@@ -55,7 +60,9 @@ def parry_feint_flags(character_data: Dict[str, Any]) -> Dict[str, Any]:
 
 def apply_post_roll_hooks(character: Any, roll_key: str) -> List[str]:
     """What a live parry or feint does to the character by itself, the moment
-    it is rolled. Returns a note per effect. Does not commit."""
+    it is rolled. Returns a note per effect. Does not commit. A feint's
+    success-dependent effects are not here: ``feint_outcome`` decides them
+    and ``roll_sessions`` keeps them in step with the roll's total."""
     flags = parry_feint_flags(character.to_dict())
     notes: List[str] = []
     state = dict(character.adventure_state or {})
@@ -73,11 +80,33 @@ def apply_post_roll_hooks(character: Any, roll_key: str) -> List[str]:
         state["hiruma_banked_attack_bonus"] = (int(state.get("hiruma_banked_attack_bonus") or 0)
                                                + flags["hiruma_post_parry_amount"])
         notes.append(f"+{flags['hiruma_post_parry_amount']} banked for the next attack and damage (Hiruma 3rd Dan)")
-    if roll_key == "knack:feint" and flags["feint_temp_vp"]:
-        character.current_temp_void_points = (character.current_temp_void_points or 0) + 1
-        notes.append("Gained 1 temp void point from the feint")
     if roll_key == "knack:feint" and flags["bayushi_post_feint_raise"]:
         state["bayushi_banked_feint_raise"] = int(state.get("bayushi_banked_feint_raise") or 0) + 5
         notes.append("+5 banked for a future attack (Bayushi 4th Dan)")
     character.adventure_state = state
     return notes
+
+
+def highest_die_move(action_dice: List[Dict[str, Any]], spent_index: Optional[int],
+                     phase: int) -> Optional[Dict[str, int]]:
+    """A successful feint moves the character's highest action to the current
+    phase - the phase of the die the feint spent. The highest UNSPENT die
+    other than that one is lowered to ``phase``; a die already at or below
+    the phase stays where it is (moving it would delay it)."""
+    best = None
+    for i, d in enumerate(action_dice or []):
+        if i == spent_index or d.get("spent"):
+            continue
+        value = int(d.get("value") or 0)
+        if value > phase and (best is None or value > best["from"]):
+            best = {"index": i, "from": value, "to": phase}
+    return best
+
+
+def feint_outcome(flags: Dict[str, Any], total: int, tn: int, parried: bool) -> Dict[str, Any]:
+    """Whether a feint at ``total`` succeeded against ``tn``, and the temp
+    void points that earns. Met the TN and not parried is success."""
+    met = total >= tn
+    success = met and not parried
+    gain = flags["feint_success_temp_vp"] if success else flags["feint_failure_temp_vp"]
+    return {"met_tn": met, "success": success, "temp_vp": gain}

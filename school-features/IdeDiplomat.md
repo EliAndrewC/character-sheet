@@ -13,7 +13,7 @@
 
 **Status:** Fully implemented.
 - Server: `app/routes/pages.py` passes `ide_feint_tn_reduce: true` in school_abilities.
-- Client: shows "Bank -10 TN on target" button after feint rolls. The banked TN reduction is shown in the attack modal and applied when rolling the attack.
+- Client: shows "Bank -10 TN on target" button after a feint that met its TN (parried or not); the server refuses the bank on a feint below its TN. The banked TN reduction is shown in the attack modal and applied when rolling the attack.
 
 **Implementation:** `app/game_data.py` (definition), `app/routes/pages.py` (ide_feint_tn_reduce flag), `app/templates/character/sheet.html` (feint result button, attack modal TN reduction).
 

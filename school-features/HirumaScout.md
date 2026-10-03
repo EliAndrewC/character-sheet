@@ -3,7 +3,7 @@
 **School ID:** `hiruma_scout`
 **Category:** Investigator
 **School Ring:** Air - Confirmed correct.
-**School Knacks:** double_attack, iaijutsu, lunge - All present and rollable. (Knack history: originally double_attack/feint/iaijutsu, then briefly counterattack/double_attack/iaijutsu, now double_attack/iaijutsu/lunge to match the 3rd Dan's post-parry interrupt lunge. Hiruma does not count as a "feint school" so `feint_temp_vp` is not set and they are not in `SCHOOLS_WITH_TEMP_VOID` - and the Special Ability text doesn't mention temp VP either, so they're correctly out of that set.)
+**School Knacks:** double_attack, iaijutsu, lunge - All present and rollable. (Knack history: originally double_attack/feint/iaijutsu, then briefly counterattack/double_attack/iaijutsu, now double_attack/iaijutsu/lunge to match the 3rd Dan's post-parry interrupt lunge. Hiruma does not count as a "feint school" so they are not in `SCHOOLS_WITH_TEMP_VOID` (a successful feint gives anyone 1 temp VP, so a Hiruma with a foreign feint knack does get the counter) - and the Special Ability text doesn't mention temp VP either, so they're correctly out of that set.)
 
 ---
 

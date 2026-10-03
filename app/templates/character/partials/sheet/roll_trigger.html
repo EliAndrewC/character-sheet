@@ -440,7 +440,7 @@
                 <div data-mobile-parry-menu>
                     <button type="button"
                             data-mobile-parry-roll
-                            @click="rollMenuOpen = false; openParryModal('parry')"
+                            @click="rollMenuOpen = false; rollMenuKey === 'knack:feint' ? openFeintModal() : openParryModal('parry')"
                             class="w-full text-left px-4 py-2 text-sm hover:bg-parchment transition-colors font-medium">
                         Roll <span x-text="rollMenuTitle"></span>
                     </button>

@@ -6875,6 +6875,67 @@ class TestKitsuneWardenSwapProbs:
         assert "kitsune_swap" not in wp
 
 
+class TestFeintProbs:
+    """The feint modal's odds: ``feint_probs`` (P(roll >= target) per void
+    spend) and, for a Bayushi 3rd Dan, the damage dice and their average."""
+
+    def _read(self, client, cid):
+        return TestParryProbs._read_json_script(None, client, cid, "feint-probs")
+
+    def test_akodo_feint_slice_has_no_damage(self, client):
+        cid = _seed_character(
+            client, name="FeintProbs", school="akodo_bushi", school_ring_choice="Water",
+            ring_air=2, ring_void=3, knacks={"double_attack": 1, "feint": 2, "iaijutsu": 1},
+        )
+        entry = self._read(client, cid)["knack:feint"]
+        assert entry["void_keys"]["0"] == "4,2" and entry["void_keys"]["1"] == "5,3"
+        arr = entry["probs"][entry["void_keys"]["0"]]
+        assert len(arr) == 151 and arr[0] == 1.0
+        assert "damage_avgs" not in entry
+
+    def test_bayushi_3rd_dan_feint_slice_has_damage_per_void(self, client):
+        cid = _seed_character(
+            client, name="FeintDmg", school="bayushi_bushi", school_ring_choice="Fire",
+            ring_fire=3, ring_void=3, attack=4,
+            knacks={"double_attack": 3, "feint": 3, "iaijutsu": 3},
+        )
+        entry = self._read(client, cid)["knack:feint"]
+        # 4k1, then +1k1 per void point (Bayushi Special).
+        assert entry["damage_keys"]["0"] == "4,1"
+        assert entry["damage_keys"]["2"] == "6,3"
+        assert entry["damage_avgs"]["2"] > entry["damage_avgs"]["1"] > entry["damage_avgs"]["0"] > 0
+
+    def test_bayushi_feint_damage_past_ten_dice_uses_the_cap(self, client):
+        cid = _seed_character(
+            client, name="FeintDmgCap", school="bayushi_bushi", school_ring_choice="Fire",
+            ring_fire=3, ring_void=5, attack=5,
+            knacks={"double_attack": 5, "feint": 5, "iaijutsu": 5},
+        )
+        entry = self._read(client, cid)["knack:feint"]
+        caps = {k: v for k, v in entry["damage_keys"].items()}
+        assert all(int(k.split(",")[0]) <= 10 for k in caps.values())
+
+    def test_no_feint_no_slice(self, client):
+        cid = _seed_character(
+            client, name="NoFeint", school="mirumoto_bushi", school_ring_choice="Void",
+            knacks={"counterattack": 1, "double_attack": 1, "iaijutsu": 1},
+        )
+        assert self._read(client, cid) == {}
+
+    def test_a_foreign_feint_shows_the_temp_void_counter(self, client):
+        plain = _seed_character(
+            client, name="NoTempVoid", school="hida_bushi", school_ring_choice="Water",
+            knacks={"counterattack": 1, "double_attack": 1, "iaijutsu": 1},
+        )
+        feinter = _seed_character(
+            client, name="ForeignFeint", school="hida_bushi", school_ring_choice="Water",
+            knacks={"counterattack": 1, "double_attack": 1, "iaijutsu": 1},
+            foreign_knacks={"feint": 1},
+        )
+        assert "Temp Void" not in client.get(f"/characters/{plain}").text
+        assert "Temp Void" in client.get(f"/characters/{feinter}").text
+
+
 class TestParryProbs:
     """The parry modal's probability chart is driven by ``parry_probs``,
     computed in routes/pages.py and embedded as the ``parry-probs`` JSON

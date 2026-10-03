@@ -1,0 +1,120 @@
+        {# ── Feint Modal ── #}
+        {# Pre-roll odds for a feint. Like the parry modal it only collects
+           the target's TN and the void pick; the roll runs through the shared
+           result modal, where the server's outcome (met the TN, parried, the
+           temp void earned, the action die moved) is shown. The TN is
+           required: it is how the server decides the feint's success. #}
+        <div x-show="feintModalOpen" x-cloak
+             class="fixed inset-0 z-50 flex items-center justify-center bg-ink/60"
+             data-modal="feint">
+            <div class="bg-white rounded-lg shadow-xl px-6 py-5 max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+                <div class="flex items-start justify-between mb-3">
+                    <h3 class="text-xl font-bold text-accent">Feint</h3>
+                    <button type="button" @click="feintModalOpen = false"
+                            class="text-ink/60 hover:text-ink text-2xl leading-none px-2">&times;</button>
+                </div>
+                {% include 'character/partials/read_only_roll_banner.html' %}
+
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium mb-1">
+                            Target Number
+                            <span class="text-xs text-ink/60 font-normal">(the target's TN to be hit)</span>
+                        </label>
+                        <input type="number" x-model.number="feintTN" min="1" max="999"
+                               data-testid="feint-tn-input"
+                               @keydown.enter.prevent="feintRoll()"
+                               placeholder="Enter the target's TN"
+                               class="w-full border rounded px-2 py-1.5 text-sm">
+                    </div>
+
+                    <p class="text-xs text-ink/60" data-testid="feint-success-note">
+                        A feint that meets the TN and is not parried succeeds:
+                        +<span x-text="schoolAbilities.feint_success_temp_vp || 1"></span> temp void
+                        <span x-text="(schoolAbilities.feint_success_temp_vp || 1) === 1 ? 'point' : 'points'"></span>,
+                        and your highest action die moves to this phase.
+                        <span x-show="(schoolAbilities.feint_failure_temp_vp || 0) > 0">
+                            An unsuccessful feint still gives +<span x-text="schoolAbilities.feint_failure_temp_vp"></span>.
+                        </span>
+                    </p>
+
+                    {# One row per void spend: P(roll >= TN). A Bayushi 3rd Dan
+                       feint also does damage that its void points increase
+                       (never extra dice from the TN), so it gets those columns. #}
+                    <template x-if="feintTNValid()">
+                        <div class="overflow-x-auto" data-testid="feint-prob-table">
+                            <table class="text-sm w-full">
+                                <thead>
+                                    <tr class="border-b border-ink/20">
+                                        <th class="text-left py-1 pr-3">Void</th>
+                                        <th class="text-right py-1 px-2">Feint Roll</th>
+                                        <th class="text-right py-1 px-2">Success %</th>
+                                        <template x-if="feintActiveProbs()?.damage_avgs">
+                                            <th class="text-right py-1 px-2">Damage</th>
+                                        </template>
+                                        <template x-if="feintActiveProbs()?.damage_avgs">
+                                            <th class="text-right py-1 px-2">Avg Damage</th>
+                                        </template>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <template x-for="v in Array.from({length: feintVoidBlocked() ? 1 : (feintActiveProbs()?.void_cap || 0) + 1}, (_, i) => i)" :key="v">
+                                        <tr class="border-b border-ink/5"
+                                            :data-feint-row="v"
+                                            :class="v === feintVoidSelected ? 'bg-accent/10 font-medium' : ''">
+                                            <td class="py-1 pr-3" x-text="v === 0 ? 'None' : v"></td>
+                                            <td class="text-right py-1 px-2 font-mono text-xs text-ink/70"
+                                                x-text="(feintActiveProbs()?.void_keys?.[String(v)] || '').replace(',', 'k')"></td>
+                                            <td class="text-right py-1 px-2 text-success"
+                                                x-text="feintHitChance(v) === null ? '-' : Math.round(feintHitChance(v) * 100) + '%'"></td>
+                                            <template x-if="feintActiveProbs()?.damage_avgs">
+                                                <td class="text-right py-1 px-2 font-mono text-xs text-ink/70"
+                                                    x-text="(feintActiveProbs()?.damage_keys?.[String(v)] || '').replace(',', 'k')"></td>
+                                            </template>
+                                            <template x-if="feintActiveProbs()?.damage_avgs">
+                                                <td class="text-right py-1 px-2 font-bold"
+                                                    x-text="feintActiveProbs()?.damage_avgs?.[String(v)]"></td>
+                                            </template>
+                                        </tr>
+                                    </template>
+                                </tbody>
+                            </table>
+                        </div>
+                    </template>
+                    <template x-if="!feintTNValid()">
+                        <div class="text-sm text-ink/50 italic" data-testid="feint-tn-prompt">
+                            Enter the target's TN to see your odds.
+                        </div>
+                    </template>
+
+                    <div class="flex items-center gap-3">
+                        <template x-if="!feintVoidBlocked()">
+                            <div class="flex items-center gap-3">
+                                <label class="text-sm font-medium">Void points:</label>
+                                <div class="flex items-center gap-1">
+                                    <button type="button" @click="feintVoidSelected = Math.max(0, feintVoidSelected - 1)"
+                                            :disabled="feintVoidSelected <= 0"
+                                            class="btn-pip">-</button>
+                                    <span class="w-8 text-center font-bold text-lg" x-text="feintVoidSelected"></span>
+                                    <button type="button" @click="feintVoidSelected = Math.min(feintVoidSelected + 1, feintVoidCap())"
+                                            :disabled="feintVoidSelected >= feintVoidCap()"
+                                            class="btn-pip">+</button>
+                                </div>
+                            </div>
+                        </template>
+                        <template x-if="feintVoidBlocked()">
+                            <span class="text-xs text-ink/60 italic" data-testid="discordant-no-void-feint">
+                                Discordant: cannot spend void points on skill rolls
+                            </span>
+                        </template>
+                        <button type="button" @click="feintRoll()"
+                                data-action="roll-feint-go"
+                                :disabled="!feintTNValid()"
+                                :title="feintTNValid() ? '' : 'Enter the target\'s TN first - it decides whether the feint succeeded.'"
+                                class="btn-primary px-4 py-2 rounded text-sm font-medium ml-auto disabled:opacity-40 disabled:cursor-not-allowed">
+                            Roll Feint
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>

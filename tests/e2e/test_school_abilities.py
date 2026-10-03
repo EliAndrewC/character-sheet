@@ -51,6 +51,20 @@ def _wait_roll_done(page):
     }""", timeout=10000)
 
 
+def _roll_feint(page, tn=1, void=0):
+    """Feint: open the feint modal, enter the target's TN (1 always
+    succeeds, 999 always misses), pick the void and roll."""
+    page.locator('[data-roll-key="knack:feint"]').click()
+    page.wait_for_selector('[data-modal="feint"]', state='visible', timeout=3000)
+    page.locator('[data-testid="feint-tn-input"]').fill(str(tn))
+    modal = page.locator('[data-modal="feint"]')
+    for _ in range(void):
+        modal.locator('button.btn-pip:has-text("+")').click()
+    page.locator('[data-action="roll-feint-go"]').click()
+    _wait_roll_done(page)
+    page.wait_for_selector('[data-testid="feint-outcome"]', state='visible', timeout=5000)
+
+
 def _roll_via_menu_or_direct(page, roll_key):
     """Click a roll key. If a menu appears, click the main Roll button. Otherwise wait for direct roll.
 
@@ -64,6 +78,9 @@ def _roll_via_menu_or_direct(page, roll_key):
     opens the bare-vs-athletics picker, where the athletics row is
     addressable via ``data-ring-athletics="<Ring>"``.
     """
+    if roll_key == "knack:feint":
+        _roll_feint(page)
+        return
     if roll_key in ("parry", "athletics:parry"):
         # Parry now opens a dedicated modal (TN + probability chart); the
         # roll fires from its "Roll Parry" button. Athletics-parry is the
@@ -315,11 +332,21 @@ def _set_light_wounds(page, amount):
 # ===========================================================================
 
 def test_akodo_feint_temp_vp(page, live_server_url):
-    """Akodo feint roll shows succeeded (+4 temp VP) and failed (+1 temp VP) buttons."""
+    """Akodo feint: the outcome is decided from the TN - success +4 temp VP,
+    a miss +1 - with no button to remember to click."""
     _create_char(page, live_server_url, "AkodoFeintVP", "akodo_bushi")
-    _roll_via_menu_or_direct(page, "knack:feint")
-    assert page.locator('button:has-text("Succeeded (+4 temp VP)")').is_visible()
-    assert page.locator('button:has-text("Failed (+1 temp VP)")').is_visible()
+    page.evaluate("async () => { const t = window._trackingBridge; t.tempVoidPoints = 0;"
+                  " await t.save(); await t.whenSaved(); }")
+    _roll_feint(page, tn=1)
+    assert "Feint succeeded" in page.locator('[data-testid="feint-outcome-line"]').text_content()
+    assert "+4 temp void points (Akodo Special)" in " ".join(
+        page.locator('[data-testid="feint-temp-vp"]').text_content().split())
+    page.wait_for_function("() => window._trackingBridge.tempVoidPoints === 4", timeout=5000)
+    page.evaluate("() => window._diceRoller.close()")
+    _roll_feint(page, tn=999)
+    assert "Feint missed" in page.locator('[data-testid="feint-outcome-line"]').text_content()
+    assert not page.locator('[data-testid="feint-parried"]').is_visible()
+    page.wait_for_function("() => window._trackingBridge.tempVoidPoints === 5", timeout=5000)
 def test_bayushi_3rd_dan_feint_shows_damage(page, live_server_url):
     """Bayushi at 3rd Dan: feint roll shows Roll Feint Damage button, clicking it shows damage result."""
     _create_char(page, live_server_url, "BayushiFeintDmg", "bayushi_bushi",
@@ -393,29 +420,9 @@ def test_bayushi_feint_damage_formula_shows_vp(page, live_server_url):
     _create_char(page, live_server_url, "BayushiDmgVP", "bayushi_bushi",
                  knack_overrides={"double_attack": 3, "feint": 3, "iaijutsu": 3})
     # Give VP so we can spend them on the feint
-    page.evaluate("window._trackingBridge.voidPoints = 2")
-    page.wait_for_timeout(200)
-    # Click feint roll key - menu should appear with VP options
-    page.locator('[data-roll-key="knack:feint"]').click()
-    page.wait_for_timeout(300)
-    menu = page.locator('.fixed.z-50.bg-white.rounded-lg.shadow-xl.border')
-    if menu.is_visible():
-        # Find the "1 VP" row and click it to select, then click "Roll Feint"
-        vp_btns = menu.locator('button')
-        for i in range(vp_btns.count()):
-            text = vp_btns.nth(i).text_content().strip()
-            if "1 VP" in text or "1 regular" in text.lower():
-                vp_btns.nth(i).click()
-                page.wait_for_timeout(100)
-                break
-        # Click the Roll button
-        roll_btns = menu.locator('button.font-medium')
-        for i in range(roll_btns.count()):
-            text = roll_btns.nth(i).text_content().strip()
-            if text.startswith("Roll "):
-                roll_btns.nth(i).click()
-                break
-    _wait_roll_done(page)
+    page.evaluate("async () => { const t = window._trackingBridge; t.voidPoints = 2;"
+                  " await t.save(); await t.whenSaved(); }")
+    _roll_feint(page, tn=1, void=1)
     # The feint damage description should show the VP-adjusted formula
     modal = page.locator('[data-modal="dice-roller"]')
     desc = modal.text_content()

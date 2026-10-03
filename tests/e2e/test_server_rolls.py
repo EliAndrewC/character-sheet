@@ -255,16 +255,19 @@ def test_mirumoto_parry_hooks_and_points_are_the_servers(page, live_server_url):
 
 
 def test_akodo_feint_void_points_are_granted_by_the_server(page, live_server_url):
-    from tests.e2e.test_school_abilities import _create_char, _roll_via_menu_or_direct
+    """The server decides the feint from its TN and grants the void by itself;
+    marking it parried takes the success back (4 -> 1)."""
+    from tests.e2e.test_school_abilities import _create_char, _roll_feint
     _create_char(page, live_server_url, "ServerAkodoFeint", "akodo_bushi")
     page.evaluate("async () => { const t = window._trackingBridge; t.voidPoints = 0; t.tempVoidPoints = 0;"
                   " await t.save(); await t.whenSaved(); }")
-    _roll_via_menu_or_direct(page, "knack:feint")
-    page.locator('[data-action="akodo-feint-succeeded"]').click()
+    _roll_feint(page, tn=1)
     page.wait_for_function("() => window._trackingBridge.tempVoidPoints === 4", timeout=5000)
-    assert not page.locator('[data-action="akodo-feint-failed"]').is_visible()
+    page.locator('[data-testid="feint-parried"]').check()
+    page.wait_for_function("() => window._trackingBridge.tempVoidPoints === 1", timeout=5000)
+    assert "parried" in page.locator('[data-testid="feint-outcome-line"]').text_content()
     page.reload()
-    page.wait_for_function("() => window._trackingBridge.tempVoidPoints === 4", timeout=5000)
+    page.wait_for_function("() => window._trackingBridge.tempVoidPoints === 1", timeout=5000)
 
 
 def test_shiba_parry_damage_is_rolled_by_the_server(page, live_server_url):
