@@ -7,7 +7,6 @@ A character sheet and character builder web app for L7R, a Legend of the Five Ri
 <!-- container-ports: 8081:8080 8092:8090 -->
 <!-- Mount the parent l7r repo at /host-l7r-repo; its rules/ dir holds the canonical L7R rules this project encodes. -->
 <!-- container-mounts: ..:/host-l7r-repo -->
-<!-- container-workdir: /character-sheet -->
 <!-- (distinct mount path per repo so Claude memory under ~/.claude/projects/ stays separate across sibling repos) -->
 <!-- System packages auto-installed on a fresh container launch (see "Setup"); alsa-utils is added by the launcher for everyone. Language-level deps (pip, playwright) are NOT covered - still run those by hand. -->
 <!-- container-apt: libmagic1 antiword libcairo2 -->
