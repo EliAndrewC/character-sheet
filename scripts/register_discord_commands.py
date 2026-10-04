@@ -30,6 +30,11 @@ non-combat skill in ``game_data.SKILLS``, the three allow-listed knacks and
 commands (one of them a MESSAGE command, ``Ishi 3rd Dan boost``). 26
 commands against Discord's cap of 100 per scope.
 ``--only etiquette,roll`` registers a subset, for poking at one command.
+
+**``--global`` also clears the guild's copy** (``--guild``, default
+``$DISCORD_TEST_GUILD_ID``). Discord lists a guild command and a global one
+of the same name side by side, so leaving the test-guild copy behind showed
+every command twice there. ``--clear-guild`` does only the clearing.
 """
 
 import argparse
@@ -56,6 +61,17 @@ def select_commands(only: str) -> list:
     return [c for c in commands if c["name"].lower() in wanted]
 
 
+def register_global(commands: list, guild: str) -> tuple:
+    """Register ``commands`` globally, then empty ``guild``'s own command set
+    so the guild does not list each one twice. Returns ``(registered,
+    cleared)``; ``cleared`` is False when no guild was given."""
+    registered = discord_api.put_global_commands(commands)
+    if not guild:
+        return registered, False
+    discord_api.put_guild_commands(guild, [])
+    return registered, True
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--commands", action="store_true",
@@ -69,16 +85,21 @@ def main() -> int:
     parser.add_argument("--url", default="",
                         help="interactions endpoint URL, for --endpoint")
     parser.add_argument("--global", dest="global_scope", action="store_true",
-                        help="register globally instead of in one guild")
+                        help="register globally instead of in one guild, "
+                             "then clear the guild's copy")
+    parser.add_argument("--clear-guild", action="store_true",
+                        help="remove every command registered in --guild")
     parser.add_argument("--only", default="",
                         help="comma-separated command names (default: all)")
     args = parser.parse_args()
 
-    if not (args.commands or args.endpoint or args.list):
-        parser.error("nothing to do: pass --commands, --endpoint, or --list")
+    if not (args.commands or args.endpoint or args.list or args.clear_guild):
+        parser.error(
+            "nothing to do: pass --commands, --endpoint, --clear-guild, or --list"
+        )
     if not discord_api.application_id():
         parser.error("DISCORD_APPLICATION_ID is not set (source .env first)")
-    if (args.commands or args.endpoint) and not discord_api.bot_token():
+    if (args.commands or args.endpoint or args.clear_guild) and not discord_api.bot_token():
         parser.error("DISCORD_BOT_TOKEN is not set (source .env first)")
 
     commands = select_commands(args.only)
@@ -93,8 +114,10 @@ def main() -> int:
 
     if args.commands:
         if args.global_scope:
-            registered = discord_api.put_global_commands(commands)
+            registered, cleared = register_global(commands, args.guild)
             where = "globally (allow about an hour to propagate)"
+            if cleared:
+                print(f"cleared guild {args.guild}'s copy so it is not listed twice")
         elif args.guild:
             registered = discord_api.put_guild_commands(args.guild, commands)
             where = f"in guild {args.guild}"
@@ -105,6 +128,12 @@ def main() -> int:
         print(f"registered {len(registered)} command(s) {where}:")
         for command in registered:
             print(f"  /{command['name']} (id {command['id']})")
+
+    if args.clear_guild:
+        if not args.guild:
+            parser.error("--clear-guild needs --guild (or $DISCORD_TEST_GUILD_ID)")
+        discord_api.put_guild_commands(args.guild, [])
+        print(f"cleared every command registered in guild {args.guild}")
 
     if args.endpoint:
         if not args.url:

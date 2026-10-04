@@ -1633,3 +1633,20 @@ def test_register_script_selects_the_message_command_case_insensitively():
     assert {c["name"] for c in got} == {
         "Ishi 3rd Dan boost", "ishi-3rd-dan-technique",
     }
+
+
+def test_global_registration_clears_the_guild_copy(monkeypatch):
+    """Discord lists a guild command and a global one of the same name side
+    by side, so --global must not leave the test guild's copy behind."""
+    script = _load_script()
+    calls = []
+    monkeypatch.setattr(script.discord_api, "put_global_commands",
+                        lambda cmds: calls.append(("global", cmds)) or cmds)
+    monkeypatch.setattr(script.discord_api, "put_guild_commands",
+                        lambda guild, cmds: calls.append((guild, cmds)) or cmds)
+    cmds = [{"name": "roll"}]
+    assert script.register_global(cmds, "1543") == (cmds, True)
+    assert calls == [("global", cmds), ("1543", [])]
+    calls.clear()
+    assert script.register_global(cmds, "") == (cmds, False)
+    assert calls == [("global", cmds)]

@@ -752,7 +752,9 @@ always-on process**. Discord delivers commands as signed HTTPS POSTs.
 ```bash
 # Bulk-overwrite the test guild's command set (instant). Test guild FIRST.
 python3 scripts/register_discord_commands.py --commands --guild "$DISCORD_TEST_GUILD_ID"
-# Then globally (about an hour to propagate)
+# Then globally (about an hour to propagate). This ALSO empties the test guild's copy:
+# Discord lists a guild and a global command of the same name side by side, so a
+# leftover guild copy shows every command twice there. --clear-guild does only that.
 python3 scripts/register_discord_commands.py --commands --global
 # Point Discord at this app. The app must already be DEPLOYED - Discord
 # validates the URL by PINGing it and requiring a signed PONG.
