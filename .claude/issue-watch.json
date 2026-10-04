@@ -1,0 +1,4 @@
+{
+  "agent": "character-sheet",
+  "token": {"env_file": ".env", "key": "GITHUB_TOKEN"}
+}

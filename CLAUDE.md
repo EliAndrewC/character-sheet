@@ -462,6 +462,16 @@ For local dev, the same vars go in `.env`. For e2e tests, the harness sets `IMPO
 - `.sxw` (pre-fork OpenOffice) fixture (extractor code path exists; no real sample to test against - see `tests/import_fixtures/happy_path/DEFERRED.md`).
 - Cross-machine job registry if we scale beyond one Fly machine.
 
+## GitHub issues (issue watch)
+
+Sessions in other containers (gm-assistant) coordinate with this one through GitHub issues. "Please
+implement <issue URL>" means watching the issue until it is closed; the procedure is "Working a
+GitHub issue" in the shared user-level `~/.claude/CLAUDE.md`, and the tool is
+`~/.claude/hooks/issue_watch.py` (source and tests: `webapp/l7r/issuewatch.py` in gm-assistant).
+This repository opts in with `.claude/issue-watch.json` (agent `character-sheet`, token
+`GITHUB_TOKEN` from `.env`, which needs Issues read/write); it is tracked on purpose - without it the
+tool refuses to start here.
+
 ## GM read-only API and Discord integration
 
 A token-authenticated, read-only JSON surface (`app/routes/gm_api.py`, mounted at `/api`) that

@@ -10,7 +10,9 @@ __pycache__/
 client_secret*.json
 staged_art/
 logs/
-.claude/
+.claude/*
+# issue watch opt-in (agent name + where the token lives; no secret) - see CLAUDE.md "GitHub issues"
+!.claude/issue-watch.json
 
 # Tailwind standalone CLI (downloaded by scripts/build-css.sh)
 /bin/
