@@ -172,6 +172,8 @@ async def create_roll(
     rank = skill_rank_for_roll(roll_key, character)
     if rank is not None:
         payload["skill_rank"] = rank
+    # Only the Discord boost command names a target; a client cannot.
+    payload.pop("target_message_id", None)
 
     row = RollHistory(
         character_id=character.id,
@@ -235,6 +237,7 @@ async def update_roll(
     body = await request.json()
     if "payload" in body:
         previous_rank = (row.payload or {}).get("skill_rank")
+        previous_target = (row.payload or {}).get("target_message_id")
         row.payload = coerce_payload(body["payload"])
         # The client PATCHes a freshly-built payload that has no notion of
         # skill_rank (it is stamped server-side at create time), so carry
@@ -242,6 +245,13 @@ async def update_roll(
         # bonus toggle erase it.
         if previous_rank is not None and "skill_rank" not in row.payload:
             row.payload = {**row.payload, "skill_rank": previous_rank}
+        # The boost's target (set by the Discord command) is server-stamped
+        # too, and never the client's to change or erase.
+        row.payload = {
+            k: v for k, v in row.payload.items() if k != "target_message_id"
+        }
+        if previous_target is not None:
+            row.payload["target_message_id"] = previous_target
     if "action_die_spent" in body:
         row.action_die_spent = coerce_action_die_spent(body["action_die_spent"])
     db.commit()

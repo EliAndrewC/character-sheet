@@ -586,7 +586,7 @@ repo**), the authorization model is here (`owner_discord_id`, `editor_discord_id
 own `roll_history` row, so the image-matching problem `/api/rolls` exists to solve never arises
 for it.
 
-#### The command set (24 commands; Discord's cap is 100 per scope)
+#### The command set (26 commands; Discord's cap is 100 per scope)
 
 **Derived, never hand-maintained** - `discord_commands.command_definitions()` is what the
 registration script sends:
@@ -598,6 +598,7 @@ registration script sends:
 | `/oppose-social`, `/oppose-knowledge`, `/commune` | `knack:<id>` (`KNACK_COMMANDS`) | `void` |
 | `/initiative` | `initiative`, and starts the combat round | none |
 | `/discern-honor` | nothing - a private lookup, see "Discern Honor" | none |
+| `/ishi-3rd-dan-technique` and the MESSAGE command `Ishi 3rd Dan boost` | `spend_vp_xk1:isawa_ishi`, see "Isawa Ishi 3rd Dan boost" | none |
 
 - `SKILLS` holds exactly the 18 non-combat skills (attack / parry are in `COMBAT_SKILLS`; iaijutsu
   is a knack), so combat is excluded **by construction**. The knack set is an explicit allow-list of
@@ -608,6 +609,8 @@ registration script sends:
   post-roll bonuses to the commands without the GM asking** - each is a separate feature he will
   specify.
 - Discord names are lowercase with no spaces, so `/oppose-social` rolls `knack:oppose_social`.
+  The one exception is a MESSAGE command (type 3, right-click a message > Apps), whose name is a
+  display name and which Discord rejects if it has a `description` or `options`.
 - **`/roll` autocompletes skills only** (interaction type 4 answered with type 8; cannot be
   deferred, touches no database, never errors - any failure returns the plain list). Matching is
   case-insensitive over skill NAMES, prefix matches first, then substring. The submitted value is
@@ -642,6 +645,19 @@ registration script sends:
   roll leaves no history row: the no-history rule is about the record, not about the dice.
 - Every write moves `tracking_rev`, so an open sheet tab becomes stale instead of overwriting it.
 
+#### Isawa Ishi 3rd Dan boost (issue #2, gm-assistant feature 214)
+
+Spend one void point after another character's roll to roll Precepts k1 and add it. The **message
+command** `Ishi 3rd Dan boost` is run ON the roll being boosted, so Discord hands us its id
+(`data.target_id`); a slash command sent "as a reply" would not - Discord drops the reply reference.
+`/ishi-3rd-dan-technique` is for when nothing is pointed at (the GM aims it later in his REPL).
+Both roll `special_rolls.xk1_formula`, the formula the sheet's button rolls, charge the point as an
+activation cost, and refuse privately before rolling (not an Ishi at 3rd Dan, Precepts 0, no void).
+**Nothing about the target is judged here** (is it a roll, whose, already boosted) - gm-assistant
+owns that. The message command stores the target in the payload as `target_message_id` (a string),
+which `/api/rolls` returns (`null` for every other roll); it is server-stamped, so the sheet's roll
+`POST` / `PATCH` can neither set nor erase it.
+
 #### What gets posted (gm-assistant pins these)
 
 | roll | line |
@@ -651,6 +667,8 @@ registration script sends:
 | knack | `**Name**: **24** Oppose Social (Air)` - the formula label, no `@rank` |
 | commune | `**Name**: **24** Commune (Water) (1 void to activate)`, or `(1 void to activate, 2 void)` |
 | initiative | `**Name** rolls initiative - action dice: 2, 5, 7` |
+| Ishi boost (slash) | `**Name**: **14** Isawa Ishi 3rd Dan` |
+| Ishi boost (message) | `**Name**: **14** Isawa Ishi 3rd Dan, boosting https://discord.com/channels/<guild or @me>/<channel>/<message>` |
 
 **Any spend annotation stays inside parentheses** - gm-assistant strips `(...)` spans before parsing,
 so a bracketed void note cannot be misread as a second roll - and the initiative line deliberately

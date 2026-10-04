@@ -25,6 +25,14 @@ is what the registration script sends to Discord):
   stored for the open conversation (``app/services/conversations.py``),
   answers privately, and writes no ``RollHistory`` row. It goes through
   ``run_private_command``, never ``run_command``.
+- The Isawa Ishi 3rd Dan boost (gm-assistant feature 214, issue #2), twice:
+  the MESSAGE command ``Ishi 3rd Dan boost`` (right-click a roll, Apps), whose
+  target message Discord hands us, and ``/ishi-3rd-dan-technique`` for when
+  nothing is pointed at. Both roll the sheet's own ``spend_vp_xk1`` formula
+  (``special_rolls.xk1_formula``). A message command because a slash command
+  sent "as a reply" loses the reply reference - the bot never learns it.
+  Nothing about the target is judged here (is it a roll, whose, already
+  boosted): gm-assistant has the conversation and this app does not.
 
 ``tests/test_discord_bot.py`` guards all of that: a future move of attack
 into ``SKILLS``, or a knack added casually, turns the gate red instead of
@@ -68,6 +76,7 @@ from app.services.dice import build_all_roll_formulas
 from app.services.party import party_member_data, visible_party_members
 from app.services.roll_engine import execute_initiative, execute_roll, impaired_now
 from app.services.rolls_history import should_record_roll, skill_rank_for_roll
+from app.services.special_rolls import xk1_ability, xk1_formula
 from app.services.tracking import start_combat_round
 from app.services.void_spend import (
     VoidSpendRefused,
@@ -101,14 +110,19 @@ def character_overrides() -> Dict[str, int]:
     return out
 
 
-#: CHAT_INPUT command, and the option types used below.
+#: CHAT_INPUT (slash) and MESSAGE (right-click a message, Apps) commands,
+#: and the option types used below.
 COMMAND_TYPE_CHAT_INPUT = 1
+COMMAND_TYPE_MESSAGE = 3
 OPTION_TYPE_STRING = 3
 OPTION_TYPE_INTEGER = 4
 
 ROLL_COMMAND = "roll"
 INITIATIVE_COMMAND = "initiative"
 DISCERN_HONOR_COMMAND = "discern-honor"
+#: Message commands keep their display name (spaces and capitals allowed).
+ISHI_BOOST_MESSAGE_COMMAND = "Ishi 3rd Dan boost"
+ISHI_BOOST_SLASH_COMMAND = "ishi-3rd-dan-technique"
 
 #: Slash-command name -> knack id. Discord requires lowercase names with no
 #: spaces, so the commands are hyphenated while the roll keys stay
@@ -188,6 +202,17 @@ def command_definitions() -> List[Dict[str, Any]]:
         "Privately learn what your character reads of this character's Honor",
         [],
     ))
+    # Isawa Ishi 3rd Dan. No options on either: the void point is the
+    # technique's fixed price, and the message command's target IS its input.
+    # Discord rejects a description or options on a type-3 command.
+    commands.append(chat(
+        ISHI_BOOST_SLASH_COMMAND,
+        "Spend a void point to add Precepts k1 to another character's roll",
+        [],
+    ))
+    commands.append({
+        "name": ISHI_BOOST_MESSAGE_COMMAND, "type": COMMAND_TYPE_MESSAGE,
+    })
     return commands
 
 
@@ -373,10 +398,13 @@ def run_private_command(
 
 def run_command(
     db: Session, data: Dict[str, Any], discord_id: str,
+    interaction: Optional[Dict[str, Any]] = None,
 ) -> Tuple[str, Dict[str, Any]]:
     """Run one slash command for whoever invoked it.
 
     ``data`` is the interaction's ``data`` object (command name + options).
+    ``interaction`` is the whole interaction, read only for where a message
+    command was run (``guild_id`` / ``channel_id``, for the jump link).
     Returns ``(content, payload)`` - the message text and the dice-card
     payload to render. Raises ``CommandError`` with a private message for
     the invoker when the command cannot be run; in that case NOTHING has
@@ -384,6 +412,13 @@ def run_command(
     """
     command_name = str((data or {}).get("name") or "").strip().lower()
     options = _options(data)
+    if command_name in (ISHI_BOOST_SLASH_COMMAND, ISHI_BOOST_MESSAGE_COMMAND.lower()):
+        target = None
+        if command_name != ISHI_BOOST_SLASH_COMMAND:
+            target = _jump_target(data, interaction or {})
+        character = resolve_character(db, discord_id)
+        _require_edit_access(db, character, discord_id)
+        return _run_ishi_boost(db, character, discord_id, target)
     roll_key = roll_key_for_command(command_name, options)
     if roll_key is None:
         if command_name == ROLL_COMMAND:
@@ -473,6 +508,76 @@ def _run_roll(
         f"**{character.name}**: **{payload['total']}** {shown}"
         f"{_void_suffix(activation, void_requested)}"
     )
+    return content, payload
+
+
+def _snowflake(raw: Any) -> Optional[str]:
+    """A Discord id as a string of digits, or None. Kept a STRING end to end:
+    snowflakes do not fit a JavaScript number."""
+    text = str(raw if raw is not None else "").strip()
+    return text if text.isdigit() else None
+
+
+def _jump_target(
+    data: Dict[str, Any], interaction: Dict[str, Any],
+) -> Tuple[str, str]:
+    """``(target message id, jump link)`` for a message command.
+
+    In a DM there is no guild; Discord's own link form puts ``@me`` there."""
+    target = _snowflake((data or {}).get("target_id"))
+    channel = _snowflake(interaction.get("channel_id"))
+    if target is None or channel is None:
+        raise CommandError(
+            "Discord did not tell me which message that was run on. Nothing "
+            "was rolled."
+        )
+    guild = _snowflake(interaction.get("guild_id")) or "@me"
+    return target, f"https://discord.com/channels/{guild}/{channel}/{target}"
+
+
+def _run_ishi_boost(
+    db: Session, character: Character, discord_id: str,
+    target: Optional[Tuple[str, str]],
+) -> Tuple[str, Dict[str, Any]]:
+    """Isawa Ishi 3rd Dan: spend one void point, roll Precepts k1, to be
+    added to another character's roll (gm-assistant adds it).
+
+    Every refusal comes before any dice or spend, like ``_run_roll``. The
+    Ide Diplomat's subtracting twin is deliberately not reachable here."""
+    character_data = character.to_dict()
+    ability = xk1_ability(character_data)
+    if ability is None or ability["verb"] != "add":
+        raise CommandError(
+            f"{character.name} is not an Isawa Ishi of 3rd Dan or higher, so "
+            "has no 3rd Dan technique to use. Nothing was rolled."
+        )
+    if ability["x"] < 1:
+        raise CommandError(
+            f"{character.name} has no Precepts, so the technique would roll no "
+            "dice. Nothing was rolled."
+        )
+    formula = xk1_formula(ability)
+    try:
+        plan = plan_void_spend(
+            character, 0, activation_cost=1, roll_label=formula["label"],
+        )
+    except VoidSpendRefused as exc:
+        raise CommandError(f"{exc} Nothing was rolled.")
+    # Same as the sheet's roll session: the point is a price, not +1k1.
+    formula["void_activation_cost"] = 1
+    record_key = f"spend_vp_xk1:{character.school}"
+    payload = execute_roll(character_data, record_key, formula=formula)
+    if target is not None:
+        payload["target_message_id"] = target[0]
+
+    apply_void_spend(character, plan)
+    _record(db, character, record_key, payload, discord_id, character_data)
+    db.commit()
+
+    # gm-assistant parses these bytes (issue #2, B3) - announce any change.
+    content = f"**{character.name}**: **{payload['total']}** {ability['title']}"
+    if target is not None:
+        content += f", boosting {target[1]}"
     return content, payload
 
 

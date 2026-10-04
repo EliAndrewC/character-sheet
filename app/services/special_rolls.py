@@ -52,6 +52,16 @@ def xk1_ability(char_data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     return None
 
 
+def xk1_formula(ability: Dict[str, Any]) -> Dict[str, Any]:
+    """The formula ``xk1_ability``'s roll is rolled with: X kept 1, 10s
+    rerolled. The sheet's button (``roll_sessions``) and the Discord boost
+    commands both roll THIS, so the two cannot disagree. The void point is
+    the roll's price, not dice on it - the caller charges it as an
+    activation cost."""
+    return {"label": ability["title"], "rolled": ability["x"], "kept": 1, "flat": 0,
+            "reroll_tens": True, "bonuses": []}
+
+
 def freeform_formula(rolled: Any, kept: Any, reroll_tens: Any) -> Dict[str, Any]:
     """A player's own NkM roll. Raises ValueError on a bad shape."""
     try:

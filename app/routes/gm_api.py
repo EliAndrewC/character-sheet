@@ -232,6 +232,13 @@ def _alternatives(payload: Dict[str, Any]) -> List[Dict[str, Any]]:
     ]
 
 
+def _target_message_id(payload: Dict[str, Any]) -> Optional[str]:
+    """The Discord message a boost was aimed at, as a STRING (snowflakes do
+    not fit a JavaScript number), or None for every other roll."""
+    raw = payload.get("target_message_id")
+    return str(raw) if raw not in (None, "") else None
+
+
 def _serialize_roll(
     row: RollHistory, character: Character, group: Optional[GamingGroup],
 ) -> Dict[str, Any]:
@@ -251,6 +258,7 @@ def _serialize_roll(
         "roll_key": row.roll_key,
         "label": label_for_roll(row.roll_key, payload),
         "skill_rank": payload.get("skill_rank"),
+        "target_message_id": _target_message_id(payload),
         "formula": payload.get("formula") or "",
         "total": payload.get("total"),
         "kept": _die_values(payload.get("kept")),
@@ -321,6 +329,10 @@ async def list_rolls(
       time. It is ``null`` for rolls with no single governing rank (rings,
       wound checks, initiative, bless, freeform) and for rows recorded
       before that stamping existed.
+    - ``target_message_id`` is the Discord message an Isawa Ishi 3rd Dan
+      boost was aimed at (the ``Ishi 3rd Dan boost`` message command), a
+      string; ``null`` for every other roll, ``/ishi-3rd-dan-technique``'s
+      and the sheet's included.
     """
     denied = _authorize(request)
     if denied is not None:

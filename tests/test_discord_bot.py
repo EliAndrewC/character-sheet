@@ -866,8 +866,11 @@ def test_the_registered_set_is_exactly_skills_plus_three_knacks_plus_three():
     assert set(command_names()) == (
         set(SKILLS) | {"oppose-social", "oppose-knowledge", "commune"}
         | {"roll", "initiative", "discern-honor"}
+        # Isawa Ishi 3rd Dan (issue #2): a deliberate addition - a slash
+        # command and a MESSAGE command - not a knack slipping in.
+        | {"ishi-3rd-dan-technique", "Ishi 3rd Dan boost"}
     )
-    assert len(command_names()) == len(set(command_names())) == 24
+    assert len(command_names()) == len(set(command_names())) == 26
     assert set(KNACK_COMMANDS.values()) == {
         "oppose_social", "oppose_knowledge", "commune",
     }
@@ -896,16 +899,23 @@ def test_command_names_satisfy_discords_rules():
     import re
 
     for definition in command_definitions():
+        if definition["type"] == 3:
+            # A message command: a display name, and Discord rejects a
+            # description or options on one.
+            assert definition == {"name": "Ishi 3rd Dan boost", "type": 3}
+            continue
         assert re.fullmatch(r"[a-z0-9_-]{1,32}", definition["name"])
         assert 1 <= len(definition["description"]) <= 100
         assert definition["type"] == 1
 
 
 def test_every_roll_takes_void_and_initiative_does_not():
-    by_name = {d["name"]: d for d in command_definitions()}
+    by_name = {
+        d["name"]: d for d in command_definitions() if d["type"] == 1
+    }
     for name, definition in by_name.items():
         option_names = [o["name"] for o in definition["options"]]
-        if name in ("initiative", "discern-honor"):
+        if name in ("initiative", "discern-honor", "ishi-3rd-dan-technique"):
             # rules/03-combat.md: initiative is rolled "without spending
             # void points". Discern Honor is not a roll at all.
             assert option_names == []
@@ -1423,3 +1433,203 @@ def test_put_global_commands(monkeypatch, signing_key):
     assert discord_api.put_global_commands([{"name": "roll"}]) == [{"name": "roll"}]
     assert captured["url"].endswith(f"/applications/{APP_ID}/commands")
     assert "guilds" not in captured["url"]
+
+
+# ===========================================================================
+# Isawa Ishi 3rd Dan boost (issue #2): message command + slash command
+# ===========================================================================
+
+
+GUILD_ID = "745421621829042297"
+CHANNEL_ID = "832075590726844436"
+TARGET_ID = "1300000000000000001"
+
+
+def _ishi(db, dan=3, precepts=3, **kwargs):
+    kwargs.setdefault("name", "Isawa Kenji")
+    kwargs.setdefault("school", "isawa_ishi")
+    kwargs.setdefault("knacks", {
+        "absorb_void": dan, "kharmic_spin": dan, "otherworldliness": dan,
+    })
+    kwargs.setdefault("skills", {"precepts": precepts})
+    return _grouped(db, **kwargs)
+
+
+def _boost_data(target=TARGET_ID):
+    return {"id": "cmd_9", "name": "Ishi 3rd Dan boost", "type": 3,
+            "target_id": target,
+            "resolved": {"messages": {target: {"id": target, "content": "x"}}}}
+
+
+def _boost_interaction(guild=GUILD_ID):
+    out = {"channel_id": CHANNEL_ID}
+    if guild:
+        out["guild_id"] = guild
+    return out
+
+
+def _void_of(client, char_id):
+    c = query_db(client, Character).filter(Character.id == char_id).first()
+    return c.current_void_points
+
+
+def test_message_boost_spends_one_void_records_the_target_and_links_it(client):
+    db = _session(client)
+    char = _ishi(db, current_void_points=3)
+    content, payload = run_command(
+        db, _boost_data(), PLAYER_ID, interaction=_boost_interaction(),
+    )
+    total = payload["total"]
+    assert content == (
+        f"**Isawa Kenji**: **{total}** Isawa Ishi 3rd Dan, boosting "
+        f"https://discord.com/channels/{GUILD_ID}/{CHANNEL_ID}/{TARGET_ID}"
+    )
+    assert _void_of(client, char.id) == 2
+    rows = query_db(client, RollHistory).all()
+    assert len(rows) == 1
+    assert rows[0].roll_key == "spend_vp_xk1:isawa_ishi"
+    assert rows[0].payload["target_message_id"] == TARGET_ID
+    # Precepts k1: three dice rolled, one kept.
+    assert len(payload["kept"]) == 1
+    assert len(payload["kept"]) + len(payload["dropped"]) == 3
+
+
+def test_message_boost_in_a_dm_links_with_at_me(client):
+    db = _session(client)
+    _ishi(db)
+    content, _ = run_command(
+        db, _boost_data(), PLAYER_ID, interaction=_boost_interaction(guild=None),
+    )
+    assert content.endswith(
+        f", boosting https://discord.com/channels/@me/{CHANNEL_ID}/{TARGET_ID}"
+    )
+
+
+def test_slash_boost_has_no_target(client):
+    db = _session(client)
+    char = _ishi(db, current_void_points=1)
+    content, payload = run_roll_command(db, "ishi-3rd-dan-technique", PLAYER_ID)
+    assert content == f"**Isawa Kenji**: **{payload['total']}** Isawa Ishi 3rd Dan"
+    assert "target_message_id" not in payload
+    assert _void_of(client, char.id) == 0
+    row = query_db(client, RollHistory).one()
+    assert row.roll_key == "spend_vp_xk1:isawa_ishi"
+
+
+@pytest.mark.parametrize("make, expected", [
+    (lambda db: _akodo(db), "not an Isawa Ishi of 3rd Dan"),
+    (lambda db: _ishi(db, dan=2), "not an Isawa Ishi of 3rd Dan"),
+    (lambda db: _ishi(db, school="ide_diplomat", knacks={
+        "double_attack": 3, "feint": 3, "worldliness": 3}), "not an Isawa Ishi"),
+    (lambda db: _ishi(db, precepts=0), "has no Precepts"),
+    (lambda db: _ishi(db, current_void_points=0), "Nothing was rolled"),
+])
+@pytest.mark.parametrize("message", [True, False])
+def test_boost_refusals_are_private_and_change_nothing(
+    client, monkeypatch, make, expected, message,
+):
+    db = _session(client)
+    char = make(db)
+    before = _void_of(client, char.id)
+    _no_dice(monkeypatch)
+    with pytest.raises(CommandError, match=expected):
+        if message:
+            run_command(db, _boost_data(), PLAYER_ID,
+                        interaction=_boost_interaction())
+        else:
+            run_roll_command(db, "ishi-3rd-dan-technique", PLAYER_ID)
+    assert _void_of(client, char.id) == before
+    assert query_db(client, RollHistory).count() == 0
+
+
+@pytest.mark.parametrize("target, interaction", [
+    (None, {"channel_id": CHANNEL_ID}),
+    ("not-a-snowflake", {"channel_id": CHANNEL_ID}),
+    (TARGET_ID, {}),
+])
+def test_message_boost_without_a_usable_target_is_refused(
+    client, monkeypatch, target, interaction,
+):
+    db = _session(client)
+    char = _ishi(db)
+    _no_dice(monkeypatch)
+    with pytest.raises(CommandError, match="which message"):
+        run_command(db, _boost_data(target), PLAYER_ID, interaction=interaction)
+    assert _void_of(client, char.id) == 3
+
+
+def test_boost_needs_edit_access(client, monkeypatch):
+    db = _session(client)
+    char = _ishi(db)
+    monkeypatch.setattr(
+        discord_commands, "can_edit_character", lambda *a, **kw: False,
+    )
+    with pytest.raises(CommandError, match="edit access"):
+        run_command(db, _boost_data(), PLAYER_ID,
+                    interaction=_boost_interaction())
+    assert _void_of(client, char.id) == 3
+
+
+def test_boost_rolls_the_same_formula_as_the_sheet(client, monkeypatch):
+    """The sheet's button and the commands share special_rolls.xk1_formula."""
+    from app.services import roll_sessions, special_rolls
+
+    db = _session(client)
+    char = _ishi(db, precepts=4)
+    ability = special_rolls.xk1_ability(char.to_dict())
+    sheet = roll_sessions._special(char, char.to_dict(), "spend_vp_xk1", {})
+    assert sheet == (special_rolls.xk1_formula(ability),
+                     "spend_vp_xk1:isawa_ishi", 1)
+    seen = {}
+
+    def spy(char_data, roll_key, **kw):
+        seen.update(kw["formula"], roll_key=roll_key)
+        return {"total": 7, "kept": [], "dropped": []}
+
+    monkeypatch.setattr(discord_commands, "execute_roll", spy)
+    run_roll_command(db, "ishi-3rd-dan-technique", PLAYER_ID)
+    assert seen == dict(special_rolls.xk1_formula(ability),
+                        void_activation_cost=1,
+                        roll_key="spend_vp_xk1:isawa_ishi")
+
+
+def test_boost_interaction_round_trip(client, signing_key, _capture_discord_calls):
+    db = _session(client)
+    _ishi(db)
+    body = _command(name="Ishi 3rd Dan boost")
+    body["data"] = _boost_data()
+    body.update(_boost_interaction())
+    r = _post(client, signing_key, body)
+    assert r.json() == {"type": 5}
+    sent = _capture_discord_calls[0]
+    assert sent["content"].startswith("**Isawa Kenji**: **")
+    assert sent["content"].endswith(f"/{GUILD_ID}/{CHANNEL_ID}/{TARGET_ID}")
+    assert sent["png"][:8] == b"\x89PNG\r\n\x1a\n"
+
+
+def test_boost_target_reaches_the_gm_api(client, monkeypatch):
+    monkeypatch.setenv("ROLL_QUERY_TOKEN", "tok")
+    db = _session(client)
+    _ishi(db, current_void_points=2)
+    run_command(db, _boost_data(), PLAYER_ID, interaction=_boost_interaction())
+    run_roll_command(db, "ishi-3rd-dan-technique", PLAYER_ID)
+    run_roll_command(db, "precepts", PLAYER_ID)
+    rolls = client.get(
+        "/api/rolls?since=2020-01-01T00:00:00Z",
+        headers={"Authorization": "Bearer tok"},
+    ).json()["rolls"]
+    by_key = [(r["roll_key"], r["target_message_id"]) for r in rolls]
+    assert by_key == [
+        ("spend_vp_xk1:isawa_ishi", TARGET_ID),
+        ("spend_vp_xk1:isawa_ishi", None),
+        ("skill:precepts", None),
+    ]
+
+
+def test_register_script_selects_the_message_command_case_insensitively():
+    got = _load_script().select_commands(
+        "ishi 3rd dan boost, ishi-3rd-dan-technique",
+    )
+    assert {c["name"] for c in got} == {
+        "Ishi 3rd Dan boost", "ishi-3rd-dan-technique",
+    }

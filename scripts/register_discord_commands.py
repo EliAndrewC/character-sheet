@@ -26,7 +26,9 @@ environment (both live in the gitignored ``.env``)::
 The full set is registered by default and is never hand-maintained: it is
 ``discord_commands.command_definitions()`` - ``/roll``, one command per
 non-combat skill in ``game_data.SKILLS``, the three allow-listed knacks and
-``/initiative``. 23 commands against Discord's cap of 100 per scope.
+``/initiative``, ``/discern-honor`` and the two Isawa Ishi 3rd Dan boost
+commands (one of them a MESSAGE command, ``Ishi 3rd Dan boost``). 26
+commands against Discord's cap of 100 per scope.
 ``--only etiquette,roll`` registers a subset, for poking at one command.
 """
 
@@ -46,11 +48,12 @@ def select_commands(only: str) -> list:
     wanted = [n.strip().lower() for n in (only or "").split(",") if n.strip()]
     if not wanted:
         return commands
-    known = {c["name"] for c in commands}
+    # Case-insensitive: the message command's name has capitals and spaces.
+    known = {c["name"].lower() for c in commands}
     for name in wanted:
         if name not in known:
             raise SystemExit(f"unknown command: {name}")
-    return [c for c in commands if c["name"] in wanted]
+    return [c for c in commands if c["name"].lower() in wanted]
 
 
 def main() -> int:
@@ -82,6 +85,9 @@ def main() -> int:
 
     if args.list:
         for command in commands:
+            if command.get("type") == 3:   # message command: no options, no description
+                print(f"[message] {command['name']}")
+                continue
             opts = " ".join(f"[{o['name']}]" for o in command["options"])
             print(f"/{command['name']} {opts}- {command['description']}")
 

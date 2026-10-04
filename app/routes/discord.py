@@ -149,6 +149,7 @@ async def interactions(request: Request, db: Session = Depends(get_db)):
             return _ephemeral(private)
         content, payload = run_command(
             db, interaction.get("data") or {}, discord_id,
+            interaction=interaction,
         )
     except CommandError as exc:
         return _ephemeral(str(exc))

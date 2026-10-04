@@ -426,8 +426,7 @@ def _special(character: Character, char_data: Dict[str, Any], roll_key: str,
         # The void point is the roll's price, not dice on it: drawn like an
         # activation cost (temp, then regular, then worldliness) and its
         # school consequences fire.
-        return ({"label": ability["title"], "rolled": ability["x"], "kept": 1, "flat": 0,
-                 "reroll_tens": True, "bonuses": []},
+        return (special_rolls.xk1_formula(ability),
                 f"spend_vp_xk1:{character.school or ''}", 1)
     try:
         formula = special_rolls.freeform_formula(

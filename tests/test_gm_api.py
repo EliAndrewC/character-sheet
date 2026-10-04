@@ -427,6 +427,7 @@ def test_roll_serialization_shape(client):
     assert got["roll_key"] == "skill:etiquette"
     assert got["label"] == "Etiquette"
     assert got["skill_rank"] == 3
+    assert got["target_message_id"] is None
     assert got["formula"] == "7k3 + 5 (etiquette skill: 3)"
     assert got["total"] == 38
     # A 10 that exploded into a 7 collapses to a single 17.
@@ -786,3 +787,69 @@ def test_characters_null_json_columns(client):
     assert got["editor_discord_ids"] == []
     assert got["knacks"] == {}
     assert got["skills"] == {"attack": 1, "parry": 1}
+
+
+# ---------------------------------------------------------------------------
+# target_message_id (Isawa Ishi 3rd Dan boost, issue #2)
+# ---------------------------------------------------------------------------
+
+
+def test_target_message_id_is_serialized_as_a_string(client):
+    db = _session(client)
+    char = _make_char(db)
+    # Even a number stored by some older writer comes back a string.
+    _make_roll(db, char, roll_key="spend_vp_xk1:isawa_ishi",
+               payload={"total": 9, "target_message_id": 1300000000000000001})
+    db.commit()
+    got = client.get(
+        "/api/rolls?since=2020-01-01T00:00:00Z", headers=AUTH,
+    ).json()["rolls"][0]
+    assert got["target_message_id"] == "1300000000000000001"
+
+
+def test_a_client_cannot_name_a_target_when_creating_a_roll(client):
+    db = _session(client)
+    char = _make_char(db, owner_discord_id=ADMIN_ID)
+    db.commit()
+    client.post(f"/characters/{char.id}/rolls", json={
+        "roll_key": "spend_vp_xk1:isawa_ishi",
+        "payload": {"title": "Isawa Ishi 3rd Dan", "target_message_id": "123"},
+    })
+    got = client.get(
+        "/api/rolls?since=2020-01-01T00:00:00Z", headers=AUTH,
+    ).json()["rolls"][0]
+    assert got["target_message_id"] is None
+
+
+@pytest.mark.parametrize("sent", [{}, {"target_message_id": "999"}])
+def test_patch_roll_keeps_the_server_stamped_target(client, sent):
+    """A post-roll edit on the sheet can neither erase nor change it."""
+    db = _session(client)
+    char = _make_char(db, owner_discord_id=ADMIN_ID)
+    row = _make_roll(db, char, roll_key="spend_vp_xk1:isawa_ishi",
+                     payload={"total": 9, "target_message_id": "1300"})
+    row.actor_discord_id = ADMIN_ID
+    db.commit()
+    r = client.patch(f"/characters/{char.id}/rolls/{row.id}",
+                     json={"payload": {"total": 14, **sent}})
+    assert r.status_code == 200
+    got = client.get(
+        "/api/rolls?since=2020-01-01T00:00:00Z", headers=AUTH,
+    ).json()["rolls"][0]
+    assert got["target_message_id"] == "1300"
+    assert got["total"] == 14
+
+
+def test_patch_roll_cannot_add_a_target(client):
+    db = _session(client)
+    char = _make_char(db, owner_discord_id=ADMIN_ID)
+    db.commit()
+    created = client.post(f"/characters/{char.id}/rolls", json={
+        "roll_key": "spend_vp_xk1:isawa_ishi", "payload": {"total": 9},
+    }).json()
+    client.patch(f"/characters/{char.id}/rolls/{created['id']}",
+                 json={"payload": {"total": 9, "target_message_id": "5"}})
+    got = client.get(
+        "/api/rolls?since=2020-01-01T00:00:00Z", headers=AUTH,
+    ).json()["rolls"][0]
+    assert got["target_message_id"] is None
