@@ -1,5 +1,7 @@
 """Page routes — serve full HTML pages via Jinja2 templates."""
 
+from typing import Any, Dict, Optional
+
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse, RedirectResponse
 from sqlalchemy.orm import Session
