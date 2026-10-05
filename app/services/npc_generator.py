@@ -10,6 +10,8 @@ answered. This module only:
 * rolls the XP (``roll_extra_xp``: base + 5 x an exploding d10, D5),
 * draws the combat share (``draw_combat_share``: target + a deviation
   resampled from real characters, clamped to their range, D6/D14),
+* prices the NPC's advantages and disadvantages (``trait_budget``) and
+  shrinks the simulator's budget to match,
 * calls ``simulation.templates.generator.generate_template``, and
 * translates the result into this app's ids (the ONE place the two
   projects' vocabularies meet - see ``_SIM_SCHOOL_OVERRIDES`` and
@@ -35,6 +37,11 @@ from simulation.templates.generator import generate_template
 from simulation.templates.strategies import SCHOOL_NAMES as SIM_SCHOOL_NAMES
 
 from app.game_data import (
+    ADVANTAGES,
+    CAMPAIGN_ADVANTAGES,
+    CAMPAIGN_DISADVANTAGES,
+    COMBAT_SKILLS,
+    DISADVANTAGES,
     NPC_COMBAT_SHARE_SAMPLES,
     PROFESSION_CHARACTER_TYPE,
     SCHOOL_KNACKS,
@@ -42,7 +49,13 @@ from app.game_data import (
     SCHOOLS,
     SKILLS,
 )
-from app.services.xp import TECHNIQUE_CHOICE_REQUIREMENTS
+from app.services.xp import (
+    TECHNIQUE_CHOICE_REQUIREMENTS,
+    _advantage_is_combat,
+    _combat_advantage_labels,
+    advantage_items,
+    disadvantage_items,
+)
 
 # Starting XP every character has before any is earned (D2: "50 earned" is
 # 150 + 50 = 200 total).
@@ -233,6 +246,110 @@ def simulator_version() -> str:
 
 
 # ---------------------------------------------------------------------------
+# Advantages and disadvantages
+# ---------------------------------------------------------------------------
+
+# Trait field -> (catalog, what to call an id missing from it).
+_TRAIT_CATALOGS: Dict[str, Tuple[Dict[str, Any], str]] = {
+    "advantages": (ADVANTAGES, "advantage"),
+    "disadvantages": (DISADVANTAGES, "disadvantage"),
+    "campaign_advantages": (CAMPAIGN_ADVANTAGES, "campaign advantage"),
+    "campaign_disadvantages": (CAMPAIGN_DISADVANTAGES, "campaign disadvantage"),
+}
+TRAIT_FIELDS = tuple(_TRAIT_CATALOGS) + ("specializations", "advantage_details")
+
+
+def normalize_traits(traits: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+    """Validated, canonical traits: every ``TRAIT_FIELDS`` key present.
+
+    Raises ``ValueError`` naming the problem, so a GM request is refused
+    before anything is built. The legacy ``specialization`` advantage flag is
+    dropped: the ``specializations`` list is what the sheet prices and rolls.
+    """
+    traits = traits or {}
+    unknown = sorted(set(traits) - set(TRAIT_FIELDS))
+    if unknown:
+        raise ValueError(f"unknown trait field {unknown[0]!r}")
+    out: Dict[str, Any] = {}
+    for field, (catalog, what) in _TRAIT_CATALOGS.items():
+        ids = traits.get(field) or []
+        if not isinstance(ids, list):
+            raise ValueError(f"{field} must be a list")
+        ids = [i for i in ids if not (field == "advantages" and i == "specialization")]
+        for i in ids:
+            if i not in catalog:
+                raise ValueError(f"unknown {what} {i!r}")
+        if len(set(ids)) != len(ids):
+            raise ValueError(f"a {what} is listed twice")
+        out[field] = list(ids)
+    specs = []
+    for spec in traits.get("specializations") or []:
+        text = (spec.get("text") or "").strip() if isinstance(spec, dict) else ""
+        skills = spec.get("skills") if isinstance(spec, dict) else None
+        if not text or not isinstance(skills, list) or len(skills) != 1 or (
+                skills[0] not in SKILLS and skills[0] not in COMBAT_SKILLS):
+            raise ValueError(f"bad specialization {spec!r}: needs text and one skill id")
+        specs.append({"text": text, "skills": [skills[0]]})
+    out["specializations"] = specs
+    details = traits.get("advantage_details") or {}
+    if not isinstance(details, dict):
+        raise ValueError("advantage_details must be an object")
+    out["advantage_details"] = dict(details)
+    return out
+
+
+def trait_budget(traits: Dict[str, Any]) -> Tuple[int, int, int]:
+    """``(combat advantage XP, all advantage XP, disadvantage XP gained)``,
+    priced and classified exactly as the sheet and the combat-share
+    measurement do (``xp.advantage_items`` / ``_advantage_is_combat``)."""
+    adv = advantage_items(traits["advantages"], traits["campaign_advantages"],
+                          specializations=traits["specializations"])
+    combat_labels = _combat_advantage_labels()
+    combat = sum(i["xp"] for i in adv if _advantage_is_combat(i["label"], combat_labels))
+    gained = -sum(i["xp"] for i in disadvantage_items(
+        traits["disadvantages"], traits["campaign_disadvantages"]))
+    return combat, sum(i["xp"] for i in adv), gained
+
+
+def _trait_index() -> Dict[str, Tuple[str, str]]:
+    """Lower-cased name or id -> (trait field, id), over every catalog."""
+    index: Dict[str, Tuple[str, str]] = {}
+    for field, (catalog, _what) in _TRAIT_CATALOGS.items():
+        for tid, entry in catalog.items():
+            if tid == "specialization":
+                continue  # its skill cannot be told from a bare line
+            index[tid.lower()] = (field, tid)
+            index[entry.name.lower()] = (field, tid)
+    return index
+
+
+def match_trait_lines(lines: List[str]) -> Tuple[Dict[str, Any], List[str]]:
+    """Split a character's trait lines (Obsidian Portal's GM info lists one
+    per line, e.g. "Contrary", "squinty") into ``(traits, flavor)``.
+
+    A line matches when it IS an advantage or disadvantage name or id,
+    ignoring case and surrounding space; anything else ("pauses before
+    speaking") is flavor and is returned for the GM to read, never guessed
+    at. Ids come back sorted, each once.
+    """
+    index = _trait_index()
+    found: Dict[str, set] = {field: set() for field in _TRAIT_CATALOGS}
+    flavor: List[str] = []
+    for line in lines:
+        text = line.strip()
+        if not text:
+            continue
+        hit = index.get(text.lower())
+        if hit:
+            found[hit[0]].add(hit[1])
+        else:
+            flavor.append(text)
+    traits = {field: sorted(ids) for field, ids in found.items()}
+    traits.update(specializations=[], advantage_details={})
+    return traits, flavor
+
+
+# ---------------------------------------------------------------------------
 # Building
 # ---------------------------------------------------------------------------
 
@@ -276,20 +393,45 @@ def _technique_choices(school_id: str, sim_school: Any) -> Dict[str, Any]:
     return choices
 
 
-def build_npc(npc_type: str, earned_xp: int, combat_share: float) -> Dict[str, Any]:
+def build_npc(
+    npc_type: str, earned_xp: int, combat_share: float,
+    traits: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
     """Character fields for one NPC, in ``Character.to_dict()`` shape.
 
     ``earned_xp`` is on top of ``STARTING_XP``. The unspent remainder is the
     non-combat XP the simulator deliberately leaves unassigned.
+
+    ``traits`` (``normalize_traits``) are the NPC's advantages and
+    disadvantages, paid for the way the combat share was measured on real
+    characters: disadvantages add their XP to the budget, as on the sheet;
+    combat advantages (Lucky, Strength of the Earth, Quick Healer, combat
+    specializations) come out of the combat share; the rest come out of the
+    unspent remainder, and only shrink the combat spend when they do not fit.
     """
     if npc_type not in npc_types():
         raise ValueError(f"unknown NPC type {npc_type!r}")
     if earned_xp < 0:
         raise ValueError("earned XP cannot be negative")
+    traits = normalize_traits(traits)
+    adv_combat, adv_total, gained = trait_budget(traits)
+    total = STARTING_XP + earned_xp
+    budget = total + gained
+    combat = int(budget * combat_share)
+    # The simulator keeps its own total at starting + earned (it sizes a
+    # Wave Man's ability picks from it, as the sheet does), so a disadvantage
+    # gain can never make it spend more than that.
+    sim_combat = min(combat - adv_combat, budget - adv_total, total)
+    if sim_combat <= 0:
+        raise ValueError(
+            f"the advantages cost more XP ({adv_total}) than this NPC has to spend"
+        )
+    # Untouched when nothing moved, so an NPC without traits builds exactly
+    # as before; otherwise the fraction that floors to ``sim_combat``.
+    unchanged = sim_combat == int(total * combat_share)
+    fraction = combat_share if unchanged else min(1.0, (sim_combat + 0.5) / total)
     sim_key = npc_types()[npc_type]
-    config, breakdown = generate_template(
-        sim_key, STARTING_XP + earned_xp, combat_xp_fraction=combat_share,
-    )
+    config, breakdown = generate_template(sim_key, total, combat_xp_fraction=fraction)
 
     is_profession = npc_type == WAVE_MAN
     school_id = "" if is_profession else npc_type
@@ -325,6 +467,15 @@ def build_npc(npc_type: str, earned_xp: int, combat_share: float) -> Dict[str, A
         abilities[_SIM_ABILITY_TO_SHEET[name]] = count
 
     rings = {ring.capitalize(): rank for ring, rank in config.rings.items()}
+    generation = {
+        "npc_type": npc_type,
+        "earned_xp": earned_xp,
+        "combat_share": combat_share,
+        "combat_budget": breakdown["combat_budget"],
+        "simulator": simulator_version(),
+    }
+    if any(traits.values()):
+        generation["traits"] = traits
     return {
         "school": school_id,
         "school_ring_choice": "" if is_profession else sim_school.school_ring().capitalize(),
@@ -339,13 +490,8 @@ def build_npc(npc_type: str, earned_xp: int, combat_share: float) -> Dict[str, A
         "technique_choices": {} if is_profession else _technique_choices(school_id, sim_school),
         "starting_xp": STARTING_XP,
         "earned_xp": earned_xp,
-        "generation": {
-            "npc_type": npc_type,
-            "earned_xp": earned_xp,
-            "combat_share": combat_share,
-            "combat_budget": breakdown["combat_budget"],
-            "simulator": simulator_version(),
-        },
+        **traits,
+        "generation": generation,
     }
 
 

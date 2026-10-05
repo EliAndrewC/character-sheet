@@ -513,3 +513,24 @@ def test_names_unreachable_yields_nothing(monkeypatch):
         raise httpx.ConnectError("asleep")
     _patch_http(monkeypatch, handler)
     assert asyncio.run(npc_names.fetch_names(2, False)) == []
+
+
+def test_generate_and_rebuild_carry_traits(client, group):
+    _start(client, group)
+    s = _session(client)
+    g = s.get(GamingGroup, group)
+    enc = s.query(Encounter).filter_by(gaming_group_id=group).one()
+    row = dict(_wave_men(1, roll_extra=False), traits={"advantages": ["lucky"], "disadvantages": ["contrary"]})
+    (npc,) = npcs.generate(s, g, enc, GM, [row], rng=random.Random(1))
+    assert npc.advantages == ["lucky"] and npc.disadvantages == ["contrary"]
+    npcs.rebuild_npc(s, npc, earned_xp=(npc.earned_xp or 0) + 20)
+    assert npc.advantages == ["lucky"] and npc.disadvantages == ["contrary"]
+    assert npc.npc_generation["traits"]["advantages"] == ["lucky"]
+    s.close()
+
+
+def test_generate_refuses_bad_traits_before_creating_anything(client, group):
+    _start(client, group)
+    resp = _gen(client, group, dict(_wave_men(1), traits={"advantages": ["flying"]}))
+    assert resp.status_code == 400 and "unknown advantage" in resp.json()["error"]
+    assert _npc_ids(client, group) == []

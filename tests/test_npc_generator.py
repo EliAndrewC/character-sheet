@@ -382,3 +382,170 @@ def test_hiruma_scout_takes_the_simulators_counterattack_ranks_as_lunge():
     assert set(npc["knacks"]) == {"double_attack", "iaijutsu", "lunge"}
     assert "counterattack" not in npc["foreign_knacks"]
     assert min(npc["knacks"].values()) >= 3
+
+
+# ---------------------------------------------------------------------------
+# Advantages and disadvantages
+# ---------------------------------------------------------------------------
+
+def _capture_budget(monkeypatch):
+    """Record what build_npc asks the simulator to spend on combat."""
+    seen = {}
+    real = gen.generate_template
+
+    def spy(sim_key, total_xp, combat_xp_fraction):
+        seen["total"] = total_xp
+        seen["combat"] = int(total_xp * combat_xp_fraction)
+        return real(sim_key, total_xp, combat_xp_fraction=combat_xp_fraction)
+
+    monkeypatch.setattr(gen, "generate_template", spy)
+    return seen
+
+
+def test_no_traits_spends_exactly_as_before(monkeypatch):
+    seen = _capture_budget(monkeypatch)
+    build = gen.build_npc("akodo_bushi", 50, 0.7)
+    assert seen == {"total": 200, "combat": 140}
+    assert build["advantages"] == [] and build["disadvantages"] == []
+    assert "traits" not in build["generation"]
+
+
+def test_traits_land_on_the_build_and_in_the_generation_record():
+    traits = {"advantages": ["lucky", "wealthy"], "disadvantages": ["contrary"],
+              "campaign_advantages": ["streetwise"], "campaign_disadvantages": ["peasantborn"],
+              "specializations": [{"text": "Spears", "skills": ["attack"]}],
+              "advantage_details": {"virtue": {"text": "Courage"}}}
+    build = gen.build_npc("wave_man", 50, 0.7, traits=traits)
+    assert build["advantages"] == ["lucky", "wealthy"]
+    assert build["disadvantages"] == ["contrary"]
+    assert build["campaign_advantages"] == ["streetwise"]
+    assert build["campaign_disadvantages"] == ["peasantborn"]
+    assert build["specializations"] == [{"text": "Spears", "skills": ["attack"]}]
+    assert build["advantage_details"] == {"virtue": {"text": "Courage"}}
+    assert build["generation"]["traits"] == gen.normalize_traits(traits)
+
+
+def test_a_combat_advantage_comes_out_of_the_combat_budget(monkeypatch):
+    seen = _capture_budget(monkeypatch)
+    gen.build_npc("akodo_bushi", 50, 0.7, traits={"advantages": ["lucky"]})  # 5 XP, combat
+    assert seen["combat"] == 140 - 5
+
+
+def test_a_combat_specialization_counts_as_combat(monkeypatch):
+    seen = _capture_budget(monkeypatch)
+    gen.build_npc("akodo_bushi", 50, 0.7,
+                  traits={"specializations": [{"text": "Spear attacks", "skills": ["attack"]}]})
+    assert seen["combat"] == 140 - 2
+
+
+def test_a_noncombat_advantage_is_paid_from_the_unspent_remainder(monkeypatch):
+    seen = _capture_budget(monkeypatch)
+    gen.build_npc("akodo_bushi", 50, 0.7, traits={"advantages": ["wealthy", "worldly"]})
+    assert seen["combat"] == 140  # 6 XP fits in the 60 left over
+
+
+def test_noncombat_advantages_beyond_the_remainder_shrink_combat(monkeypatch):
+    seen = _capture_budget(monkeypatch)
+    # 200 XP at 0.9: 180 combat, 20 left; great destiny + discerning + worldly = 17,
+    # kind eye + good reputation = 6 more -> 23, three over.
+    gen.build_npc("akodo_bushi", 50, 0.9, traits={"advantages": [
+        "great_destiny", "discerning", "worldly", "kind_eye", "good_reputation"]})
+    assert seen["combat"] == 180 - 3
+
+
+def test_disadvantages_raise_the_budget_like_the_sheet(monkeypatch):
+    seen = _capture_budget(monkeypatch)
+    build = gen.build_npc("akodo_bushi", 50, 0.7, traits={"disadvantages": ["contrary", "unkempt"]})
+    gain = -sum(i["xp"] for i in __import__("app.services.xp", fromlist=["x"]).disadvantage_items(
+        ["contrary", "unkempt"], []))
+    assert seen["total"] == 200  # the simulator's own total stays starting + earned
+    assert seen["combat"] == int((200 + gain) * 0.7)
+
+
+def test_disadvantage_gains_never_push_combat_past_the_simulators_total(monkeypatch):
+    seen = _capture_budget(monkeypatch)
+    gen.build_npc("akodo_bushi", 0, 0.91, traits={"disadvantages": [
+        "contrary", "unkempt", "proud", "vain", "emotional", "meddler", "jealousy", "withdrawn"]})
+    assert seen["combat"] <= seen["total"]
+
+
+@pytest.mark.parametrize("npc_type", ["akodo_bushi", "wave_man", "hiruma_scout"])
+def test_a_build_with_traits_is_a_valid_character_within_budget(npc_type):
+    traits = {"advantages": ["lucky", "virtue", "wealthy"], "disadvantages": ["contrary", "unkempt"]}
+    build = gen.build_npc(npc_type, 45, 0.741, traits=traits)
+    character = _as_character(build)
+    xp = calculate_total_xp(character)
+    budget = gen.STARTING_XP + 45 - xp["disadvantages"] - xp["campaign_disadvantages"]
+    assert xp["total"] - xp["disadvantages"] - xp["campaign_disadvantages"] <= budget
+    problems = [w for w in validate_character(character)
+                if not any(p in w for p in _PC_ONLY_WARNINGS + ("Virtue",))]
+    assert problems == []
+
+
+@pytest.mark.parametrize("traits,message", [
+    ({"advantages": ["flying"]}, "unknown advantage 'flying'"),
+    ({"disadvantages": ["lucky"]}, "unknown disadvantage 'lucky'"),
+    ({"campaign_advantages": ["lucky"]}, "unknown campaign advantage 'lucky'"),
+    ({"campaign_disadvantages": ["contrary"]}, "unknown campaign disadvantage 'contrary'"),
+    ({"specializations": [{"text": "Spears", "skills": ["flying"]}]}, "specialization"),
+    ({"specializations": [{"text": "", "skills": ["attack"]}]}, "specialization"),
+    ({"specializations": ["Spears"]}, "specialization"),
+    ({"advantages": "lucky"}, "must be a list"),
+    ({"advantage_details": ["x"]}, "advantage_details"),
+    ({"advantages": ["lucky", "lucky"]}, "twice"),
+    ({"skills": {}}, "unknown trait field 'skills'"),
+])
+def test_bad_traits_are_refused(traits, message):
+    with pytest.raises(ValueError, match=message):
+        gen.build_npc("akodo_bushi", 50, 0.7, traits=traits)
+
+
+def test_the_legacy_specialization_flag_is_dropped():
+    assert gen.normalize_traits({"advantages": ["specialization", "lucky"]})["advantages"] == ["lucky"]
+
+
+def test_advantages_that_cost_more_than_the_npc_has_are_refused():
+    with pytest.raises(ValueError, match="cost more XP"):
+        gen.build_npc("akodo_bushi", 0, 0.6, traits={"advantages": [
+            "great_destiny", "strength_of_the_earth", "discerning", "lucky", "worldly",
+            "good_reputation", "kind_eye", "quick_healer", "virtue", "charming", "fierce",
+            "genealogist", "higher_purpose", "imperial_favor", "tactician", "wealthy"],
+            "campaign_advantages": ["family_reckoning_righteous_sting", "streetwise",
+                                    "minor_clan_major_ally_mantis", "highest_regard",
+                                    "household_wealth", "minor_clan_major_ally_fox"],
+            "specializations": [{"text": f"S{i}", "skills": ["attack"]} for i in range(50)]})
+
+
+def test_never_below_keeps_the_new_builds_traits():
+    old = gen.build_npc("akodo_bushi", 50, 0.7)
+    new = gen.build_npc("akodo_bushi", 60, 0.7, traits={"advantages": ["lucky"]})
+    assert gen.never_below(old, new)["advantages"] == ["lucky"]
+
+
+# ---------------------------------------------------------------------------
+# Matching Obsidian Portal trait lines
+# ---------------------------------------------------------------------------
+
+def test_trait_lines_split_into_mechanics_and_flavor():
+    traits, flavor = gen.match_trait_lines(
+        ["Contrary", "Unkempt", "Virtue", "wealthy", "pauses before speaking", "",
+         "Peasantborn", "Household Wealth", "  Strength of the Earth  ", "squinty"])
+    assert traits["advantages"] == ["strength_of_the_earth", "virtue", "wealthy"]
+    assert traits["disadvantages"] == ["contrary", "unkempt"]
+    assert traits["campaign_advantages"] == ["household_wealth"]
+    assert traits["campaign_disadvantages"] == ["peasantborn"]
+    assert flavor == ["pauses before speaking", "squinty"]
+
+
+def test_trait_lines_accept_ids_and_ignore_repeats():
+    traits, flavor = gen.match_trait_lines(["quick_healer", "Quick Healer", "Short Temper"])
+    assert traits["advantages"] == ["quick_healer"]
+    assert traits["disadvantages"] == ["short_temper"]
+    assert flavor == []
+
+
+def test_a_specialization_line_is_left_for_the_gm():
+    """Its skill cannot be told from the line, so it is not guessed."""
+    traits, flavor = gen.match_trait_lines(["Specialization", "Specialization: spears"])
+    assert traits["advantages"] == [] and traits["specializations"] == []
+    assert flavor == ["Specialization", "Specialization: spears"]
