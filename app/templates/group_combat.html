@@ -78,9 +78,17 @@
             <p x-show="state.pcs.length === 0" class="text-sm text-ink/60">No visible characters in this group.</p>
             <template x-for="pc in state.pcs" :key="'pc' + pc.id">
                 <div class="bg-white rounded-lg shadow border border-ink/10 p-3 space-y-2" :data-testid="'pc-card-' + pc.id">
-                    <div class="flex items-center justify-between gap-2">
-                        <span class="font-semibold text-ink truncate" x-text="pc.name"></span>
+                    <div class="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+                        <span class="font-semibold text-ink truncate min-w-0" x-text="pc.name"></span>
                         <span x-show="gm && pc.impaired" class="text-xs px-2 py-0.5 rounded bg-amber-100 text-amber-800">Impaired</span>
+                        {# Players: wounds ride the name line, right-aligned, wrapping below when narrow. #}
+                        <template x-if="!gm">
+                            <span class="ml-auto text-sm text-ink/80 whitespace-nowrap" :data-testid="'pc-public-stats-' + pc.id">
+                                <span class="text-ink/50">LW</span> <b :data-testid="'pc-lw-' + pc.id" x-text="pc.light_wounds"></b>
+                                <span class="text-ink/30 mx-1">&middot;</span>
+                                <span class="text-ink/50">SW</span> <b :data-testid="'pc-sw-' + pc.id" x-text="pc.serious_wounds"></b>
+                            </span>
+                        </template>
                     </div>
                     <div class="flex flex-wrap gap-1" :data-testid="'pc-dice-' + pc.id">
                         <template x-for="(d, i) in pc.action_dice" :key="i">
@@ -90,16 +98,14 @@
                         </template>
                         <span x-show="pc.action_dice.length === 0" class="text-xs text-ink/50">No action dice</span>
                     </div>
+                    <template x-if="gm">
                     <div class="text-sm text-ink/80 flex flex-wrap gap-x-4 gap-y-1">
                         <span><span class="text-ink/50">LW</span> <b :data-testid="'pc-lw-' + pc.id" x-text="pc.light_wounds"></b></span>
-                        <span><span class="text-ink/50">SW</span> <b :data-testid="'pc-sw-' + pc.id" x-text="pc.serious_wounds"></b><template x-if="gm"><span class="text-ink/50" x-text="' / ' + pc.max_serious_wounds"></span></template></span>
-                        <template x-if="gm">
-                            <span><span class="text-ink/50">Void</span> <b x-text="voidText(pc)"></b></span>
-                        </template>
-                        <template x-if="gm">
-                            <span><span class="text-ink/50">TN</span> <b x-text="pc.tn_to_be_hit"></b></span>
-                        </template>
+                        <span><span class="text-ink/50">SW</span> <b :data-testid="'pc-sw-' + pc.id" x-text="pc.serious_wounds"></b><span class="text-ink/50" x-text="' / ' + pc.max_serious_wounds"></span></span>
+                        <span><span class="text-ink/50">Void</span> <b x-text="voidText(pc)"></b></span>
+                        <span><span class="text-ink/50">TN</span> <b x-text="pc.tn_to_be_hit"></b></span>
                     </div>
+                    </template>
                     <template x-if="gm && pc.bonuses.length">
                         <div class="text-xs text-ink/60 flex flex-wrap gap-x-3" :data-testid="'pc-bonuses-' + pc.id">
                             <template x-for="b in pc.bonuses" :key="b.id">
@@ -119,15 +125,27 @@
                 <div class="bg-white rounded-lg shadow border border-ink/10 p-3 space-y-2"
                      :class="npc.down || (npc.status && npc.status !== 'fighting') ? 'opacity-60' : ''"
                      :data-testid="'npc-card-' + npc.id">
-                    <div class="flex items-center justify-between gap-2">
+                    <div class="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
                         <div class="min-w-0">
                             <span class="font-semibold text-ink truncate" :data-testid="'npc-name-' + npc.id" x-text="npc.name"></span>
                             <template x-if="gm">
                                 <span class="block text-xs text-ink/60" x-text="npc.type + ', ' + npc.earned_xp + ' earned XP, ' + pct(npc.combat_share) + '% combat'"></span>
                             </template>
                         </div>
-                        <template x-if="!gm && npc.down">
-                            <span class="text-xs px-2 py-0.5 rounded bg-ink/10 text-ink/70" :data-testid="'npc-down-' + npc.id">Down</span>
+                        <template x-if="!gm">
+                            <span class="ml-auto flex items-center gap-2 text-sm text-ink/80 whitespace-nowrap" :data-testid="'npc-public-stats-' + npc.id">
+                                <span>
+                                    <span class="text-ink/50">LW</span> <b :data-testid="'npc-lw-' + npc.id" x-text="npc.light_wounds"></b>
+                                    <span class="text-ink/30 mx-1">&middot;</span>
+                                    <span class="text-ink/50">SW</span> <b :data-testid="'npc-sw-' + npc.id" x-text="npc.serious_wounds"></b>
+                                    <template x-if="npc.tn_to_be_hit">
+                                        <span :data-testid="'npc-public-tn-' + npc.id"><span class="text-ink/30 mx-1">&middot;</span><span class="text-ink/50">TN</span> <b x-text="npc.tn_to_be_hit"></b></span>
+                                    </template>
+                                </span>
+                                <template x-if="npc.down">
+                                    <span class="text-xs px-2 py-0.5 rounded bg-ink/10 text-ink/70" :data-testid="'npc-down-' + npc.id">Down</span>
+                                </template>
+                            </span>
                         </template>
                         <template x-if="gm">
                             <select class="border rounded px-1 py-0.5 text-xs" :value="npc.status"
@@ -158,20 +176,15 @@
                         </div>
                     </template>
 
+                    <template x-if="gm">
                     <div class="text-sm text-ink/80 flex flex-wrap gap-x-4 gap-y-1">
                         <span><span class="text-ink/50">LW</span> <b :data-testid="'npc-lw-' + npc.id" x-text="npc.light_wounds"></b></span>
-                        <span><span class="text-ink/50">SW</span> <b :data-testid="'npc-sw-' + npc.id" x-text="npc.serious_wounds"></b><template x-if="gm"><span class="text-ink/50" x-text="' / ' + npc.max_serious_wounds"></span></template></span>
-                        <template x-if="gm">
-                            <span><span class="text-ink/50">Void</span> <b :data-testid="'npc-void-' + npc.id" x-text="voidText(npc)"></b></span>
-                        </template>
-                        <template x-if="gm">
-                            <span><span class="text-ink/50">TN</span> <b x-text="npc.tn_to_be_hit"></b></span>
-                        </template>
-                        <template x-if="!gm && npc.tn_to_be_hit">
-                            <span :data-testid="'npc-public-tn-' + npc.id"><span class="text-ink/50">TN</span> <b x-text="npc.tn_to_be_hit"></b></span>
-                        </template>
-                        <span x-show="gm && npc.impaired" class="text-xs px-2 py-0.5 rounded bg-amber-100 text-amber-800">Impaired</span>
+                        <span><span class="text-ink/50">SW</span> <b :data-testid="'npc-sw-' + npc.id" x-text="npc.serious_wounds"></b><span class="text-ink/50" x-text="' / ' + npc.max_serious_wounds"></span></span>
+                        <span><span class="text-ink/50">Void</span> <b :data-testid="'npc-void-' + npc.id" x-text="voidText(npc)"></b></span>
+                        <span><span class="text-ink/50">TN</span> <b x-text="npc.tn_to_be_hit"></b></span>
+                        <span x-show="npc.impaired" class="text-xs px-2 py-0.5 rounded bg-amber-100 text-amber-800">Impaired</span>
                     </div>
+                    </template>
 
                     <template x-if="gm && npc.bonuses.length">
                         <div class="text-xs text-ink/60 flex flex-wrap gap-x-3">

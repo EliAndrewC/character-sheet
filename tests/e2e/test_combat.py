@@ -291,3 +291,29 @@ def test_players_see_an_npcs_tn_only_after_it_was_attacked(page, page_anon, live
     shown = page_anon.locator(f'[data-testid="npc-public-tn-{npc_id}"]')
     shown.wait_for(timeout=15000)
     assert f"TN {tn}" in shown.text_content()
+
+
+def _same_line(page, a, b):
+    ba, bb = page.locator(a).bounding_box(), page.locator(b).bounding_box()
+    return abs((ba["y"] + ba["height"] / 2) - (bb["y"] + bb["height"] / 2)) < 8
+
+
+def test_player_view_puts_wounds_on_the_name_line(page, page_anon, live_server_url):
+    """Players' cards show "LW n · SW n" (and TN once known) right of the
+    name, wrapping below on a narrow screen; the GM's cards are unchanged."""
+    gid = _group_with_pc(page, live_server_url, "LinePC")
+    npc_id = _start_fight_with_wave_men(page, live_server_url, gid)
+    pc_id = _state(page, live_server_url, gid)["pcs"][0]["id"]
+    page_anon.set_viewport_size({"width": 1200, "height": 800})
+    page_anon.goto(f"{live_server_url}/groups/{gid}/combat")
+    page_anon.wait_for_selector(f'[data-testid="npc-public-stats-{npc_id}"]')
+    assert _same_line(page_anon, f'[data-testid="npc-name-{npc_id}"]', f'[data-testid="npc-public-stats-{npc_id}"]')
+    pc_name = f'[data-testid="pc-card-{pc_id}"] span.font-semibold'
+    assert _same_line(page_anon, pc_name, f'[data-testid="pc-public-stats-{pc_id}"]')
+    text = " ".join(page_anon.locator(f'[data-testid="pc-public-stats-{pc_id}"]').text_content().split())
+    assert text == "LW 0 · SW 0"
+    page_anon.set_viewport_size({"width": 360, "height": 800})
+    assert page_anon.evaluate("document.documentElement.scrollWidth <= window.innerWidth")
+    # The GM's own card keeps its separate stats row.
+    assert page.locator(f'[data-testid="npc-public-stats-{npc_id}"]').count() == 0
+    assert page.locator(f'[data-testid="npc-void-{npc_id}"]').is_visible()

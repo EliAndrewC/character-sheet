@@ -507,7 +507,18 @@ def view_character(request: Request, char_id: int, db: Session = Depends(get_db)
     character = db.query(Character).filter(Character.id == char_id).first()
     if not character:
         return HTMLResponse("Character not found", status_code=404)
+    context = sheet_context(request, character, db)
+    if context is None:
+        return HTMLResponse("Character not found", status_code=404)
+    return _templates().TemplateResponse(
+        request=request, name="character/sheet.html", context=context,
+    )
 
+
+def sheet_context(request: Request, character: Character, db: Session) -> Optional[Dict[str, Any]]:
+    """Everything the sheet template (and its roller) renders from, or None
+    when the viewer may not see the character. Shared by the sheet and the
+    combat page's NPC roll overlay, so both run the one roller."""
     user = getattr(request.state, "user", None)
     user_id = user["discord_id"] if user else None
 
@@ -527,7 +538,7 @@ def view_character(request: Request, char_id: int, db: Session = Depends(get_db)
     # Hidden characters are invisible by URL too - non-editors get a 404
     # rather than a "you don't have access" leak.
     if character.is_hidden and not viewer_can_edit:
-        return HTMLResponse("Character not found", status_code=404)
+        return None
 
     # Everyone sees the current draft state
     char_dict = character.to_dict()
@@ -1203,7 +1214,7 @@ def view_character(request: Request, char_id: int, db: Session = Depends(get_db)
     # Get version history
     versions = (
         db.query(CharacterVersion)
-        .filter(CharacterVersion.character_id == char_id)
+        .filter(CharacterVersion.character_id == character.id)
         .order_by(CharacterVersion.version_number.desc())
         .all()
     )
@@ -1228,112 +1239,108 @@ def view_character(request: Request, char_id: int, db: Session = Depends(get_db)
         if "attack" in (s.get("skills") or [])
     ]
 
-    return _templates().TemplateResponse(
-        request=request,
-        name="character/sheet.html",
-        context={
-            "character": character,
-            "char_dict": char_dict,
-            "school": school,
-            "is_profession": bool(character.profession),
-            # P10: the View Sheet lists only what the character actually took.
-            "profession_ability_groups": ability_counts_for_display(
-                character.profession_abilities or {}, include_untaken=False,
-            ),
-            "xp_breakdown": xp_breakdown,
-            "errors": errors,
-            "technique_choices_summary": technique_choices_summary,
-            "skills": SKILLS,
-            "combat_skills": COMBAT_SKILLS,
-            "attack_specs": attack_specs,
-            "wasp_lineages": WASP_LINEAGES,
-            "advantages": ADVANTAGES,
-            "disadvantages": DISADVANTAGES,
-            "campaign_advantages": CAMPAIGN_ADVANTAGES,
-            "campaign_disadvantages": CAMPAIGN_DISADVANTAGES,
-            "school_knacks": SCHOOL_KNACKS,
-            "char_knacks": char_knacks,
-            "char_foreign_knacks": char_foreign_knacks,
-            "dan": dan,
-            "spells_by_element": SPELLS_BY_ELEMENT,
-            "effective": effective,
-            "skill_rolls": skill_rolls,
-            "viewer_can_edit": viewer_can_edit,
-            # Player Character Points: the unspent XP before any new spend (so
-            # the confirmation modal can show unspent-vs-debt), and whether the
-            # character is published + clean (the spend gate).
-            # Disadvantage refund raises the budget but is also subtracted as
-            # gross spent, so it cancels: remaining = starting + earned -
-            # build spent - PCP spent.
-            "pcp_xp_remaining": (
-                character.starting_xp + character.earned_xp
-                - xp_breakdown["grand_total"]
-                - xp_breakdown["pcp"]["total"]
-            ),
-            "pcp_publish_clean": character.publish_status == "published",
-            "viewer_is_logged_in": user is not None,
-            "login_url_for_return_to_sheet": f"/auth/login?return_to=/characters/{char_id}",
-            "versions": versions,
-            "draft_diff": draft_diff,
-            "owner_display_name": (owner.display_name or owner.discord_name) if owner else character.player_name,
-            "advantage_detail_fields": ADVANTAGE_DETAIL_FIELDS,
-            # The dark secret is stripped unless the viewer is the owner
-            # or the GM - edit access alone is not enough.
-            "advantage_details": details_for_viewer(
-                character.advantage_details, user_id, character.owner_discord_id,
-            ),
-            "viewer_can_view_dark_secret": can_view_dark_secret(
-                user_id, character.owner_discord_id,
-            ),
-            "dark_secret_knower_name": (
-                knower_display_name(
-                    (character.advantage_details or {}).get(DARK_SECRET_ID), db,
-                )
-                if can_view_dark_secret(user_id, character.owner_discord_id)
-                else ""
-            ),
-            "player_names": {u.discord_id: u.display_name or u.discord_name
-                             for u in db.query(UserModel).all()},
-            "per_adventure": per_adventure,
-            "void_max": void_max,
-            "adventure_state": character.adventure_state or {},
-            "action_dice": character.action_dice or [],
-            "precepts_pool": character.precepts_pool or [],
-            # Cash on-hand and the ledger of income / expense entries
-            # are private - only the character's editors see them. The
-            # stipend (and its calculation) stay public because they
-            # describe the character's social standing rather than
-            # their day-to-day finances. ``public_money_state``
-            # strips everything but the stipend so the private fields
-            # never reach a non-editor's page source or DevTools.
-            "money_state": (
+    return {
+        "character": character,
+        "char_dict": char_dict,
+        "school": school,
+        "is_profession": bool(character.profession),
+        # P10: the View Sheet lists only what the character actually took.
+        "profession_ability_groups": ability_counts_for_display(
+            character.profession_abilities or {}, include_untaken=False,
+        ),
+        "xp_breakdown": xp_breakdown,
+        "errors": errors,
+        "technique_choices_summary": technique_choices_summary,
+        "skills": SKILLS,
+        "combat_skills": COMBAT_SKILLS,
+        "attack_specs": attack_specs,
+        "wasp_lineages": WASP_LINEAGES,
+        "advantages": ADVANTAGES,
+        "disadvantages": DISADVANTAGES,
+        "campaign_advantages": CAMPAIGN_ADVANTAGES,
+        "campaign_disadvantages": CAMPAIGN_DISADVANTAGES,
+        "school_knacks": SCHOOL_KNACKS,
+        "char_knacks": char_knacks,
+        "char_foreign_knacks": char_foreign_knacks,
+        "dan": dan,
+        "spells_by_element": SPELLS_BY_ELEMENT,
+        "effective": effective,
+        "skill_rolls": skill_rolls,
+        "viewer_can_edit": viewer_can_edit,
+        # Player Character Points: the unspent XP before any new spend (so
+        # the confirmation modal can show unspent-vs-debt), and whether the
+        # character is published + clean (the spend gate).
+        # Disadvantage refund raises the budget but is also subtracted as
+        # gross spent, so it cancels: remaining = starting + earned -
+        # build spent - PCP spent.
+        "pcp_xp_remaining": (
+            character.starting_xp + character.earned_xp
+            - xp_breakdown["grand_total"]
+            - xp_breakdown["pcp"]["total"]
+        ),
+        "pcp_publish_clean": character.publish_status == "published",
+        "viewer_is_logged_in": user is not None,
+        "login_url_for_return_to_sheet": f"/auth/login?return_to=/characters/{character.id}",
+        "versions": versions,
+        "draft_diff": draft_diff,
+        "owner_display_name": (owner.display_name or owner.discord_name) if owner else character.player_name,
+        "advantage_detail_fields": ADVANTAGE_DETAIL_FIELDS,
+        # The dark secret is stripped unless the viewer is the owner
+        # or the GM - edit access alone is not enough.
+        "advantage_details": details_for_viewer(
+            character.advantage_details, user_id, character.owner_discord_id,
+        ),
+        "viewer_can_view_dark_secret": can_view_dark_secret(
+            user_id, character.owner_discord_id,
+        ),
+        "dark_secret_knower_name": (
+            knower_display_name(
+                (character.advantage_details or {}).get(DARK_SECRET_ID), db,
+            )
+            if can_view_dark_secret(user_id, character.owner_discord_id)
+            else ""
+        ),
+        "player_names": {u.discord_id: u.display_name or u.discord_name
+                         for u in db.query(UserModel).all()},
+        "per_adventure": per_adventure,
+        "void_max": void_max,
+        "adventure_state": character.adventure_state or {},
+        "action_dice": character.action_dice or [],
+        "precepts_pool": character.precepts_pool or [],
+        # Cash on-hand and the ledger of income / expense entries
+        # are private - only the character's editors see them. The
+        # stipend (and its calculation) stay public because they
+        # describe the character's social standing rather than
+        # their day-to-day finances. ``public_money_state``
+        # strips everything but the stipend so the private fields
+        # never reach a non-editor's page source or DevTools.
+        "money_state": (
+            compute_money_state(effective.stipend, character.money_ledger or [])
+            if viewer_can_edit
+            else public_money_state(
                 compute_money_state(effective.stipend, character.money_ledger or [])
-                if viewer_can_edit
-                else public_money_state(
-                    compute_money_state(effective.stipend, character.money_ledger or [])
-                )
-            ),
-            "all_groups": all_groups,
-            "roll_formulas": roll_formulas,
-            "is_impaired_now": is_impaired_now,
-            "user_prefs": user_prefs,
-            "void_spend_config": void_spend_config,
-            "wound_check_probs": wc_probs,
-            "attack_probs": attack_probs,
-            "parry_probs": parry_probs,
-            "feint_probs": feint_probs,
-            "damage_avgs": damage_avgs,
-            "duel_probs": duel_probs,
-            # A foreign feint knack earns temp void too (any successful feint).
-            "has_temp_void": (character.school in SCHOOLS_WITH_TEMP_VOID
-                              or bool((character.foreign_knacks or {}).get("feint"))),
-            "school_abilities": school_abilities,
-            "daidoji_counterattack_party": daidoji_counterattack_party,
-            "priest_conviction_allies": priest_conviction_allies,
-            "priest_precepts_allies": priest_precepts_allies,
-            "party_priests": party_priests,
-        },
-    )
+            )
+        ),
+        "all_groups": all_groups,
+        "roll_formulas": roll_formulas,
+        "is_impaired_now": is_impaired_now,
+        "user_prefs": user_prefs,
+        "void_spend_config": void_spend_config,
+        "wound_check_probs": wc_probs,
+        "attack_probs": attack_probs,
+        "parry_probs": parry_probs,
+        "feint_probs": feint_probs,
+        "damage_avgs": damage_avgs,
+        "duel_probs": duel_probs,
+        # A foreign feint knack earns temp void too (any successful feint).
+        "has_temp_void": (character.school in SCHOOLS_WITH_TEMP_VOID
+                          or bool((character.foreign_knacks or {}).get("feint"))),
+        "school_abilities": school_abilities,
+        "daidoji_counterattack_party": daidoji_counterattack_party,
+        "priest_conviction_allies": priest_conviction_allies,
+        "priest_precepts_allies": priest_precepts_allies,
+        "party_priests": party_priests,
+    }
 
 
 @router.get("/characters/{char_id}/roll-history", response_class=HTMLResponse)
