@@ -60,7 +60,7 @@ Status: **built and deployed** (2026-09-28). All phases done, including the GM's
 | D26 | **Names:** Wave Men always from the **peasant** pool. Samurai-school NPCs get a **samurai-eligible personal name only**; the GM types a full name if one is ever needed. |
 | D27 | **The players' view is its own page**, linked from the group page like Money, and it is **public**. Logged in as the GM you get the tracker controls; everyone else, logged in or not, gets the same public view. |
 | D28 | **Players see the NPC's real name.** For a mystery, the GM types a name like "Bandit 2" instead of using a generated one. |
-| D29 | **Players see each NPC roll's total** ("attack: 52"), never how it was reached: no dice, no 10s, no void spent, no breakdown of bonuses. They cannot see NPC roll history; the GM screen-shares if they want to. |
+| D29 | *(Superseded by D34.)* **Players see each NPC roll's total** ("attack: 52"), never how it was reached: no dice, no 10s, no void spent, no breakdown of bonuses. They cannot see NPC roll history; the GM screen-shares if they want to. |
 | D30 | **Every visible PC in the group** is on the tracker. |
 | D31 | **"New round" rolls initiative for the NPCs only.** Players roll their own. |
 
@@ -70,6 +70,7 @@ Status: **built and deployed** (2026-09-28). All phases done, including the GM's
 |---|---|
 | D32 | **The public view lists the PCs too**: their wounds and remaining action dice, alongside the NPCs. |
 | D33 | **One fight at a time per group.** Starting a new encounter ends the current one, after a confirmation. When none is active, the public page says "No fight in progress". |
+| D34 | **Players do not see NPC rolls at all**, only spent action dice as they are spent and "?" dice for actions known from earlier rounds (2026-10-05). A roll shown on its own stayed up when the GM unspent its die; the spent dice already say how many actions were taken. The fight log stays on the GM's tracker. |
 
 ## 3. What exists today
 
@@ -173,7 +174,7 @@ Status: **built and deployed** (2026-09-28). All phases done, including the GM's
 - **Live updates:** polls a GM-only state endpoint every few seconds, comparing `tracking_rev` and encounter state to skip redraws.
 
 **One URL, two views: `GET /groups/{id}/combat` (D27).** It is public. The GM, when logged in, gets the tracker described above; everyone else gets the public view. The group page links to it, the way it links to Money.
-- **Public view, per NPC:** name (D28), LW / SW, down or not, this round's actions (kind, target and roll **total** - D29), and last round's action count (D22).
+- **Public view, per NPC:** name (D28), LW / SW, down or not, spent action dice and "?" dice for actions known from earlier rounds - never its rolls (D34).
 - **Never in the public view:** dice, void, phases, remaining actions, stats, how a total was reached, or roll history.
 - **Live updates:** the public view polls its own endpoint. Its payload is built from an **allow-list**, so a field added later cannot leak by accident, and a test asserts the exact key set.
 - **PCs in the public view (D32):** every visible PC, with wounds and remaining action dice.

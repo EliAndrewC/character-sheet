@@ -215,7 +215,7 @@ def test_public_view_shows_totals_but_not_how(page, page_anon, live_server_url):
     state = page_anon.request.get(f"{live_server_url}/groups/{gid}/combat/state").json()
     assert set(state["npcs"][0]) == {
         "id", "name", "light_wounds", "serious_wounds", "down",
-        "actions_this_round", "spent_dice", "unknown_dice", "tn_to_be_hit", "impaired",
+        "spent_dice", "unknown_dice", "tn_to_be_hit", "impaired",
     }
 
 
@@ -388,7 +388,7 @@ def test_players_see_spent_dice_once_however_often_the_gm_changes_their_mind(pag
     spent.first.wait_for()
     assert spent.count() == 1 and spent.first.text_content().strip() == str(value)
     assert page_anon.locator(f'[data-testid="npc-unknown-die-{npc_id}"]').count() == 0
-    assert page_anon.locator(f'[data-testid="npc-actions-{npc_id}"]').text_content().strip() == ""
+    assert page_anon.locator(f'[data-testid="npc-actions-{npc_id}"]').count() == 0  # rolls are never public
 
     _round(page, npc_id)
     page_anon.locator(f'[data-testid="npc-unknown-die-{npc_id}"]').first.wait_for(timeout=15000)
@@ -409,7 +409,17 @@ def test_gm_card_keeps_npc_controls_in_a_kebab_menu(page, page_anon, live_server
     npc_id = _start_fight_with_wave_men(page, live_server_url, gid)
     card = page.locator(f'[data-testid="npc-card-{npc_id}"]')
     build = page.locator(f'[data-testid="npc-build-{npc_id}"]')
-    assert "50 earned XP" in build.text_content() and not build.is_visible()
+    assert "50 earned XP (200 total)" in build.text_content() and "% non-combat" in build.text_content()
+    assert not build.is_visible()
+    # Hovering shows it after the site's tooltip delay. The name's truncate
+    # used to sit on the trigger itself and clip the tooltip to nothing.
+    page.locator(f'[data-testid="npc-name-{npc_id}"]').hover()
+    page.wait_for_function(f"""() => {{
+        const r = document.querySelector('[data-testid="npc-build-{npc_id}"]').getBoundingClientRect();
+        const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+        return getComputedStyle(hit).visibility === 'visible' && hit.closest('[data-testid="npc-build-{npc_id}"]');
+    }}""", timeout=5000)
+    page.mouse.move(0, 0)
     for gone in ("Took damage", "Roll initiative", "Adjust", "Rebuild", "Rename", "Leave fight"):
         assert gone not in card.inner_text(), gone
     page.locator(f'[data-testid="npc-menu-{npc_id}"]').click()

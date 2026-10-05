@@ -129,15 +129,12 @@
         for (var i = 0; i < (npc.unknown_dice || 0); i++) out.push({ value: "?", spent: false });
         return out;
       },
-      publicActionText: function (a) {
-        var s = a.label;
-        if (a.target) s += " on " + a.target;
-        if (a.total !== null && a.total !== undefined) s += ": " + a.total;
-        if (a.outcome === "missed") s += ", missed";
-        else if (a.outcome === "parried") s += ", parried";
-        else if (a.outcome === "failed") s += ", failed";
-        if (a.damage !== null && a.damage !== undefined) s += ", " + a.damage + " damage";
-        return s;
+      // The GM's tooltip on an NPC's name: what it is and how its XP went.
+      buildText: function (npc) {
+        var s = npc.type + ", " + npc.earned_xp + " earned XP (" + npc.total_xp + " total)";
+        if (npc.combat_share == null) return s;
+        var combat = pct(npc.combat_share);
+        return s + ", " + combat + "% combat / " + (100 - combat) + "% non-combat";
       },
       gmActionText: function (a) {
         var d = a.detail || {};

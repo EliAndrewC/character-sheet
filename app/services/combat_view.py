@@ -76,18 +76,6 @@ def _dice(character: Character, *, spent: bool) -> List[Dict[str, Any]]:
 # Public
 # ---------------------------------------------------------------------------
 
-def _public_action(action: EncounterAction, names: Dict[int, str]) -> Dict[str, Any]:
-    detail = action.detail or {}
-    return {
-        "kind": action.kind,
-        "label": action.label,
-        "target": names.get(action.target_character_id) if action.target_character_id else None,
-        "total": action.total,
-        "outcome": detail.get("outcome"),
-        "damage": detail.get("damage"),
-    }
-
-
 def _sides(db: Session, group: GamingGroup):
     """``(encounter, pcs, npc links)``, each side in its standing order."""
     encounter = npcs.active_encounter(db, group.id)
@@ -117,8 +105,6 @@ def public_state(db: Session, group: GamingGroup, mine: Optional[Set[int]] = Non
     they can use them from the combat page."""
     own_pcs = mine or set()
     encounter, pcs, links = _sides(db, group)
-    names = {c.id: c.name for c in pcs}
-    names.update({link.character_id: link.character.name for link in links})
     actions = _actions(db, encounter)
     current = encounter.current_round if encounter else 0
     out_npcs = []
@@ -136,9 +122,10 @@ def public_state(db: Session, group: GamingGroup, mine: Optional[Set[int]] = Non
             "light_wounds": npc.current_light_wounds or 0,
             "serious_wounds": npc.current_serious_wounds or 0,
             "down": link.status != "fighting",
-            "actions_this_round": [_public_action(a, names) for a in mine if a.round == current],
             # Spent dice are public (their values too); unspent ones never
             # are. "?" dice: the actions players know of from earlier rounds.
+            # The rolls themselves are not public: a die the GM unspends
+            # takes its action back, which a roll shown on its own would not.
             "spent_dice": spent,
             "unknown_dice": max(0, fight_log.known_actions(link, current) - len(spent)),
             "tn_to_be_hit": tn_to_be_hit(npc) if attacked else None,
@@ -212,6 +199,7 @@ def gm_state(db: Session, group: GamingGroup) -> Dict[str, Any]:
             "status": link.status,
             "type": gen.npc_type_label(g.get("npc_type") or npcs._infer_type(npc)),
             "earned_xp": npc.earned_xp or 0,
+            "total_xp": (npc.starting_xp or 0) + (npc.earned_xp or 0),
             "combat_share": g.get("combat_share"),
         })
     return {

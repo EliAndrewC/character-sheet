@@ -127,8 +127,7 @@ def test_down_prompt_needs_the_npc_in_the_fight(world):
 # ---------------------------------------------------------------------------
 
 _PUBLIC_NPC_KEYS = {"id", "name", "light_wounds", "serious_wounds", "down",
-                    "actions_this_round", "spent_dice", "unknown_dice", "tn_to_be_hit", "impaired"}
-_PUBLIC_ACTION_KEYS = {"kind", "label", "target", "total", "outcome", "damage"}
+                    "spent_dice", "unknown_dice", "tn_to_be_hit", "impaired"}
 
 
 def _spend(npc, *indices, spent=True):
@@ -148,10 +147,7 @@ def test_public_state_is_the_allow_list(world):
     assert [p["name"] for p in state["pcs"]] == ["Yudai"]  # the hidden PC is not in the fight
     assert set(state["pcs"][0]) == {"id", "name", "light_wounds", "serious_wounds", "action_dice", "impaired"}
     (row,) = state["npcs"]
-    assert set(row) == _PUBLIC_NPC_KEYS
-    assert set(row["actions_this_round"][0]) == _PUBLIC_ACTION_KEYS
-    ca.new_round(s, enc, GM, rng=ConstRng(3))
-    assert cv.public_state(s, g)["npcs"][0]["actions_this_round"] == []
+    assert set(row) == _PUBLIC_NPC_KEYS  # an NPC's rolls are not public, only its spent dice
 
 
 def test_players_see_spent_dice_and_the_actions_they_know_of(world):

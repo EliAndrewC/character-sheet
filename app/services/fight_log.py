@@ -3,8 +3,8 @@
 The combat page drives an NPC through the same die menus and roll modals as a
 character sheet (the NPC roll overlay), so its rolls arrive through the
 ordinary roll routes. These hooks turn the ones a fight cares about into
-``EncounterAction`` rows - what the public combat view shows (D29: a roll's
-total and outcome, never how it was reached):
+``EncounterAction`` rows - the GM's fight log (players see none of it, D34;
+they see spent dice):
 
 * an attack (any live roll whose answer carries an ``attack`` block), with
   its target when the GM picked a PC in the fight, and later its damage;

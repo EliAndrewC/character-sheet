@@ -43,8 +43,7 @@ def test_an_attack_is_logged_with_its_target_and_outcome(client, world):
     assert a.kind == "attack" and a.total == out["total"] and a.target_character_id == pc.id
     assert a.detail["outcome"] == "hit" and a.detail["session_id"] == out["session_id"]
     assert a.round == world["enc"].current_round
-    public = cv.public_state(world["s"], world["g"])["npcs"][0]["actions_this_round"]
-    assert public[0]["target"] == "Yudai" and public[0]["outcome"] == "hit"
+    assert "Yudai" not in str(cv.public_state(world["s"], world["g"])["npcs"])  # the log is the GM's
 
 
 def test_a_missed_attack_then_damage_on_a_hit(client, world):
