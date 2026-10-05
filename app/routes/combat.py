@@ -188,6 +188,42 @@ async def standing_order(group_id: int, request: Request, db: Session = Depends(
     return {"status": "ok"}
 
 
+@router.post("/groups/{group_id}/combat/reach")
+async def reach(group_id: int, request: Request, db: Session = Depends(get_db)):
+    """``{"pc_id", "npc_id", "on"}``: they can (or no longer) strike each other."""
+    _, group, err = _load(db, group_id, request)
+    if err:
+        return err
+    encounter = _active(db, group)
+    if encounter is None:
+        return _error("No fight in progress", 409)
+    body = await _body(request)
+    try:
+        npcs.set_reach(db, encounter, body.get("pc_id"), body.get("npc_id"), bool(body.get("on", True)),
+                       [pc.id for pc in combat_view.visible_pcs(db, group)],
+                       [link.character_id for link in encounter.npcs])
+    except ValueError as exc:
+        return _error(str(exc))
+    db.commit()
+    return {"status": "ok"}
+
+
+@router.post("/groups/{group_id}/combat/reach-visible")
+async def reach_visible(group_id: int, request: Request, db: Session = Depends(get_db)):
+    """``{"visible"}``: draw the striking lines (for everyone) or hide them."""
+    _, group, err = _load(db, group_id, request)
+    if err:
+        return err
+    encounter = _active(db, group)
+    if encounter is None:
+        return _error("No fight in progress", 409)
+    body = await _body(request)
+    encounter.show_reach = bool(body.get("visible"))
+    npcs.touch(encounter)
+    db.commit()
+    return {"status": "ok"}
+
+
 @router.post("/groups/{group_id}/combat/npcs/{npc_id}/status")
 async def set_status(group_id: int, npc_id: int, request: Request, db: Session = Depends(get_db)):
     _, group, err = _load(db, group_id, request)

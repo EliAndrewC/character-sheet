@@ -485,3 +485,54 @@ def test_gm_drags_each_side_into_the_order_they_stand_in(page, page_anon, live_s
     page.reload()
     assert _names(page, "pcs") == [pcs[1], pcs[0]]
     assert sorted(_names(page, "npcs")) == sorted(npcs)
+
+
+def test_gm_draws_striking_lines_players_see_them_and_the_gm_can_hide_them(page, page_anon, live_server_url):
+    gid = _group_with_pc(page, live_server_url, "ReachA", "ReachB")
+    _start_fight_with_wave_men(page, live_server_url, gid, count=2)
+    page.set_viewport_size({"width": 1280, "height": 900})
+    pcs, npcs = [int(i) for i in _names(page, "pcs")], [int(i) for i in _names(page, "npcs")]
+    arena = page.locator('[data-testid="combat-arena"]')
+    assert "lg:grid-cols-2" in arena.get_attribute("class")  # no strip until there is a line
+
+    # From an NPC's kebab: Can strike > a PC.
+    page.locator(f'[data-testid="npc-menu-{npcs[0]}"]').click()
+    page.locator(f'[data-testid="npc-can-strike-{npcs[0]}"]').hover()
+    page.locator(f'[data-testid="npc-card-{npcs[0]}"] [data-testid="reach-{pcs[0]}-{npcs[0]}"]').check()
+    page.wait_for_selector(f'[data-testid="reach-line-{pcs[0]}-{npcs[0]}"]', state="attached")
+    page.keyboard.press("Escape")
+    page.mouse.click(5, 5)
+    # From a PC's kebab: Can strike > an NPC.
+    page.locator(f'[data-testid="pc-menu-{pcs[1]}"]').click()
+    page.locator(f'[data-testid="pc-can-strike-{pcs[1]}"]').hover()
+    page.locator(f'[data-testid="pc-card-{pcs[1]}"] [data-testid="reach-{pcs[1]}-{npcs[0]}"]').check()
+    page.wait_for_selector(f'[data-testid="reach-line-{pcs[1]}-{npcs[0]}"]', state="attached")
+    page.mouse.click(5, 5)
+    assert "lg:grid-cols-2" not in arena.get_attribute("class")
+
+    page_anon.set_viewport_size({"width": 1280, "height": 900})
+    page_anon.goto(f"{live_server_url}/groups/{gid}/combat")
+    page_anon.wait_for_selector(f'[data-testid="reach-line-{pcs[0]}-{npcs[0]}"]', state="attached")
+    assert page_anon.locator('[data-testid^="reach-line-"]').count() == 2
+    assert page_anon.locator('[data-testid^="reach-hit-"]').count() == 0  # players cannot remove one
+
+    # The GM clicks a line: it highlights and offers to remove it.
+    page.locator(f'[data-testid="reach-hit-{pcs[0]}-{npcs[0]}"]').click()
+    page.wait_for_selector('[data-testid="reach-line-menu"]')
+    assert "ReachA" in page.locator('[data-testid="reach-line-menu"]').text_content()
+    page.locator('[data-testid="reach-line-remove"]').click()
+    page.wait_for_selector(f'[data-testid="reach-line-{pcs[0]}-{npcs[0]}"]', state="detached")
+    page_anon.wait_for_selector(f'[data-testid="reach-line-{pcs[0]}-{npcs[0]}"]', state="detached", timeout=15000)
+
+    # A phone stacks the columns: the pairing is written on the card instead.
+    page_anon.set_viewport_size({"width": 390, "height": 800})
+    page_anon.wait_for_selector(f'[data-testid="pc-reach-{pcs[1]}"]')
+    assert "Can strike: Wave Man" in page_anon.locator(f'[data-testid="pc-reach-{pcs[1]}"]').text_content()
+    assert page_anon.evaluate("document.documentElement.scrollWidth <= window.innerWidth")
+
+    # The GM's switch hides them everywhere.
+    page.locator('[data-testid="show-reach"]').uncheck()
+    page.wait_for_selector('[data-testid^="reach-line-"]', state="detached")
+    page_anon.wait_for_selector(f'[data-testid="pc-reach-{pcs[1]}"]', state="hidden", timeout=15000)
+    state = page_anon.request.get(f"{live_server_url}/groups/{gid}/combat/state").json()
+    assert state["reach"] == []

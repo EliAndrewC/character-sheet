@@ -143,7 +143,7 @@ def test_public_state_is_the_allow_list(world):
     ca.new_round(s, enc, GM, rng=ConstRng(3))
     _act(world, kind="attack", label="Attack", total=20)
     state = cv.public_state(s, g)
-    assert set(state) == {"rev", "group", "encounter", "pcs", "npcs"}
+    assert set(state) == {"rev", "group", "encounter", "pcs", "npcs", "reach"}
     assert state["encounter"] == {"name": "Ambush", "round": 1}
     assert [p["name"] for p in state["pcs"]] == ["Yudai"]  # the hidden PC is not in the fight
     assert set(state["pcs"][0]) == {"id", "name", "light_wounds", "serious_wounds", "action_dice", "impaired"}
@@ -450,3 +450,64 @@ def test_an_order_must_be_exactly_that_sides_members(client, lineup):
     assert _order(client, w, "pcs", pcs, headers=PLAYER).status_code == 403
     client.post(_url(w, "/end"))
     assert _order(client, w, "pcs", pcs).status_code == 409
+
+
+# ---------------------------------------------------------------------------
+# Striking distance: undirected PC <-> NPC lines
+# ---------------------------------------------------------------------------
+
+def _reach(client, world, pc, npc, on=True, **kw):
+    return client.post(_url(world, "/reach"), json={"pc_id": pc, "npc_id": npc, "on": on}, **kw)
+
+
+def test_the_gm_marks_who_can_strike_whom(client, lineup):
+    w = lineup
+    s, g = w["s"], w["g"]
+    pc, npc, npc2 = w["pc"].id, w["npc"].id, w["npc2"].id
+    assert _reach(client, w, pc, npc).status_code == 200
+    assert _reach(client, w, pc, npc2).status_code == 200
+    assert _reach(client, w, pc, npc).status_code == 200  # twice is still one line
+    s.expire_all()
+    assert cv.gm_state(s, g)["reach"] == [[pc, npc], [pc, npc2]]
+    assert cv.public_state(s, g)["reach"] == [[pc, npc], [pc, npc2]]
+    assert _reach(client, w, pc, npc, on=False).status_code == 200
+    s.expire_all()
+    assert cv.public_state(s, g)["reach"] == [[pc, npc2]]
+
+
+def test_hidden_lines_reach_no_player(client, lineup):
+    w = lineup
+    s, g = w["s"], w["g"]
+    _reach(client, w, w["pc"].id, w["npc"].id)
+    r = client.post(_url(w, "/reach-visible"), json={"visible": False})
+    assert r.status_code == 200
+    s.expire_all()
+    assert cv.public_state(s, g)["reach"] == []
+    gm = cv.gm_state(s, g)
+    assert gm["show_reach"] is False and gm["reach"] == [[w["pc"].id, w["npc"].id]]  # kept for later
+    client.post(_url(w, "/reach-visible"), json={"visible": True})
+    s.expire_all()
+    assert cv.public_state(s, g)["reach"] == [[w["pc"].id, w["npc"].id]]
+
+
+def test_a_line_to_someone_who_left_is_not_drawn(client, lineup):
+    w = lineup
+    s, g = w["s"], w["g"]
+    _reach(client, w, w["pc"].id, w["npc2"].id)
+    client.post(_url(w, f"/npcs/{w['npc2'].id}/remove"))
+    s.expire_all()
+    assert cv.public_state(s, g)["reach"] == []
+
+
+def test_a_line_joins_a_pc_and_an_npc_in_this_fight(client, lineup):
+    w = lineup
+    pc, pc2, npc = w["pc"].id, w["pc2"].id, w["npc"].id
+    assert _reach(client, w, pc, pc2).status_code == 400           # two PCs
+    assert _reach(client, w, npc, pc).status_code == 400           # sides swapped
+    assert _reach(client, w, w["hidden"].id, npc).status_code == 400
+    assert _reach(client, w, "x", npc).status_code == 400
+    assert _reach(client, w, pc, npc, headers=PLAYER).status_code == 403
+    assert client.post(_url(w, "/reach-visible"), json={"visible": True}, headers=PLAYER).status_code == 403
+    client.post(_url(w, "/end"))
+    assert _reach(client, w, pc, npc).status_code == 409
+    assert client.post(_url(w, "/reach-visible"), json={"visible": True}).status_code == 409

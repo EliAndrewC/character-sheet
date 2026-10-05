@@ -10,6 +10,27 @@
 {# The SW count for combatant ``who`` (an Alpine variable: pc or npc).
    Impaired (serious wounds at least Earth) turns it orange with a tooltip,
    in both views - players may know who is Impaired. #}
+{# "Can strike >": checkboxes for everyone on the other side; each one is
+   a striking-distance line between this card and that one. A flyout on
+   wide screens, inline beneath the item on narrow ones. #}
+{% macro can_strike(who, others, pc_id, npc_id, flyout) -%}
+<div class="relative" x-data="{ strikeOpen: false }" @mouseenter="strikeOpen = true" @mouseleave="strikeOpen = false" @click.stop>
+    <button type="button" @click="strikeOpen = !strikeOpen" :data-testid="'{{ who }}-can-strike-' + {{ who }}.id"
+            class="flex w-full items-center justify-between gap-3 px-4 py-2 hover:bg-parchment text-left">Can strike <span class="text-ink/40">&#9656;</span></button>
+    <div x-show="strikeOpen" x-cloak
+         class="lg:absolute lg:top-0 {{ flyout }} bg-white lg:rounded-lg lg:shadow-xl lg:border border-ink/20 py-1 min-w-[200px] z-40">
+        <template x-for="o in state.{{ others }}" :key="o.id">
+            <label class="flex items-center gap-2 px-4 py-1.5 hover:bg-parchment cursor-pointer whitespace-nowrap">
+                <input type="checkbox" :checked="hasReach({{ pc_id }}, {{ npc_id }})"
+                       @change="toggleReach({{ pc_id }}, {{ npc_id }}, $event.target.checked)"
+                       :data-testid="'reach-' + {{ pc_id }} + '-' + {{ npc_id }}">
+                <span x-text="o.name"></span>
+            </label>
+        </template>
+        <p x-show="!state.{{ others }}.length" class="px-4 py-1.5 text-ink/50">Nobody on the other side</p>
+    </div>
+</div>
+{%- endmacro %}
 {% macro sw_count(who, show_max=False) -%}
 <span class="relative" :class="{{ who }}.impaired ? 'tooltip-trigger text-orange-600 font-semibold' : ''" data-tap-toggle
       :data-impaired="{{ who }}.impaired ? 'true' : 'false'"><span :class="{{ who }}.impaired ? '' : 'text-ink/50'">SW</span> <b :data-testid="'{{ who }}-sw-' + {{ who }}.id" x-text="{{ who }}.serious_wounds"></b>{% if show_max %}<span class="text-ink/50 font-normal" x-text="' / ' + {{ who }}.max_serious_wounds"></span>{% endif %}<span x-show="{{ who }}.impaired" class="tooltip-content absolute left-0 top-full z-10 mt-1 p-2 bg-ink text-parchment text-xs rounded shadow-lg w-56 whitespace-normal text-left font-normal">Impaired: serious wounds at least Earth. 10s are not rerolled, except on wound checks and damage.</span></span>
@@ -45,6 +66,13 @@
                 </template>
                 <a :href="'/groups/' + groupId + '/combat/rolls'" data-testid="combat-rolls-link"
                    class="text-sm text-accent hover:underline">Combat rolls</a>
+                <template x-if="state.encounter">
+                    <label class="flex items-center gap-1.5 text-sm text-ink/80 cursor-pointer"
+                           title="Draw who can strike whom, on this page and the players' view">
+                        <input type="checkbox" :checked="state.show_reach" @change="setShowReach($event.target.checked)"
+                               data-testid="show-reach"> Striking lines
+                    </label>
+                </template>
                 {% if gm %}
                 <a :href="'/groups/' + groupId + '/combat?view=player'" target="_blank" rel="noopener"
                    data-testid="open-player-view"
@@ -78,7 +106,22 @@
     </template>
 
     {# ---------------- Combatants ---------------- #}
-    <div class="grid grid-cols-1 lg:grid-cols-2 gap-5">
+    {# The two sides. While striking lines are drawn, a strip between the
+       columns carries them (drawReach in combat_page.js). #}
+    <div x-ref="arena" class="relative grid grid-cols-1 gap-5" data-testid="combat-arena"
+         :class="reachShown() ? 'lg:grid-cols-[minmax(0,1fr)_7rem_minmax(0,1fr)]' : 'lg:grid-cols-2'">
+        <svg x-ref="reachSvg" data-testid="reach-lines" aria-hidden="true"
+             class="absolute inset-0 w-full h-full hidden pointer-events-none overflow-visible z-10"
+             :class="reachShown() ? 'lg:block' : ''"></svg>
+        <template x-if="lineMenu">
+            <div class="absolute z-30 bg-white rounded-lg shadow-xl border border-ink/20 py-1 text-sm min-w-[200px]"
+                 :style="'left: ' + lineMenu.x + 'px; top: ' + lineMenu.y + 'px'" data-testid="reach-line-menu"
+                 @click.outside="closeLineMenu()">
+                <div class="px-4 py-1.5 text-ink/60" x-text="lineMenu.label"></div>
+                <button type="button" @click="removeLine()" data-testid="reach-line-remove"
+                        class="block w-full text-left px-4 py-2 hover:bg-parchment text-red-700">Remove this line</button>
+            </div>
+        </template>
         {# PCs #}
         <section class="space-y-3" data-testid="pc-section" data-order-side="pcs">
             <h2 class="font-bold text-ink">Player characters</h2>
@@ -95,6 +138,17 @@
                             </template>
                             <span class="font-semibold text-ink truncate min-w-0" x-text="pc.name"></span>
                         </span>
+                        <template x-if="gm && state.encounter">
+                            <div class="relative ml-auto" x-data="{ open: false }" @click.outside="open = false">
+                                <button type="button" @click="open = !open" :data-testid="'pc-menu-' + pc.id"
+                                        title="Options" aria-label="Options"
+                                        class="btn-ghost rounded leading-none font-bold px-2 py-1 text-xl">&#8942;</button>
+                                <div x-show="open" x-cloak
+                                     class="absolute right-0 top-full mt-1 z-30 bg-white rounded-lg shadow-xl border border-ink/20 py-1 min-w-[180px] text-sm">
+                                    {{ can_strike('pc', 'npcs', 'pc.id', 'o.id', 'lg:left-full lg:ml-1') }}
+                                </div>
+                            </div>
+                        </template>
                         {# Players: wounds ride the name line, right-aligned, wrapping below when narrow. #}
                         <template x-if="!gm">
                             <span class="ml-auto text-sm text-ink/80 whitespace-nowrap" :data-testid="'pc-public-stats-' + pc.id">
@@ -127,9 +181,13 @@
                             </template>
                         </div>
                     </template>
+                    {# Narrow screens stack the columns, so no lines: say it instead. #}
+                    <p x-show="reachNames('pcs', pc.id).length" class="lg:hidden text-xs text-ink/70" :data-testid="'pc-reach-' + pc.id"
+                       x-text="'Can strike: ' + reachNames('pcs', pc.id).join(', ')"></p>
                 </div>
             </template>
         </section>
+        <div x-show="reachShown()" class="hidden lg:block" aria-hidden="true"></div>
 
         {# NPCs #}
         <section class="space-y-3" data-testid="npc-section" data-order-side="npcs">
@@ -191,6 +249,7 @@
                                        class="block w-full text-left px-4 py-2 hover:bg-parchment">Sheet</a>
                                     <button type="button" @click="removeNpc(npc)" :data-testid="'npc-remove-' + npc.id"
                                             class="block w-full text-left px-4 py-2 hover:bg-parchment">Leave fight</button>
+                                    {{ can_strike('npc', 'pcs', 'o.id', 'npc.id', 'lg:right-full lg:mr-1') }}
                                     <div class="border-t border-ink/10 mt-1 pt-1 px-4 py-1 text-[10px] uppercase tracking-wide text-ink/40">Status</div>
                                     <template x-for="opt in [['fighting', 'Fighting'], ['unconscious', 'Down'], ['dead', 'Dead']]" :key="opt[0]">
                                         <button type="button" @click="setStatus(npc, opt[0])"
@@ -263,6 +322,8 @@
                         </div>
                     </template>
 
+                    <p x-show="reachNames('npcs', npc.id).length" class="lg:hidden text-xs text-ink/70" :data-testid="'npc-reach-' + npc.id"
+                       x-text="'Can strike: ' + reachNames('npcs', npc.id).join(', ')"></p>
                 </div>
             </template>
         </section>

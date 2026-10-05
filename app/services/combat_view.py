@@ -142,6 +142,9 @@ def public_state(db: Session, group: GamingGroup) -> Dict[str, Any]:
             for pc in pcs
         ],
         "npcs": out_npcs,
+        # Who can strike whom, only while the GM shows the lines.
+        "reach": (npcs.current_reach(encounter, [pc.id for pc in pcs], [link.character_id for link in links])
+                  if encounter is not None and encounter.show_reach else []),
     }
 
 
@@ -214,6 +217,8 @@ def gm_state(db: Session, group: GamingGroup) -> Dict[str, Any]:
         "pcs": [_combatant(pc) for pc in pcs],
         "npcs": out_npcs,
         "actions": [_gm_action(a, names) for a in _actions(db, encounter)],
+        "reach": npcs.current_reach(encounter, [pc.id for pc in pcs], [link.character_id for link in links]),
+        "show_reach": bool(encounter.show_reach) if encounter is not None else True,
     }
 
 

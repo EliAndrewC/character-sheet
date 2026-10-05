@@ -249,6 +249,10 @@ def _migrate_add_columns():
     enc_cols = {row[1] for row in cursor.fetchall()}
     if enc_cols and "standing_order" not in enc_cols:  # pragma: no cover
         cursor.execute("ALTER TABLE encounters ADD COLUMN standing_order TEXT DEFAULT '{}'")
+    if enc_cols and "reach" not in enc_cols:  # pragma: no cover
+        cursor.execute("ALTER TABLE encounters ADD COLUMN reach TEXT DEFAULT '[]'")
+    if enc_cols and "show_reach" not in enc_cols:  # pragma: no cover
+        cursor.execute("ALTER TABLE encounters ADD COLUMN show_reach BOOLEAN DEFAULT 1")
 
     # Encounter NPCs table migrations
     cursor.execute("PRAGMA table_info(encounter_npcs)")

@@ -903,6 +903,11 @@ class Encounter(Base):
     # The order each side stands in, as the GM dragged it: {"pcs": [ids],
     # "npcs": [ids]}. No mechanical effect; both views list each side in it.
     standing_order: Mapped[Optional[Dict[str, List[int]]]] = mapped_column(JSON, default=dict)
+    # Who is within striking distance of whom: undirected [pc_id, npc_id]
+    # pairs, drawn as lines between the two columns. show_reach is the GM's
+    # switch for drawing them (players get no pairs while it is off).
+    reach: Mapped[Optional[List[List[int]]]] = mapped_column(JSON, default=list)
+    show_reach: Mapped[bool] = mapped_column(default=True)
 
     npcs: Mapped[List["EncounterNpc"]] = relationship(
         back_populates="encounter", cascade="all, delete-orphan",

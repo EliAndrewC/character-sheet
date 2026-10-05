@@ -39,6 +39,7 @@
       _timer: null,
       _roller: null,
       drag: null,
+      lineMenu: null,
 
       start: function () {
         var self = this;
@@ -47,6 +48,13 @@
         document.addEventListener("visibilitychange", function () {
           if (!document.hidden) self.poll();
         });
+        // Striking lines follow every redraw, resize and card-height change.
+        this.$watch("state", function () { self.$nextTick(function () { self.drawReach(); }); });
+        window.addEventListener("resize", function () { self.drawReach(); });
+        if (window.ResizeObserver && this.$refs.arena) {
+          new ResizeObserver(function () { self.drawReach(); }).observe(this.$refs.arena);
+        }
+        this.$nextTick(function () { self.drawReach(); });
         window.addEventListener("message", function (e) {
           if (e.origin === window.location.origin && e.data && e.data.type === "l7r-npc-roller-closed") {
             self.onRollerClosed();
@@ -206,6 +214,118 @@
         await this.post("/npcs/" + npc.id + "/remove");
       },
 
+      // ---- striking distance: undirected PC <-> NPC lines ----
+      // The pairs to draw: the GM's while their switch is on; players only
+      // ever receive them while it is on.
+      reachPairs: function () {
+        if (this.gm && !this.state.show_reach) return [];
+        return this.state.reach || [];
+      },
+      reachShown: function () { return this.reachPairs().length > 0; },
+      hasReach: function (pc, npc) {
+        return (this.state.reach || []).some(function (p) { return p[0] === pc && p[1] === npc; });
+      },
+      reachNames: function (side, id) {
+        var mine = side === "pcs" ? 0 : 1;
+        var others = side === "pcs" ? this.state.npcs : this.state.pcs;
+        var ids = this.reachPairs().filter(function (p) { return p[mine] === id; })
+          .map(function (p) { return p[1 - mine]; });
+        return others.filter(function (o) { return ids.indexOf(o.id) >= 0; })
+          .map(function (o) { return o.name; });
+      },
+      toggleReach: async function (pc, npc, on) {
+        await this.post("/reach", { pc_id: pc, npc_id: npc, on: on });
+      },
+      setShowReach: async function (visible) {
+        this.closeLineMenu();
+        await this.post("/reach-visible", { visible: visible });
+      },
+      closeLineMenu: function () {
+        if (!this.lineMenu) return;
+        this.lineMenu = null;
+        this.drawReach();
+      },
+      removeLine: async function () {
+        var m = this.lineMenu;
+        this.lineMenu = null;
+        if (m) await this.toggleReach(m.pc, m.npc, false);
+      },
+      // Draw each pair as a curve from the PC card's right edge to the NPC
+      // card's left edge, across the strip between the columns. A card's
+      // lines fan out along its edge in the order of the cards they reach,
+      // so they do not meet in one point or cross needlessly.
+      drawReach: function () {
+        var svg = this.$refs.reachSvg, arena = this.$refs.arena;
+        if (!svg || !arena) return;
+        while (svg.firstChild) svg.removeChild(svg.firstChild);
+        var pairs = this.reachPairs();
+        if (!pairs.length || window.innerWidth < 1024) return;
+        var self = this, NS = "http://www.w3.org/2000/svg";
+        var box = arena.getBoundingClientRect();
+        var card = function (side, id) {
+          return arena.querySelector('[data-testid="' + side + '-card-' + id + '"]');
+        };
+        var rect = {};
+        pairs.forEach(function (p) {
+          [["pc", p[0]], ["npc", p[1]]].forEach(function (k) {
+            var key = k[0] + k[1];
+            if (!(key in rect)) { var el = card(k[0], k[1]); rect[key] = el ? el.getBoundingClientRect() : null; }
+          });
+        });
+        var mid = function (r) { return r.top + r.height / 2; };
+        var anchor = function (side, id, otherSide, otherId) {
+          var mine = pairs.filter(function (p) { return p[side === "pc" ? 0 : 1] === id; })
+            .map(function (p) { return p[side === "pc" ? 1 : 0]; })
+            .filter(function (o) { return rect[otherSide + o]; })
+            .sort(function (a, b) { return mid(rect[otherSide + a]) - mid(rect[otherSide + b]); });
+          var r = rect[side + id], i = mine.indexOf(otherId);
+          return r.top + r.height * (0.2 + 0.6 * (i + 1) / (mine.length + 1)) - box.top;
+        };
+        pairs.forEach(function (p) {
+          var a = rect["pc" + p[0]], b = rect["npc" + p[1]];
+          if (!a || !b) return;
+          var x1 = a.right - box.left, x2 = b.left - box.left;
+          var y1 = anchor("pc", p[0], "npc", p[1]), y2 = anchor("npc", p[1], "pc", p[0]);
+          var mx = (x1 + x2) / 2;
+          var d = "M " + x1 + " " + y1 + " C " + mx + " " + y1 + ", " + mx + " " + y2 + ", " + x2 + " " + y2;
+          var on = self.lineMenu && self.lineMenu.pc === p[0] && self.lineMenu.npc === p[1];
+          var line = document.createElementNS(NS, "path");
+          line.setAttribute("d", d);
+          line.setAttribute("fill", "none");
+          // Theme colours go in style: SVG attributes do not resolve var().
+          line.style.stroke = on ? "rgb(var(--color-accent))" : "rgb(var(--color-ink) / 0.45)";
+          line.setAttribute("stroke-width", on ? "3.5" : "2");
+          line.setAttribute("stroke-linecap", "round");
+          line.setAttribute("data-testid", "reach-line-" + p[0] + "-" + p[1]);
+          svg.appendChild(line);
+          [[x1, y1], [x2, y2]].forEach(function (pt) {
+            var dot = document.createElementNS(NS, "circle");
+            dot.setAttribute("cx", pt[0]); dot.setAttribute("cy", pt[1]); dot.setAttribute("r", on ? "4" : "3");
+            dot.style.fill = on ? "rgb(var(--color-accent))" : "rgb(var(--color-ink) / 0.45)";
+            svg.appendChild(dot);
+          });
+          if (!self.gm) return;
+          // The GM clicks a line (on a wide invisible stroke) to remove it.
+          var hit = document.createElementNS(NS, "path");
+          hit.setAttribute("d", d);
+          hit.setAttribute("fill", "none");
+          hit.setAttribute("stroke", "transparent");
+          hit.setAttribute("stroke-width", "14");
+          hit.setAttribute("data-testid", "reach-hit-" + p[0] + "-" + p[1]);
+          hit.style.pointerEvents = "stroke";
+          hit.style.cursor = "pointer";
+          hit.addEventListener("click", function (e) {
+            e.stopPropagation();
+            var pc = self.state.pcs.find(function (c) { return c.id === p[0]; });
+            var npc = self.state.npcs.find(function (c) { return c.id === p[1]; });
+            self.lineMenu = { pc: p[0], npc: p[1], x: e.clientX - box.left, y: e.clientY - box.top,
+                              label: (pc ? pc.name : "?") + " \u2194 " + (npc ? npc.name : "?") };
+            self.drawReach();
+          });
+          svg.appendChild(hit);
+        });
+      },
+
       // ---- standing order: the GM drags a card by its grip ----
       // Pointer events (mouse and touch alike). Each side reorders only
       // within its own column: the move compares the pointer with the cards
@@ -243,6 +363,8 @@
         var moved = list.splice(from, 1)[0];
         list.splice(to, 0, moved);
         d.moved = true;
+        var self = this;
+        this.$nextTick(function () { self.drawReach(); });
       },
       endDrag: async function () {
         var d = this.drag;

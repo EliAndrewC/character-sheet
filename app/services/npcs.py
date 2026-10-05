@@ -268,6 +268,30 @@ def set_standing_order(db: Session, encounter: Encounter, side: str, ids: Any,
     db.flush()
 
 
+def set_reach(db: Session, encounter: Encounter, pc_id: Any, npc_id: Any, on: bool,
+              pcs: Sequence[int], npc_ids: Sequence[int]) -> None:
+    """Mark (or clear) that a PC and an NPC in this fight can strike each
+    other. Undirected, one PC and one NPC, each pair once."""
+    if not (isinstance(pc_id, int) and pc_id in pcs and isinstance(npc_id, int) and npc_id in npc_ids):
+        raise ValueError("a line joins a PC and an NPC in this fight")
+    pair = [pc_id, npc_id]
+    pairs = list(encounter.reach or [])
+    if on and pair not in pairs:
+        pairs.append(pair)
+    elif not on:
+        pairs = [p for p in pairs if p != pair]
+    encounter.reach = pairs
+    touch(encounter)
+    db.flush()
+
+
+def current_reach(encounter: Optional[Encounter], pcs: Sequence[int], npc_ids: Sequence[int]) -> List[List[int]]:
+    """The pairs whose PC and NPC are both still in the fight."""
+    if encounter is None:
+        return []
+    return [p for p in (encounter.reach or []) if p[0] in pcs and p[1] in npc_ids]
+
+
 def set_status(db: Session, encounter: Encounter, npc: Character, status: str) -> EncounterNpc:
     if status not in NPC_STATUSES:
         raise ValueError(f"unknown status {status!r}")
