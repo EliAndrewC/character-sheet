@@ -121,7 +121,9 @@ def test_offered_schools_agree_with_this_app():
         if npc_type == "wave_man":
             continue
         sim_school = get_school(gen.SIM_SCHOOL_NAMES[sim_key])
-        assert sorted(gen.sheet_id(k) for k in sim_school.school_knacks()) == sorted(SCHOOLS[npc_type].school_knacks), npc_type
+        renames = gen.SIM_KNACK_RENAMES.get(sim_key, {})
+        sim_knacks = [renames.get(gen.sheet_id(k), gen.sheet_id(k)) for k in sim_school.school_knacks()]
+        assert sorted(sim_knacks) == sorted(SCHOOLS[npc_type].school_knacks), npc_type
         assert sim_school.school_ring().capitalize() in SCHOOL_RING_OPTIONS[npc_type], npc_type
 
 
@@ -133,7 +135,7 @@ def test_npc_types_include_the_new_schools_and_wave_man():
     assert types["suzume_overseer"] == "suzume"
     assert types["wave_man"] == "wave_man"
     assert "ninja" not in types.values()
-    assert "hiruma_scout" not in types  # stale in the simulator; see UNSUPPORTED_SIM_KEYS
+    assert types["hiruma_scout"] == "hiruma"
     assert "shugenja" not in types
 
 
@@ -369,3 +371,14 @@ def test_version_from_the_deploy_stamp(monkeypatch, fresh_version):
     monkeypatch.setattr(importlib.metadata, "distribution",
                         lambda name: pytest.fail("the stamp wins without asking pip"))
     assert gen.simulator_version() == "3e9fec9095db"
+
+
+def test_hiruma_scout_takes_the_simulators_counterattack_ranks_as_lunge():
+    """The simulator's Hiruma predates the rules' counterattack -> lunge swap.
+    Its progression is used as-is, with the counterattack ranks renamed, so
+    the NPC reaches the Dan the simulator built rather than sitting at 1st."""
+    npc = gen.build_npc("hiruma_scout", 150, 0.6)
+    assert npc["school"] == "hiruma_scout"
+    assert set(npc["knacks"]) == {"double_attack", "iaijutsu", "lunge"}
+    assert "counterattack" not in npc["foreign_knacks"]
+    assert min(npc["knacks"].values()) >= 3

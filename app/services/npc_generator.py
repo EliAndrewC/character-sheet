@@ -63,11 +63,15 @@ _SIM_SCHOOL_OVERRIDES: Dict[str, str] = {
 # Simulator keys that are deliberately NOT offered as NPCs, with why.
 UNSUPPORTED_SIM_KEYS: Dict[str, str] = {
     "ninja": "Ninja abilities are hidden in this app until their unlock feature exists",
-    # The rules swapped counterattack for lunge (rules commit 48410d9); the
-    # simulator's Hiruma still has counterattack as a school knack, so its
-    # builds would sit at 1st Dan here. Remove once the simulator catches up
-    # (its BACKLOG.md); test_offered_schools_agree_with_this_app will pass.
-    "hiruma": "the simulator's Hiruma Scout predates the rules' counterattack -> lunge swap",
+}
+
+# Per-school knack renames, simulator id -> this app's id. The rules swapped
+# Hiruma's counterattack for lunge (rules commit 48410d9) and the simulator has
+# not caught up (its BACKLOG.md). The GM's ruling: its XP progression is still
+# good, so the counterattack ranks become lunge ranks. Drop the entry once the
+# simulator's Hiruma has lunge.
+SIM_KNACK_RENAMES: Dict[str, Dict[str, str]] = {
+    "hiruma": {"counterattack": "lunge"},
 }
 
 # Wave Man abilities: simulator name -> this app's id (rules/09-professions.md order).
@@ -291,13 +295,14 @@ def build_npc(npc_type: str, earned_xp: int, combat_share: float) -> Dict[str, A
     school_id = "" if is_profession else npc_type
     school_knacks = set() if is_profession else set(SCHOOLS[school_id].school_knacks)
     sim_school = None if is_profession else get_school(SIM_SCHOOL_NAMES[sim_key])
+    renames = SIM_KNACK_RENAMES.get(sim_key, {})
 
     skills: Dict[str, int] = {}
     knacks: Dict[str, int] = {}
     foreign: Dict[str, int] = {}
     attack = parry = 1
     for name, rank in config.skills.items():
-        sid = sheet_id(name)
+        sid = renames.get(sheet_id(name), sheet_id(name))
         if sid == "attack":
             attack = rank
         elif sid == "parry":

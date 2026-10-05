@@ -223,7 +223,7 @@ Each phase ends with tests green at 100% coverage in every repo it touches, targ
   - **Suzume Overseer** - Water (fixed). **Precepts to 5** first (3rd Dan's X, 1st Dan die), worldliness leads the knacks (void points are lowest ring + worldliness, and the special ability spends void after the roll), attack before parry, the four non-Water rings raised together so the lowest ring rises.
 
 **Found while building Phases 1-2:**
-- **Hiruma Scout is stale in the simulator.** The rules swapped counterattack for lunge (l7r `48410d9`), including the 3rd Dan interrupt, and the simulator still uses counterattack. It is left out of the NPC list (`UNSUPPORTED_SIM_KEYS`) and recorded in the simulator's BACKLOG. It is a combat-mechanics change, so it goes through the simulator's per-school workflow.
+- **Hiruma Scout is stale in the simulator.** The rules swapped counterattack for lunge (l7r `48410d9`), including the 3rd Dan interrupt, and the simulator still uses counterattack (recorded in its BACKLOG). It was first left out of the NPC list; the GM then ruled (2026-10-04) that the simulator's XP progression is still good, so `SIM_KNACK_RENAMES` turns its counterattack ranks into lunge ranks and Hiruma Scout is offered. Drop the rename once the simulator has lunge.
 - **Several existing simulator lists are not monotonic between tiers** (a stat can drop a rank at, say, 160 XP vs 150). The three new lists are monotonic, and a test checks it in 10-XP steps. A returning NPC is re-generated through `never_below()`, so it never comes back weaker.
 - **Deploys need the simulator commits pushed.** They are committed in `/host-l7r-repo/simulator` (`d75e505`, `e7961e6`, `3e9fec9`), and this container cannot push there.
 
