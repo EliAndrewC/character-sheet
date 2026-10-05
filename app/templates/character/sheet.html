@@ -64,15 +64,9 @@
 {% include 'character/partials/sheet/school.html' %}
 
     <!-- RINGS -->
-    {% set ring_map = character.rings %}
-    {# dying threshold is used by rings.html (display) AND _dice_js.html
-       (_dyingThreshold), so it must live in the parent context, not inside an
-       include (a {% set %} in an include is local to that include). #}
-    {% set dying_base = ring_map['Earth'] * 2 %}
-    {% set dying_adj = dying_base
-        - (1 if 'permanent_wound' in (character.disadvantages or []) else 0)
-        + (1 if 'great_destiny' in (character.advantages or []) else 0) %}
-    {% set has_dying_tooltip = dying_adj != dying_base %}
+    {# ring_map and the dying threshold (dying_base / dying_adj /
+       has_dying_tooltip) come from pages.sheet_context: rings.html shows
+       them and the roller (_dice_js.html) needs them on the combat page too. #}
 {% include 'character/partials/sheet/rings.html' %}
     {% if _full_art %}</div></div>{% endif %}
 
@@ -151,23 +145,7 @@
     {% endif %}
 
 {% include 'character/partials/sheet/_roll_data.html' %}
-    <div x-data="diceRoller()" x-init="init()">
-{% include 'character/partials/sheet/roll_trigger.html' %}
-{% include 'character/partials/sheet/modal_rules.html' %}
-{% include 'character/partials/sheet/modal_wound_check.html' %}
-{% include 'character/partials/sheet/modal_kakita5.html' %}
-{% include 'character/partials/sheet/modal_attack.html' %}
-{% include 'character/partials/sheet/modal_parry.html' %}
-{% include 'character/partials/sheet/modal_feint.html' %}
-{% include 'character/partials/sheet/modal_duel.html' %}
-{# Must precede modal_result.html: that partial's trailing </div> closes the
-   diceRoller x-data wrapper opened above, so anything included after it falls
-   outside the diceRoller Alpine scope. #}
-{% include 'character/partials/sheet/modal_pcp_confirm.html' %}
-{% include 'character/partials/sheet/modal_result.html' %}
-    </div>
-
-{% include 'character/partials/sheet/_dice_js.html' %}
+{% include 'character/partials/sheet/roller.html' %}
 
 </div>
 {% endblock %}

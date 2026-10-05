@@ -1241,7 +1241,19 @@ def sheet_context(request: Request, character: Character, db: Session) -> Option
         if "attack" in (s.get("skills") or [])
     ]
 
+    # The dying threshold: rings.html shows it and the roller reads it
+    # (_dice_js.html _dyingThreshold), on the sheet and the combat page.
+    ring_map = character.rings
+    dying_base = ring_map["Earth"] * 2
+    dying_adj = (dying_base
+                 - (1 if "permanent_wound" in (character.disadvantages or []) else 0)
+                 + (1 if "great_destiny" in (character.advantages or []) else 0))
+
     return {
+        "ring_map": ring_map,
+        "dying_base": dying_base,
+        "dying_adj": dying_adj,
+        "has_dying_tooltip": dying_adj != dying_base,
         "character": character,
         "char_dict": char_dict,
         "school": school,

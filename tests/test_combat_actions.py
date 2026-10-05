@@ -1,13 +1,15 @@
 """Server-side NPC actions, the combat page's state, and its routes
 (app/services/combat_actions.py, combat_view.py, app/routes/combat.py)."""
 
-import random
+import json
+import re
 
 import pytest
 
-from app.models import Character, Encounter, EncounterAction, GamingGroup, RollHistory
+from app.models import Character, Encounter, GamingGroup, RollHistory
 from app.services import combat_actions as ca
 from app.services import combat_view as cv
+from app.services import fight_log
 from app.services import npcs
 from app.services.per_adventure import per_adventure_abilities, remaining
 
@@ -50,50 +52,14 @@ def _dice(npc, values=(3, 7)):
     npc.action_dice = [{"value": v, "spent": False} for v in values]
 
 
+def _act(world, kind="other", label="Taunts", **kw):
+    """A fight action, as the sheet's roller logs one (fight_log)."""
+    fight_log._log(world["s"], world["enc"], world["npc"], kind, label, **kw)
+
+
 # ---------------------------------------------------------------------------
 # Service: helpers
 # ---------------------------------------------------------------------------
-
-def test_attack_options_put_the_plain_attack_first(world):
-    s = world["s"]
-    g, enc = world["g"], world["enc"]
-    (kakita,) = npcs.generate(s, g, enc, GM, [{"npc_type": "kakita_duelist", "count": 1,
-                                               "earned_xp": 100, "roll_extra": False}])
-    keys = [o["key"] for o in ca.attack_options(kakita)]
-    assert keys[0] == "attack" and "knack:double_attack" in keys
-    assert ca.tn_to_be_hit(world["pc"]) == 20
-
-
-@pytest.mark.parametrize("indices,message", [
-    (["x"], "pick an action die"),
-    ([5], "not available"),
-    ([0, 0], "not available"),
-    ([], "pick an action die"),
-])
-def test_spend_dice_refuses(world, indices, message):
-    npc = world["npc"]
-    _dice(npc)
-    with pytest.raises(ca.ActionError, match=message):
-        ca._spend_dice(npc, indices)
-
-
-def test_spend_dice_refuses_a_spent_die(world):
-    npc = world["npc"]
-    npc.action_dice = [{"value": 3, "spent": True}]
-    with pytest.raises(ca.ActionError):
-        ca._spend_dice(npc, [0])
-
-
-def test_void_refusals(world, monkeypatch):
-    npc = world["npc"]
-    with pytest.raises(ca.ActionError, match="cannot spend void"):
-        ca._plan(npc, {"void_blocked": True}, 1, "Attack")
-    with pytest.raises(ca.ActionError):
-        ca._plan(npc, {}, 99, "Attack")
-    monkeypatch.setattr(ca, "formulas", lambda c: {})
-    with pytest.raises(ca.ActionError, match="no parry roll"):
-        ca._roll(world["s"], npc, GM, "parry", 0, rng=None)
-
 
 # ---------------------------------------------------------------------------
 # Rounds
@@ -114,149 +80,22 @@ def test_new_round_rolls_for_fighters_and_clears_the_downed(world):
 
 
 # ---------------------------------------------------------------------------
-# Attack and damage
-# ---------------------------------------------------------------------------
-
-def test_attack_needs_a_real_attack_and_a_tn(world):
-    s, enc, npc = world["s"], world["enc"], world["npc"]
-    _dice(npc)
-    with pytest.raises(ca.ActionError, match="no knack:lunge attack"):
-        ca.attack(s, enc, npc, GM, roll_key="knack:lunge", die=0, target=None, tn=10)
-    with pytest.raises(ca.ActionError, match="target or give a TN"):
-        ca.attack(s, enc, npc, GM, roll_key="attack", die=0, target=None, tn=None)
-
-
-def test_a_hit_on_the_target_tn_then_failed_parry_damage(world):
-    s, enc, npc, pc = world["s"], world["enc"], world["npc"], world["pc"]
-    _dice(npc)
-    out = ca.attack(s, enc, npc, GM, roll_key="attack", die=0, target=pc, tn=None, rng=ConstRng(9))
-    assert out["tn"] == 20
-    action = s.get(EncounterAction, out["action_id"])
-    assert action.target_character_id == pc.id and action.round == 0
-    assert npc.action_dice[0]["spent"] is True
-    if not out["hit"]:  # pragma: no cover - a 9s attack from a 50-XP Wave Man beats 20
-        pytest.skip("did not hit")
-    dmg = ca.damage(s, enc, action, GM, parry="failed", rng=ConstRng(5))
-    assert dmg["outcome"] == "hit" and dmg["damage"] > 0
-    assert action.detail["parry"] == "failed" and action.detail["damage"] == dmg["damage"]
-    assert any("from failed parry" in p for p in dmg["payload"]["extras"])  # parry skill 3 from the target
-    with pytest.raises(ca.ActionError, match="already resolved"):
-        ca.damage(s, enc, action, GM)
-
-
-def test_a_miss_rolls_no_damage(world):
-    s, enc, npc = world["s"], world["enc"], world["npc"]
-    _dice(npc)
-    out = ca.attack(s, enc, npc, GM, roll_key="attack", die=0, target=None, tn=999, rng=ConstRng(1))
-    assert out["hit"] is False and out["extra_dice"] == 0
-    action = s.get(EncounterAction, out["action_id"])
-    assert action.detail["outcome"] == "missed"
-    with pytest.raises(ca.ActionError, match="only a hit"):
-        ca.damage(s, enc, action, GM)
-
-
-def test_parried_and_bad_damage_requests(world):
-    s, enc, npc = world["s"], world["enc"], world["npc"]
-    _dice(npc)
-    out = ca.attack(s, enc, npc, GM, roll_key="attack", die=0, target=None, tn=0, rng=ConstRng(5))
-    action = s.get(EncounterAction, out["action_id"])
-    with pytest.raises(ca.ActionError, match="none, failed or parried"):
-        ca.damage(s, enc, action, GM, parry="maybe")
-    with pytest.raises(ca.ActionError, match="unknown weapon"):
-        ca.damage(s, enc, action, GM, weapon="bazooka")
-    assert ca.damage(s, enc, action, GM, parry="parried") == {"outcome": "parried"}
-    with pytest.raises(ca.ActionError, match="already resolved"):
-        ca.damage(s, enc, action, GM)
-
-
-def test_no_target_means_no_parry_reduction(world):
-    s, enc, npc = world["s"], world["enc"], world["npc"]
-    _dice(npc)
-    out = ca.attack(s, enc, npc, GM, roll_key="attack", die=0, target=None, tn=0, rng=ConstRng(5))
-    action = s.get(EncounterAction, out["action_id"])
-    dmg = ca.damage(s, enc, action, GM, parry="failed", rng=ConstRng(5))
-    assert "-0k0 from failed parry" in dmg["payload"]["extras"]
-
-
-def _patch_attack(monkeypatch, **extra):
-    real = ca.formulas
-
-    def patched(c):
-        f = real(c)
-        f["attack"] = dict(f["attack"], **extra)
-        return f
-    monkeypatch.setattr(ca, "formulas", patched)
-
-
-def test_double_attack_excess_is_over_the_unraised_tn(world, monkeypatch):
-    s, enc, npc = world["s"], world["enc"], world["npc"]
-    _dice(npc)
-    _patch_attack(monkeypatch, attack_variant="double_attack")
-    out = ca.attack(s, enc, npc, GM, roll_key="attack", die=0, target=None, tn=0, rng=ConstRng(9))
-    detail = s.get(EncounterAction, out["action_id"]).detail
-    assert detail["effective_tn"] == 20
-    raw = detail["raw_total"]
-    assert out["hit"] == (raw >= 20)
-    if out["hit"]:
-        assert out["extra_dice"] == raw // 5
-
-
-def test_wave_man_miss_raise_lands_without_extra_dice(world, monkeypatch):
-    s, enc, npc = world["s"], world["enc"], world["npc"]
-    _dice(npc)
-    _patch_attack(monkeypatch, wave_man_miss_raise=2, wave_man_round_damage=1, shosuro_5th_dan=True)
-    probe = ca.formulas(npc)["attack"]
-    raw = probe["kept"] * 5 + (probe.get("flat") or 0)
-    out = ca.attack(s, enc, npc, GM, roll_key="attack", die=0, target=None, tn=raw + 3, rng=ConstRng(5))
-    assert out["hit"] and out["total"] == raw + 5 and out["extra_dice"] == 0
-    action = s.get(EncounterAction, out["action_id"])
-    assert action.detail["wave_man_raises"] == 1
-    dmg = ca.damage(s, enc, action, GM, rng=ConstRng(5))
-    assert dmg["damage"] % 5 == 3  # all-5s damage is a multiple of 5, so W4 adds 3
-    extras = dmg["payload"]["extras"]
-    assert any("lowest 3 dice" in e for e in extras) and any("rounded to" in e for e in extras)
-
-
-# ---------------------------------------------------------------------------
-# Parry, other
-# ---------------------------------------------------------------------------
-
-def test_parry_success_interrupt_and_predeclared(world):
-    s, enc, npc, pc = world["s"], world["enc"], world["npc"], world["pc"]
-    _dice(npc, (2, 5, 9))
-    with pytest.raises(ca.ActionError, match="one action die, or two"):
-        ca.parry(s, enc, npc, GM, dice=[0, 1, 2], attack_total=10)
-    out = ca.parry(s, enc, npc, GM, dice=[0, 1], attack_total=1, predeclared=True,
-                   attacker=pc, rng=ConstRng(5))
-    assert out["success"]
-    action = s.get(EncounterAction, out["action_id"])
-    assert action.kind == "parry" and action.detail["interrupt"] is True
-    assert action.detail["dice"] == [2, 5] and action.target_character_id == pc.id
-    assert s.get(RollHistory, action.roll_history_id).payload["total"] == out["total"]
-    miss = ca.parry(s, enc, npc, GM, dice=[2], attack_total=999, rng=ConstRng(1))
-    assert miss["success"] is False
-
-
-def test_other_action_logs_its_label(world):
-    s, enc, npc = world["s"], world["enc"], world["npc"]
-    _dice(npc)
-    out = ca.other(s, enc, npc, die=0, label="  ")
-    assert s.get(EncounterAction, out["action_id"]).label == "Action"
-
 
 def test_tn_to_be_hit_is_public_once_the_npc_was_attacked(world):
     """Unknown to players until the NPC has taken damage or parried in this
     fight: either one means somebody attacked it."""
-    s, g, enc, npc = world["s"], world["g"], world["enc"], world["npc"]
+    s, g, npc = world["s"], world["g"], world["npc"]
     assert cv.public_state(s, g)["npcs"][0]["tn_to_be_hit"] is None
-    _dice(npc, (2, 5, 9))
-    ca.parry(s, enc, npc, GM, dice=[0], attack_total=10, rng=ConstRng(5))
+    _act(world, kind="attack", label="Attack", total=20)
+    assert cv.public_state(s, g)["npcs"][0]["tn_to_be_hit"] is None  # its own attack says nothing
+    _act(world, kind="parry", label="Parry", total=20)
     assert cv.public_state(s, g)["npcs"][0]["tn_to_be_hit"] == ca.tn_to_be_hit(npc)
 
 
 def test_tn_to_be_hit_is_public_once_the_npc_has_wounds(world):
     s, g, enc, npc = world["s"], world["g"], world["enc"], world["npc"]
-    ca.take_damage(s, enc, npc, GM, amount=5, rng=ConstRng(9))
+    npc.current_light_wounds = 5
+    s.flush()
     assert cv.public_state(s, g)["npcs"][0]["tn_to_be_hit"] == ca.tn_to_be_hit(npc)
     ca.set_tracking(s, enc, npc, light=0, serious=0)  # the GM undoing a mistake
     assert cv.public_state(s, g)["npcs"][0]["tn_to_be_hit"] is None
@@ -265,24 +104,6 @@ def test_tn_to_be_hit_is_public_once_the_npc_has_wounds(world):
 # ---------------------------------------------------------------------------
 # Wounds
 # ---------------------------------------------------------------------------
-
-def test_take_damage_failed_check(world):
-    s, enc, npc = world["s"], world["enc"], world["npc"]
-    with pytest.raises(ca.ActionError, match="positive"):
-        ca.take_damage(s, enc, npc, GM, amount=0)
-    out = ca.take_damage(s, enc, npc, GM, amount=200, rng=ConstRng(1))
-    assert not out["passed"] and out["serious_wounds_taken"] >= 1
-    assert npc.current_light_wounds == 0 and npc.current_serious_wounds == out["serious_wounds_taken"]
-    assert out["down_prompt"] is True  # a huge failure passes 2 x Earth
-
-
-def test_take_damage_passed_then_take_a_serious_wound(world):
-    s, enc, npc = world["s"], world["enc"], world["npc"]
-    out = ca.take_damage(s, enc, npc, GM, amount=1, rng=ConstRng(5))
-    assert out["passed"] and out["choice_needed"] and npc.current_light_wounds == 1
-    assert ca.take_serious_wound(s, enc, npc) == {"down_prompt": False}
-    assert (npc.current_light_wounds, npc.current_serious_wounds) == (0, 1)
-
 
 def test_set_tracking(world):
     s, enc, npc = world["s"], world["enc"], world["npc"]
@@ -311,9 +132,9 @@ _PUBLIC_ACTION_KEYS = {"kind", "label", "target", "total", "outcome", "damage"}
 
 
 def test_public_state_is_the_allow_list(world):
-    s, g, enc, npc = world["s"], world["g"], world["enc"], world["npc"]
+    s, g, enc = world["s"], world["g"], world["enc"]
     ca.new_round(s, enc, GM, rng=ConstRng(3))
-    ca.other(s, enc, npc, die=0, label="Taunts")
+    _act(world)
     state = cv.public_state(s, g)
     assert set(state) == {"rev", "group", "encounter", "pcs", "npcs"}
     assert state["encounter"] == {"name": "Ambush", "round": 1}
@@ -342,11 +163,11 @@ def test_public_state_without_a_fight(client):
 def test_gm_state_has_everything(world):
     s, g, enc, npc = world["s"], world["g"], world["enc"], world["npc"]
     _dice(npc)
-    ca.attack(s, enc, npc, GM, roll_key="attack", die=0, target=world["pc"], tn=None, rng=ConstRng(5))
+    _act(world, kind="attack", label="Attack", total=20, target=world["pc"].id)
     state = cv.gm_state(s, g)
     assert state["gm"] is True and state["encounter"]["id"] == enc.id
     row = state["npcs"][0]
-    for key in ("void", "void_max", "tn_to_be_hit", "action_dice", "attacks", "status",
+    for key in ("void", "void_max", "tn_to_be_hit", "action_dice", "status",
                 "combat_share", "bonuses", "sheet_url", "max_serious_wounds"):
         assert key in row
     (action,) = state["actions"]
@@ -370,7 +191,7 @@ def test_bonuses_read_counters_and_toggles():
 
 
 def test_combat_rolls_cover_the_fight_window(world):
-    s, g, enc, npc = world["s"], world["g"], world["enc"], world["npc"]
+    s, g, enc = world["s"], world["g"], world["enc"]
     ca.new_round(s, enc, GM, rng=ConstRng(3))
     s.add(RollHistory(character_id=world["pc"].id, roll_key="attack", actor_discord_id="test_user_1",
                       payload={"title": "Attack", "total": 30, "kept": [{"parts": [10, 4]}], "dropped": []}))
@@ -442,63 +263,31 @@ def test_combat_rolls_page(client, world):
 
 
 def test_action_routes_end_to_end(client, world):
-    npc_id, pc_id = world["npc"].id, world["pc"].id
+    npc_id = world["npc"].id
     assert client.post(_url(world, "/new-round")).json()["round"] == 1
     assert client.post(_url(world, f"/npcs/{npc_id}/initiative")).status_code == 200
-    atk = client.post(_url(world, f"/npcs/{npc_id}/attack"),
-                      json={"roll_key": "attack", "die": 0, "target_id": pc_id, "tn": 0})
-    assert atk.status_code == 200 and atk.json()["hit"] is True
-    dmg = client.post(_url(world, f"/actions/{atk.json()['action_id']}/damage"),
-                      json={"parry": "failed", "parry_skill": 2, "weapon": "knife"})
-    assert dmg.status_code == 200 and dmg.json()["damage"] > 0
-    assert client.post(_url(world, f"/actions/{atk.json()['action_id']}/damage"), json={}).status_code == 400
-    par = client.post(_url(world, f"/npcs/{npc_id}/parry"),
-                      json={"die": 1, "attack_total": 1, "attacker_id": pc_id})
-    assert par.status_code in (200, 400)  # 400 only if the NPC rolled a single die
-    wc = client.post(_url(world, f"/npcs/{npc_id}/take-damage"), json={"amount": 3})
-    assert wc.status_code == 200
-    assert client.post(_url(world, f"/npcs/{npc_id}/take-serious-wound")).status_code == 200
     assert client.post(_url(world, f"/npcs/{npc_id}/tracking"), json={"light": 2}).json() == {"down_prompt": False}
+    # The old quick-action routes are gone: the sheet's roller makes those rolls.
+    for gone in ("attack", "parry", "other", "take-damage", "take-serious-wound"):
+        assert client.post(_url(world, f"/npcs/{npc_id}/{gone}"), json={}).status_code in (404, 405)
 
 
 def test_action_route_errors(client, world):
     npc_id = world["npc"].id
     base = f"/npcs/{npc_id}"
-    assert client.post(_url(world, f"{base}/attack"), json={"target_id": 99999}).status_code == 404
-    assert client.post(_url(world, f"{base}/attack"), json={"target_id": world["hidden"].id}).status_code == 404
-    assert client.post(_url(world, f"{base}/attack"), json={"die": 0, "tn": 5}).status_code == 400  # no dice yet
-    assert client.post(_url(world, f"{base}/attack"), json={"die": "x", "tn": 5}).status_code == 400
-    assert client.post(_url(world, f"{base}/parry"), json={"dice": [0]}).status_code == 400
-    assert client.post(_url(world, f"{base}/parry"), json={"dice": [0], "attack_total": 5}).status_code == 400
-    assert client.post(_url(world, f"{base}/other"), json={"die": 0}).status_code == 400
-    assert client.post(_url(world, f"{base}/take-damage"), json={"amount": 0}).status_code == 400
     assert client.post(_url(world, f"{base}/tracking"), json={"void": -1}).status_code == 400
-    assert client.post(_url(world, "/actions/99999/damage"), json={}).status_code == 404
-    assert client.post(_url(world, "/npcs/99999/other"), json={}).status_code == 404
-    for path in ("/new-round", f"{base}/other"):
-        assert client.post(_url(world, path), json={}, headers=PLAYER).status_code == 403
+    assert client.post(_url(world, "/npcs/99999/initiative"), json={}).status_code == 404
+    assert client.post(_url(world, "/new-round"), json={}, headers=PLAYER).status_code == 403
+    assert client.post(_url(world, f"{base}/initiative"), json={}, headers=PLAYER).status_code == 403
     assert client.post("/groups/999/combat/new-round").status_code == 404
-    assert client.post(_url(world, "/actions/1/damage"), headers=PLAYER).status_code == 403
     client.post(_url(world, "/end"))
     assert client.post(_url(world, "/new-round")).status_code == 409
-    assert client.post(_url(world, f"{base}/other"), json={}).status_code == 409
+    assert client.post(_url(world, f"{base}/initiative"), json={}).status_code == 409
 
 
-def test_other_route(client, world):
-    client.post(_url(world, "/new-round"))
-    out = client.post(_url(world, f"/npcs/{world['npc'].id}/other"), json={"die": 0, "label": "Moves"})
-    assert out.status_code == 200
-
-
-@pytest.mark.parametrize("path", ["initiative", "attack", "parry", "take-damage",
-                                  "take-serious-wound", "tracking"])
+@pytest.mark.parametrize("path", ["initiative", "tracking", "status", "remove", "rebuild", "rename"])
 def test_action_routes_404_for_an_npc_not_in_the_fight(client, world, path):
     assert client.post(_url(world, f"/npcs/99999/{path}"), json={}).status_code == 404
-
-
-def test_attack_target_must_be_a_number(client, world):
-    resp = client.post(_url(world, f"/npcs/{world['npc'].id}/attack"), json={"target_id": "abc"})
-    assert resp.status_code == 404
 
 
 def test_public_view_hides_spent_pc_dice(world):
@@ -507,3 +296,34 @@ def test_public_view_hides_spent_pc_dice(world):
     s.flush()
     (row,) = cv.public_state(s, g)["pcs"]
     assert row["action_dice"] == [{"value": 6}]
+
+
+# ---------------------------------------------------------------------------
+# The NPC roll overlay (the sheet's own die menu and roll modals)
+# ---------------------------------------------------------------------------
+
+def test_npc_roller_overlay_serves_the_sheets_roller(client, world):
+    s, npc, pc = world["s"], world["npc"], world["pc"]
+    _dice(npc, (3, 7))
+    s.commit()
+    page = client.get(_url(world, f"/npcs/{npc.id}/roller?die=1&x=100&y=50"))
+    assert page.status_code == 200
+    html = page.text
+    assert 'x-data="diceRoller()"' in html and 'id="roll-formulas"' in html
+    assert 'data-action-die-menu-item="attack"' in html and 'data-testid="npc-roller"' in html
+    assert "<nav" not in html and "<footer" not in html
+    targets = re.search(r'id="combat-targets">(.*?)</script>', html, re.S).group(1)
+    assert json.loads(targets) == [{"id": pc.id, "name": "Yudai", "parry": 3, "tn": ca.tn_to_be_hit(pc)}]
+    assert "lwPlusModal = true" not in html
+    wounds = client.get(_url(world, f"/npcs/{npc.id}/roller?wounds=1")).text
+    assert "Light Wounds" in wounds and "lwPlusModal = true" in wounds
+
+
+def test_npc_roller_overlay_is_the_gms_and_only_for_npcs_in_the_fight(client, world):
+    s, npc, pc = world["s"], world["npc"], world["pc"]
+    assert client.get(_url(world, f"/npcs/{npc.id}/roller"), headers=PLAYER).status_code == 403
+    assert client.get(_url(world, f"/npcs/{pc.id}/roller")).status_code == 404
+    assert client.get(f"/groups/999/combat/npcs/{npc.id}/roller").status_code == 404
+    npcs.end_encounter(s, world["enc"])
+    s.commit()
+    assert client.get(_url(world, f"/npcs/{npc.id}/roller")).status_code == 404

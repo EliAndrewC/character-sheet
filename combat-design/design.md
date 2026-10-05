@@ -264,3 +264,17 @@ Each phase ends with tests green at 100% coverage in every repo it touches, targ
 - Round 2: exact vs base XP (D13), clamp (D14), sheet migration (D15), returning NPCs (D17), missing schools (D18), NPC attacks (D19), keep-LW vs take-SW (D20), records (D21), player visibility (D22, D23), card detail (D23 / 4.5).
 - Round 3: git (D24), stub schools (D25), names (D26), public combat page (D27), real names (D28), roll totals only (D29), every visible PC (D30), new round (D31).
 - Round 4: PCs on the public page (D32), one fight at a time (D33).
+
+
+## Addendum (2026-10-05): NPC rolls on the sheet's own roller
+
+The GM asked for "the same menus and modals as on the regular pages", with one
+implementation shared rather than two. The combat page's own quick dialogs
+(attack / parry / other / took damage) and their server routes are gone. An
+NPC's dice are drawn with the sheet's die icon; a click lays the NPC roll
+overlay (an iframe, because the sheet's roller holds one character per window)
+over the page, showing only the sheet's die menu or light-wounds modal and the
+sheet's roll modals. `fight_log.py` records NPC attacks (with a target picked in
+the attack modal), damage, parries, feints and hand-spent dice as fight
+actions, so the public view is unchanged. Players also see an NPC's TN once it
+has been attacked (wounds, or a parry, this fight).

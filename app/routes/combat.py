@@ -18,9 +18,8 @@ from fastapi.responses import HTMLResponse, JSONResponse
 from sqlalchemy.orm import Session
 
 from app.database import get_db, prefetch_body
-from app.models import Character, Encounter, EncounterAction, GamingGroup
+from app.models import Character, Encounter, GamingGroup
 from app.services import combat_actions as actions
-from app.services import combat_math as cm
 from app.services import combat_view
 from app.services import npc_generator as gen
 from app.services import npcs
@@ -304,22 +303,8 @@ def delete(group_id: int, npc_id: int, request: Request, db: Session = Depends(g
 
 
 # ---------------------------------------------------------------------------
-# NPC actions (design 4.4) - every roll resolved on the server
+# NPC rounds and corrections (design 4.4); NPC rolls use the sheet's roller
 # ---------------------------------------------------------------------------
-
-def _pc(db: Session, group: GamingGroup, pc_id: Any) -> Optional[Character]:
-    """A visible PC of this group (the only things an NPC attacks)."""
-    try:
-        pc_id = int(pc_id)
-    except (TypeError, ValueError):
-        return None
-    return (
-        db.query(Character)
-        .filter(Character.id == pc_id, Character.gaming_group_id == group.id,
-                Character.is_hidden.is_(False), Character.is_npc.is_not(True))
-        .first()
-    )
-
 
 def _opt_int(body: Dict[str, Any], key: str, default: Optional[int] = None) -> Optional[int]:
     value = body.get(key)
@@ -371,106 +356,6 @@ async def initiative(group_id: int, npc_id: int, request: Request, db: Session =
     return _done(db, {"action_dice": actions.roll_initiative(db, encounter, npc, gm)})
 
 
-@router.post("/groups/{group_id}/combat/npcs/{npc_id}/attack")
-async def attack(group_id: int, npc_id: int, request: Request, db: Session = Depends(get_db)):
-    gm, group, encounter, npc, body, err = await _action_context(group_id, npc_id, request, db)
-    if err:
-        return err
-    target = None
-    if body.get("target_id") not in (None, ""):
-        target = _pc(db, group, body["target_id"])
-        if target is None:
-            return _error("That target is not a PC in this group", 404)
-    try:
-        result = actions.attack(
-            db, encounter, npc, gm, roll_key=str(body.get("roll_key") or "attack"),
-            die=_opt_int(body, "die", -1), target=target, tn=_opt_int(body, "tn"),
-            void=_opt_int(body, "void", 0),
-        )
-    except ValueError as exc:
-        return _error(str(exc))
-    return _done(db, result)
-
-
-@router.post("/groups/{group_id}/combat/actions/{action_id}/damage")
-async def damage(group_id: int, action_id: int, request: Request, db: Session = Depends(get_db)):
-    gm, group, err = _load(db, group_id, request)
-    if err:
-        return err
-    encounter = _active(db, group)
-    action = db.get(EncounterAction, action_id)
-    if encounter is None or action is None or action.encounter_id != encounter.id:
-        return _error("Not found", 404)
-    body = await _body(request)
-    try:
-        result = actions.damage(
-            db, encounter, action, gm, parry=str(body.get("parry") or "none"),
-            parry_skill=_opt_int(body, "parry_skill"), weapon=str(body.get("weapon") or "katana"),
-        )
-    except ValueError as exc:
-        return _error(str(exc))
-    return _done(db, result)
-
-
-@router.post("/groups/{group_id}/combat/npcs/{npc_id}/parry")
-async def parry(group_id: int, npc_id: int, request: Request, db: Session = Depends(get_db)):
-    gm, group, encounter, npc, body, err = await _action_context(group_id, npc_id, request, db)
-    if err:
-        return err
-    attacker = None
-    if body.get("attacker_id") not in (None, ""):
-        attacker = _pc(db, group, body["attacker_id"])
-    dice = body.get("dice")
-    if not isinstance(dice, list):
-        dice = [body.get("die")]
-    try:
-        attack_total = _opt_int(body, "attack_total")
-        if attack_total is None:
-            raise ValueError("enter the attack roll to parry")
-        result = actions.parry(
-            db, encounter, npc, gm, dice=dice, attack_total=attack_total,
-            void=_opt_int(body, "void", 0), predeclared=bool(body.get("predeclared")),
-            attacker=attacker,
-        )
-    except ValueError as exc:
-        return _error(str(exc))
-    return _done(db, result)
-
-
-@router.post("/groups/{group_id}/combat/npcs/{npc_id}/other")
-async def other_action(group_id: int, npc_id: int, request: Request, db: Session = Depends(get_db)):
-    _, _, encounter, npc, body, err = await _action_context(group_id, npc_id, request, db)
-    if err:
-        return err
-    try:
-        result = actions.other(db, encounter, npc, die=_opt_int(body, "die", -1),
-                               label=str(body.get("label") or ""))
-    except ValueError as exc:
-        return _error(str(exc))
-    return _done(db, result)
-
-
-@router.post("/groups/{group_id}/combat/npcs/{npc_id}/take-damage")
-async def take_damage(group_id: int, npc_id: int, request: Request, db: Session = Depends(get_db)):
-    gm, _, encounter, npc, body, err = await _action_context(group_id, npc_id, request, db)
-    if err:
-        return err
-    try:
-        result = actions.take_damage(db, encounter, npc, gm, amount=_opt_int(body, "amount", 0),
-                                     void=_opt_int(body, "void", 0))
-    except ValueError as exc:
-        return _error(str(exc))
-    return _done(db, result)
-
-
-@router.post("/groups/{group_id}/combat/npcs/{npc_id}/take-serious-wound")
-async def take_serious_wound(group_id: int, npc_id: int, request: Request, db: Session = Depends(get_db)):
-    _, _, encounter, npc, _, err = await _action_context(group_id, npc_id, request, db)
-    if err:
-        return err
-    return _done(db, actions.take_serious_wound(db, encounter, npc))
-
-
 @router.post("/groups/{group_id}/combat/npcs/{npc_id}/tracking")
 async def set_tracking(group_id: int, npc_id: int, request: Request, db: Session = Depends(get_db)):
     _, _, encounter, npc, body, err = await _action_context(group_id, npc_id, request, db)
@@ -517,9 +402,38 @@ def combat_page(group_id: int, request: Request, view: Optional[str] = None,
         "gm_in_player_view": is_gm and player_view,
         "npc_types": [{"id": t, "label": label} for t, label in gen.npc_type_options()] if gm else [],
         "share": {"default": round(100 * gen.default_combat_share()), "min": round(100 * low), "max": round(100 * high)},
-        "weapons": list(cm.WEAPONS),
     }
     return _templates().TemplateResponse(request=request, name="group_combat.html", context=context)
+
+
+@router.get("/groups/{group_id}/combat/npcs/{npc_id}/roller", response_class=HTMLResponse)
+def npc_roller(group_id: int, npc_id: int, request: Request, die: Optional[int] = None,
+               wounds: bool = False, x: int = 0, y: int = 0, db: Session = Depends(get_db)):
+    """The NPC roll overlay: the sheet's own die menu, light-wounds modal and
+    roll modals for one NPC, laid over the combat page in an iframe (the
+    combat page has no roller of its own). ``die`` opens that action die's
+    menu at ``(x, y)``; ``wounds`` opens the light-wounds modal, whose wound
+    check is the sheet's. Rolls go through the ordinary roll routes, and
+    ``fight_log`` turns them into fight actions."""
+    from app.routes.pages import sheet_context
+
+    _, group, err = _load(db, group_id, request)
+    if err:
+        return err
+    encounter = _active(db, group)
+    npc = _npc(db, group, npc_id)
+    if encounter is None or npc is None or npcs.link_for(encounter, npc.id) is None:
+        return HTMLResponse("Not in the fight", status_code=404)
+    context = sheet_context(request, npc, db)
+    context.update(
+        bare_page=True, group=group, roller_die=die, roller_wounds=wounds,
+        roller_x=max(0, x), roller_y=max(0, y),
+        combat_targets=[
+            {"id": pc.id, "name": pc.name, "parry": pc.parry or 0, "tn": actions.tn_to_be_hit(pc)}
+            for pc in combat_view.visible_pcs(db, group)
+        ],
+    )
+    return _templates().TemplateResponse(request=request, name="combat_npc_roller.html", context=context)
 
 
 @router.get("/groups/{group_id}/combat/state")

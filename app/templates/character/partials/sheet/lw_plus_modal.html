@@ -1,0 +1,61 @@
+{# The light-wounds "+" modal (take serious / add / set). Lives inside the
+   trackingData() scope; shared by the sheet's tracking section and the
+   combat page's NPC roll overlay (combat_npc_roller.html). #}
+                <!-- Plus modal -->
+                <div x-show="lwPlusModal" x-cloak
+                     class="fixed inset-0 z-50 flex items-center justify-center bg-ink/60">
+                    <div class="bg-white rounded-lg shadow-xl px-6 py-5 w-80" @click.outside="lwPlusModal = false">
+                        <h3 class="text-base font-bold mb-4">Light Wounds</h3>
+
+                        <!-- Option 1: Take serious wounds and reset -->
+                        <div class="mb-4 pb-4 border-b border-ink/10">
+                            <div class="flex items-center justify-between mb-2">
+                                <span class="text-sm">Take serious wounds & reset light to 0</span>
+                            </div>
+                            <div class="flex items-center gap-2 mb-2">
+                                <button @click="lwSeriousCount = Math.max(1, lwSeriousCount - 1)"
+                                        :disabled="lwSeriousCount <= 1"
+                                        class="w-6 h-6 rounded bg-ink/10 hover:bg-ink/20 disabled:opacity-30 text-xs font-bold">-</button>
+                                <span class="text-lg font-bold w-6 text-center" x-text="lwSeriousCount"></span>
+                                <button @click="lwSeriousCount++"
+                                        class="w-6 h-6 rounded bg-ink/10 hover:bg-ink/20 text-xs font-bold">+</button>
+                                <span class="text-xs text-ink/50">serious wound(s)</span>
+                            </div>
+                            <button @click="lwTakeSeriousAndReset()"
+                                    class="w-full text-xs bg-red-700 text-parchment px-3 py-1.5 rounded hover:bg-red-800">
+                                Take <span x-text="lwSeriousCount"></span> serious wound(s) & reset light to 0
+                            </button>
+                        </div>
+
+                        <!-- Option 2: Add to existing total -->
+                        <div class="mb-4 pb-4 border-b border-ink/10">
+                            <label class="text-sm block mb-1">Add to current total</label>
+                            <div class="flex gap-2">
+                                <input type="number" x-model="lwAddAmount" min="1" placeholder="Amount"
+                                       class="flex-1 border border-ink/20 rounded px-2 py-1 text-sm"
+                                       @keydown.enter="lwAddToTotal()">
+                                <button @click="lwAddToTotal()"
+                                        :disabled="!lwAddAmount || parseInt(lwAddAmount) <= 0"
+                                        class="text-xs bg-accent text-parchment px-3 py-1 rounded disabled:opacity-30">Add</button>
+                            </div>
+                        </div>
+
+                        <!-- Option 3: Set new total directly -->
+                        <div class="mb-3">
+                            <label class="text-sm block mb-1">Set total to</label>
+                            <div class="flex gap-2">
+                                <input type="number" x-model="lwNewTotal" min="0" placeholder="New total"
+                                       class="flex-1 border border-ink/20 rounded px-2 py-1 text-sm"
+                                       @keydown.enter="lwSetToTotal()">
+                                <button @click="lwSetToTotal()"
+                                        :disabled="lwNewTotal === '' || parseInt(lwNewTotal) < 0"
+                                        class="text-xs bg-accent text-parchment px-3 py-1 rounded disabled:opacity-30">Set</button>
+                            </div>
+                        </div>
+
+                        <div class="text-right">
+                            <button @click="lwPlusModal = false; lwAddAmount = ''; lwNewTotal = ''; lwSeriousCount = 1"
+                                    class="text-xs text-ink/50 hover:text-ink px-2 py-1">Cancel</button>
+                        </div>
+                    </div>
+                </div>

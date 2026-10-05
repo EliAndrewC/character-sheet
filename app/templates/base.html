@@ -387,7 +387,10 @@
        not an inline runtime config. #}
     {% block extra_head %}{% endblock %}
 </head>
-<body class="bg-parchment text-ink min-h-screen">
+{# bare_page: no navigation, banners or footer, and a transparent
+   background - the combat page's NPC roll overlay, laid over the page
+   in an iframe. #}
+<body class="{{ 'bg-transparent' if bare_page else 'bg-parchment' }} text-ink min-h-screen">
     {# Reusable d10 "kite" die sprite, referenced by roll-trigger icons via
        <use href="#d10-die">. Same path as the roll animation
        (app/static/js/dice.js DIE_PATH_D) and the copy-as-image card
@@ -405,6 +408,7 @@
                   font-size="58">0</text>
         </symbol>
     </svg>
+    {% if not bare_page %}
     <nav class="bg-ink text-parchment px-6 py-3 shadow-lg" x-data="{ navOpen: false }">
         <div class="max-w-6xl mx-auto flex items-center justify-between relative">
             <a href="/" class="text-xl font-bold tracking-wide hover:text-gold transition-colors">
@@ -520,6 +524,8 @@
     </div>
     {% endif %}
 
+    {% endif %}
+
     {# Shown by telemetry.js when the server has been redeployed since this
        page loaded. Never reloads by itself: the viewer may be mid-roll or
        mid-sentence in the editor. #}
@@ -534,6 +540,9 @@
         </div>
     </div>
 
+    {% if bare_page %}
+    {% block bare_content %}{% endblock %}
+    {% else %}
     <main class="max-w-6xl mx-auto px-4 pt-6 {% block main_pb %}pb-6{% endblock %}">
         {% block content %}{% endblock %}
     </main>
@@ -545,6 +554,7 @@
         <span class="mx-1">&middot;</span>
         <a href="/privacy" class="hover:text-ink/70">Privacy</a>
     </footer>
+    {% endif %}
     <script>
     // Tooltip click-toggle.
     //   - Touch (hover: none): every .tooltip-trigger taps to open/close.

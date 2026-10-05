@@ -1,0 +1,145 @@
+{# One action die's menu, for loop variables `die` and `i`, inside the
+   trackingData() scope. Shared by the sheet's Actions section and the combat
+   page's NPC roll overlay (combat_npc_roller.html), so both offer the same
+   actions through the same roller. #}
+                            {# Per-die action menu. Unspent dice can pay
+                               for any action they're eligible to pay for;
+                               athletics-only dice (Togashi special) are
+                               restricted to athletics variants. Each
+                               parry/feint row carries a void-spend flyout
+                               because those rolls are executed directly
+                               rather than through the attack modal. Non-
+                               editors reach all the same actions; the
+                               Phase 1 save shim keeps them client-local. #}
+                            <div x-show="actionMenuOpen === i" x-cloak
+                                 @click.outside="if (actionMenuOpen === i) { actionMenuOpen = null; actionMenuHoverRow = null; }"
+                                 class="absolute top-full left-1/2 -translate-x-1/2 mt-1 bg-white border border-ink/20 rounded shadow-lg z-20 text-sm whitespace-nowrap min-w-[200px]">
+                                {% if viewer_can_edit %}
+                                <template x-if="die.spent">
+                                    <button type="button"
+                                            @click="unspendActionDie(i)"
+                                            data-action="action-die-unspent"
+                                            class="block w-full text-left px-3 py-2 hover:bg-parchment">Mark as unspent</button>
+                                </template>
+                                {% endif %}
+                                {% if school_abilities.get('kakita_phase_zero') %}
+                                {# Kakita Phase-0 dice may only be spent on an
+                                   iaijutsu attack. Everything else (Roll
+                                   Attack, Parry, athletics variants, Mantis
+                                   3rd Dan, etc.) is suppressed for these
+                                   dice by gating the "normal" menu below on
+                                   the same value-zero check. #}
+                                <template x-if="!die.spent && die.value === 0">
+                                    <div>
+                                        <button type="button"
+                                                data-action-die-menu-item="iaijutsu-attack"
+                                                @click="window._diceRoller?.rollForActionDie('knack:iaijutsu:attack', i); actionMenuOpen = null; actionMenuHoverRow = null"
+                                                class="block w-full text-left px-3 py-2 hover:bg-parchment">Iaijutsu Attack</button>
+                                        {% if viewer_can_edit %}
+                                        <button type="button"
+                                                @click="spendActionDie(i)"
+                                                data-action="action-die-spent"
+                                                class="block w-full text-left px-3 py-2 hover:bg-parchment border-t border-ink/10 text-ink/60">Mark as spent</button>
+                                        {% endif %}
+                                    </div>
+                                </template>
+                                {% endif %}
+                                <template x-if="!die.spent && !(die.value === 0 && {{ 'true' if school_abilities.get('kakita_phase_zero') else 'false' }})">
+                                    <div>
+                                        {# ── ATTACK-MODAL ACTIONS (no void submenu) ── #}
+                                        <template x-if="!die.athletics_only">
+                                            <button type="button"
+                                                    data-action-die-menu-item="attack"
+                                                    @click="window._diceRoller?.rollForActionDie('attack', i); actionMenuOpen = null; actionMenuHoverRow = null"
+                                                    class="block w-full text-left px-3 py-2 hover:bg-parchment">Roll Attack</button>
+                                        </template>
+                                        {% if school_abilities.get('has_athletics_combat') %}
+                                        <template x-if="die.athletics_only || {{ 'true' if school_abilities.get('athletics_combat_everywhere') else 'false' }}">
+                                            <button type="button"
+                                                    data-action-die-menu-item="athletics-attack"
+                                                    @click="window._diceRoller?.rollForActionDie('athletics:attack', i); actionMenuOpen = null; actionMenuHoverRow = null"
+                                                    class="block w-full text-left px-3 py-2 hover:bg-parchment">Athletics Attack</button>
+                                        </template>
+                                        {% endif %}
+                                        <template x-if="!die.athletics_only && rollFormulas['knack:double_attack']">
+                                            <button type="button"
+                                                    data-action-die-menu-item="double-attack"
+                                                    @click="window._diceRoller?.rollForActionDie('knack:double_attack', i); actionMenuOpen = null; actionMenuHoverRow = null"
+                                                    class="block w-full text-left px-3 py-2 hover:bg-parchment">Double Attack</button>
+                                        </template>
+                                        <template x-if="!die.athletics_only && rollFormulas['knack:counterattack']">
+                                            <button type="button"
+                                                    data-action-die-menu-item="counterattack"
+                                                    @click="window._diceRoller?.rollForActionDie('knack:counterattack', i); actionMenuOpen = null; actionMenuHoverRow = null"
+                                                    class="block w-full text-left px-3 py-2 hover:bg-parchment">Counterattack</button>
+                                        </template>
+                                        <template x-if="!die.athletics_only && rollFormulas['knack:lunge']">
+                                            <button type="button"
+                                                    data-action-die-menu-item="lunge"
+                                                    @click="window._diceRoller?.rollForActionDie('knack:lunge', i); actionMenuOpen = null; actionMenuHoverRow = null"
+                                                    class="block w-full text-left px-3 py-2 hover:bg-parchment">Lunge</button>
+                                        </template>
+                                        {# ── FEINT (opens the feint modal: TN + odds + void).
+                                               Spends THIS die via the stashed index. ── #}
+                                        <template x-if="!die.athletics_only && rollFormulas['knack:feint']">
+                                            <button type="button"
+                                                    data-action-die-menu-item="feint"
+                                                    @click="window._diceRoller?.rollForActionDie('knack:feint', i); actionMenuOpen = null; actionMenuHoverRow = null"
+                                                    class="w-full text-left px-3 py-2 hover:bg-parchment">
+                                                Feint
+                                            </button>
+                                        </template>
+                                        {# ── PARRY (opens the parry modal: TN + probability chart,
+                                               void / predeclared / Kitsune / Athletics controls).
+                                               Spends THIS die via the stashed index. ── #}
+                                        <template x-if="!die.athletics_only">
+                                            <button type="button"
+                                                    data-action-die-menu-item="parry"
+                                                    @click="window._diceRoller?.rollForActionDie('parry', i); actionMenuOpen = null; actionMenuHoverRow = null"
+                                                    class="w-full text-left px-3 py-2 hover:bg-parchment">
+                                                Parry
+                                            </button>
+                                        </template>
+                                        {# ── ATHLETICS PARRY (opens the parry modal with the
+                                               athletics variant pre-selected). ── #}
+                                        {% if school_abilities.get('has_athletics_combat') %}
+                                        <template x-if="die.athletics_only || {{ 'true' if school_abilities.get('athletics_combat_everywhere') else 'false' }}">
+                                            <button type="button"
+                                                    data-action-die-menu-item="athletics-parry"
+                                                    @click="window._diceRoller?.rollForActionDie('athletics:parry', i); actionMenuOpen = null; actionMenuHoverRow = null"
+                                                    class="w-full text-left px-3 py-2 hover:bg-parchment">
+                                                Athletics Parry
+                                            </button>
+                                        </template>
+                                        {% endif %}
+                                        {# ── MANTIS 3RD DAN ── #}
+                                        {% if school_abilities.get('mantis_3rd_dan_offensive') %}
+                                        <template x-if="window._trackingBridge?.currentPosture?.() === 'offensive'">
+                                            <button type="button"
+                                                    data-action-die-menu-item="mantis-3rd-dan-offensive"
+                                                    @click="window._trackingBridge?.spendActionDieForMantis3rdDan(i, 'offensive', {{ school_abilities.get('mantis_3rd_dan_x', 0) }})"
+                                                    class="block w-full text-left px-3 py-2 hover:bg-parchment">
+                                                Mantis 3rd Dan (+<span>{{ school_abilities.get('mantis_3rd_dan_x', 0) }}</span> attack &amp; damage)
+                                            </button>
+                                        </template>
+                                        {% endif %}
+                                        {% if school_abilities.get('mantis_3rd_dan_defensive') %}
+                                        <template x-if="window._trackingBridge?.currentPosture?.() === 'defensive'">
+                                            <button type="button"
+                                                    data-action-die-menu-item="mantis-3rd-dan-defensive"
+                                                    @click="window._trackingBridge?.spendActionDieForMantis3rdDan(i, 'defensive', {{ school_abilities.get('mantis_3rd_dan_x', 0) }})"
+                                                    class="block w-full text-left px-3 py-2 hover:bg-parchment">
+                                                Mantis 3rd Dan (+<span>{{ school_abilities.get('mantis_3rd_dan_x', 0) }}</span> parry &amp; wound checks)
+                                            </button>
+                                        </template>
+                                        {% endif %}
+                                        {# ── MANUAL ── #}
+                                        {% if viewer_can_edit %}
+                                        <button type="button"
+                                                @click="spendActionDie(i)"
+                                                data-action="action-die-spent"
+                                                class="block w-full text-left px-3 py-2 hover:bg-parchment border-t border-ink/10 text-ink/60">Mark as spent</button>
+                                        {% endif %}
+                                    </div>
+                                </template>
+                            </div>

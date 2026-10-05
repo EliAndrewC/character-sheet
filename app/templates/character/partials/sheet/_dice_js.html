@@ -641,6 +641,11 @@
             atkVoidSelected: 0,
             atkCustomTN: '',
             atkShowCustomTN: false,
+            // The combat page's NPC roll overlay lists the fight's PCs
+            // (#combat-targets: id, name, parry, tn); picking one sets the
+            // TN and names them in the fight log. Empty on a sheet.
+            combatTargets: [],
+            atkTargetId: null,
             // Attack result state
             atkHit: false,
             atkNearMiss: false,
@@ -1052,6 +1057,11 @@
                         document.getElementById('attack-probs').textContent || '{}'
                     );
                 } catch (e) { this.atkProbs = {}; }
+                try {
+                    this.combatTargets = JSON.parse(
+                        document.getElementById('combat-targets')?.textContent || '[]'
+                    );
+                } catch (e) { this.combatTargets = []; }
                 try {
                     this.atkDamageAvgs = JSON.parse(
                         document.getElementById('damage-avgs').textContent || '{}'
@@ -2029,6 +2039,11 @@
                     }
                 }
                 this._feintNext = null;
+                if (key === 'parry' || key === 'athletics:parry') {
+                    // The attack total being parried, for the combat page's
+                    // fight log (the outcome is still judged here).
+                    this._serverRollRequest.tn = this.parryResultTN;
+                }
                 this.formula = f;
                 this.title = f.label;
                 this.formulaText = f.flat > 0 ? `${f.rolled}k${f.kept} + ${f.flat}` : `${f.rolled}k${f.kept}`;
@@ -4312,6 +4327,17 @@
 
             // --- Attack Modal ---
 
+            // Pick a PC from the fight as the attack's target: its TN fills
+            // the TN field (5 + 10 x Parry for an athletics attack).
+            atkPickTarget(id) {
+                const t = this.combatTargets.find(c => String(c.id) === String(id));
+                this.atkTargetId = t ? t.id : null;
+                if (!t) return;
+                this.atkTN = this.atkIsAthleticsAttack() ? 5 + 10 * (t.parry || 0) : t.tn;
+                const listed = this.atkIsAthleticsAttack() ? [5, 15, 25, 35, 45, 55] : [5, 10, 15, 20, 25, 30];
+                this.atkShowCustomTN = !listed.includes(this.atkTN);
+            },
+
             openAttackModal(key, preSpentDieIndex = null) {
                 const f = this.formulas[key];
                 if (!f) return;
@@ -4321,6 +4347,7 @@
                 this._preSpentDieIndex = preSpentDieIndex;
                 this.atkKey = key;
                 this.atkFormula = f;
+                this.atkTargetId = null;
                 this.atkPhase = 'pre';
                 this.atkVoidSelected = 0;
                 this.atkRaisesSpent = 0;
@@ -5421,6 +5448,7 @@
                         ? this.atkForceAttackerPhase : null,
                     kakita_defender_phase: Number.isFinite(parseInt(this.atkKakitaDefenderPhase, 10))
                         ? parseInt(this.atkKakitaDefenderPhase, 10) : null,
+                    target_id: this.atkTargetId,
                     request_id: this._newRequestId(),
                 };
                 await this._runServerAttack();

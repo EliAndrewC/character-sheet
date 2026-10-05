@@ -6,6 +6,7 @@ import uuid
 
 import pytest
 
+from tests.e2e.dice_control import force_dice, restore_dice
 from tests.e2e.helpers import create_and_apply
 
 pytestmark = [pytest.mark.combat]
@@ -57,89 +58,127 @@ def test_group_page_links_to_combat_for_everyone(page, page_nonadmin, live_serve
     assert "LinkPC" in page_nonadmin.locator('[data-testid="pc-section"]').text_content()
 
 
+def _roller(page):
+    """The NPC roll overlay: the sheet's own menu and modals, in an iframe."""
+    page.wait_for_selector('[data-testid="npc-roller-frame"]')
+    frame = page.frame_locator('[data-testid="npc-roller-frame"]')
+    frame.locator('[data-testid="npc-roller"]').wait_for(state="attached")
+    return frame
+
+
+def _roller_gone(page):
+    page.wait_for_selector('[data-testid="npc-roller-frame"]', state="detached", timeout=10000)
+
+
+def _round(page, npc_id):
+    page.locator('[data-testid="new-round-btn"]').click()
+    page.wait_for_selector(f'[data-testid="npc-die-{npc_id}-0"]')
+
+
 def test_gm_generates_npcs_and_one_attacks_a_pc(page, live_server_url):
+    """A die opens the SHEET's die menu and attack modal (with its odds and
+    the fight's PCs as targets); the roll, its damage and the spent die land
+    in the fight log, and nothing is written to the PC."""
     gid = _group_with_pc(page, live_server_url, "TargetPC")
     npc_id = _start_fight_with_wave_men(page, live_server_url, gid, count=2)
     assert page.locator('[data-testid^="npc-card-"]').count() == 2
     assert "Wave Man 1" in page.locator('[data-testid="npc-section"]').text_content()
     assert "50 earned XP" in page.locator(f'[data-testid="npc-card-{npc_id}"]').text_content()
-
-    page.locator('[data-testid="new-round-btn"]').click()
-    page.wait_for_selector(f'[data-testid="npc-die-{npc_id}-0"]')
+    _round(page, npc_id)
     assert "Round 1" in page.locator('[data-testid="combat-round"]').text_content()
+    # The sheet's die icon.
+    assert page.locator(f'[data-testid="npc-die-{npc_id}-0"] svg.die.action-die').count() == 1
 
+    force_dice(page, [9])
     page.locator(f'[data-testid="npc-die-{npc_id}-0"]').click()
-    page.locator('[data-testid="menu-attack-attack"]').click()
+    frame = _roller(page)
+    frame.locator('[data-action-die-menu-item="attack"]').click()
     pc = next(p for p in _state(page, live_server_url, gid)["pcs"] if p["name"] == "TargetPC")
-    page.locator(f'[data-testid="target-{pc["id"]}"]').click()
-    # The TN is pre-filled from the target and editable (D19).
-    assert page.input_value('[data-testid="attack-tn"]') == str(pc["tn_to_be_hit"])
-    page.fill('[data-testid="attack-tn"]', "1")  # make sure it hits
-    page.locator('[data-testid="attack-roll-btn"]').click()
-    page.wait_for_selector('[data-testid="attack-result"]')
-    assert "hit" in page.locator('[data-testid="attack-result"]').text_content()
-    page.locator('[data-testid="parry-failed"]').check()
-    assert page.input_value('[data-testid="parry-skill"]') == str(pc["parry"])
-    page.locator('[data-testid="damage-roll-btn"]').click()
-    page.wait_for_selector('[data-testid="damage-result"]')
-    assert re.search(r"\d+ damage", page.locator('[data-testid="damage-result"]').text_content())
+    frame.locator('[data-testid="atk-target"]').select_option(str(pc["id"]))
+    frame.locator('[data-action="roll-attack"]').click()
+    frame.locator('[data-action="roll-damage"]').wait_for()
+    frame.locator('[data-action="roll-damage"]').click()
+    frame.get_by_role("button", name="Close").last.wait_for()
+    frame.locator('button:visible', has_text="Close").last.click()
+    restore_dice(page)
+    _roller_gone(page)
 
-    page.keyboard.press("Escape")
-    die = page.locator(f'[data-testid="npc-die-{npc_id}-0"]')
-    assert die.is_disabled()
+    state = _state(page, live_server_url, gid)
+    npc = next(n for n in state["npcs"] if n["id"] == int(npc_id))
+    assert npc["action_dice"][0]["spent"] is True
+    (attack,) = [a for a in state["actions"] if a["kind"] == "attack"]
+    assert attack["target"] == "TargetPC" and attack["detail"]["outcome"] == "hit"
+    assert attack["detail"]["damage"] > 0
     log = page.locator('[data-testid="action-log"]').text_content()
     assert "on TargetPC" in log and "damage" in log
     # The PC's wounds are the player's to enter (D19): the tracker wrote nothing.
-    pc_after = next(p for p in _state(page, live_server_url, gid)["pcs"] if p["name"] == "TargetPC")
+    pc_after = next(p for p in state["pcs"] if p["name"] == "TargetPC")
     assert (pc_after["light_wounds"], pc_after["serious_wounds"]) == (0, 0)
 
 
-def test_npc_parries_and_spends_a_die_on_something_else(page, live_server_url):
+def test_npc_parries_and_marks_a_die_spent(page, live_server_url):
     gid = _group_with_pc(page, live_server_url, "SwordPC")
     npc_id = _start_fight_with_wave_men(page, live_server_url, gid)
-    page.locator('[data-testid="new-round-btn"]').click()
-    page.wait_for_selector(f'[data-testid="npc-die-{npc_id}-0"]')
+    _round(page, npc_id)
+    force_dice(page, [9])
     page.locator(f'[data-testid="npc-die-{npc_id}-0"]').click()
-    page.locator('[data-testid="menu-parry"]').click()
-    page.fill('[data-testid="parry-attack-total"]', "5")
-    page.locator('[data-testid="parry-predeclared"]').check()
-    page.locator('[data-testid="parry-roll-btn"]').click()
-    page.wait_for_selector('[data-testid="parry-result"]')
-    assert "parried" in page.locator('[data-testid="parry-result"]').text_content()
-    page.keyboard.press("Escape")
-    dice = _state(page, live_server_url, gid)["npcs"][0]["action_dice"]
-    if len(dice) > 1:
+    frame = _roller(page)
+    frame.locator('[data-action-die-menu-item="parry"]').click()
+    frame.locator('input[x-model\\.number="parryTN"]').fill("5")
+    frame.locator('[data-action="roll-parry-go"]').click()
+    frame.locator('button:visible', has_text="Close").last.wait_for()
+    frame.locator('button:visible', has_text="Close").last.click()
+    restore_dice(page)
+    _roller_gone(page)
+    state = _state(page, live_server_url, gid)
+    (parry,) = [a for a in state["actions"] if a["kind"] == "parry"]
+    assert parry["detail"]["outcome"] == "parried"
+
+    if len(state["npcs"][0]["action_dice"]) > 1:
         page.locator(f'[data-testid="npc-die-{npc_id}-1"]').click()
-        page.locator('[data-testid="menu-other"]').click()
-        page.fill('[data-testid="other-label"]', "Moves to the bridge")
-        page.locator('[data-testid="other-btn"]').click()
-        page.wait_for_selector('[data-testid="combat-dialog"]', state="detached")
-        assert "Moves to the bridge" in page.locator('[data-testid="action-log"]').text_content()
+        _roller(page).locator('[data-action="action-die-spent"]').click()
+        _roller_gone(page)
+        page.wait_for_function("document.querySelector('[data-testid=\"action-log\"]').textContent.includes('Action')")
+
+
+def test_a_die_menu_closed_without_choosing_removes_the_overlay(page, live_server_url):
+    gid = _group_with_pc(page, live_server_url, "IdlePC")
+    npc_id = _start_fight_with_wave_men(page, live_server_url, gid)
+    _round(page, npc_id)
+    page.locator(f'[data-testid="npc-die-{npc_id}-0"]').click()
+    _roller(page).locator('[data-action-die-menu-item="attack"]').wait_for()
+    page.mouse.click(5, 5)  # outside the menu: the sheet's click-outside closes it
+    _roller_gone(page)
+    assert _state(page, live_server_url, gid)["actions"] == []
 
 
 def test_npc_takes_damage_and_goes_down(page, live_server_url):
+    """"Took damage" opens the sheet's light-wounds modal and its wound check."""
     gid = _group_with_pc(page, live_server_url, "HitterPC")
     npc_id = _start_fight_with_wave_men(page, live_server_url, gid)
+    force_dice(page, [1])  # a failed check
     page.locator(f'[data-testid="npc-took-damage-{npc_id}"]').click()
-    page.fill('[data-testid="damage-amount"]', "12")
-    page.locator('[data-testid="wound-check-btn"]').click()
-    page.wait_for_selector('[data-testid="wound-check-result"]')
-    result = page.locator('[data-testid="wound-check-result"]').text_content()
-    assert "Wound check" in result
-    if "passed" in result:
-        page.locator('[data-testid="take-sw-btn"]').click()
+    frame = _roller(page)
+    frame.locator('input[x-model="lwAddAmount"]').fill("40")
+    frame.locator('button:visible', has_text="Add").first.click()
+    frame.locator('[data-action="roll-wound-check-go"]').click()
+    frame.locator('button:visible', has_text="Close").last.wait_for()
+    frame.locator('button:visible', has_text="Close").last.click()
+    restore_dice(page)
+    _roller_gone(page)
     page.wait_for_function(
         f"document.querySelector('[data-testid=\"npc-sw-{npc_id}\"]').textContent !== '0'")
-    if page.locator('[data-testid="combat-dialog"]').count():
-        page.keyboard.press("Escape")
-
-    # Adjusting serious wounds to 2 x Earth asks unconscious or dead (D9).
-    page.locator(f'[data-testid="npc-adjust-{npc_id}"]').click()
-    page.fill('[data-testid="adjust-sw"]', "20")
-    page.locator('[data-testid="adjust-save-btn"]').click()
-    page.wait_for_selector('[data-testid="down-prompt"]')
-    page.locator('[data-testid="down-dead"]').click()
-    page.wait_for_selector('[data-testid="down-prompt"]', state="detached")
+    if page.locator('[data-testid="down-prompt"]').count():
+        page.locator('[data-testid="down-dead"]').click()
+        page.wait_for_selector('[data-testid="down-prompt"]', state="detached")
+    else:
+        # Adjusting serious wounds to 2 x Earth asks unconscious or dead (D9).
+        page.locator(f'[data-testid="npc-adjust-{npc_id}"]').click()
+        page.fill('[data-testid="adjust-sw"]', "20")
+        page.locator('[data-testid="adjust-save-btn"]').click()
+        page.wait_for_selector('[data-testid="down-prompt"]')
+        page.locator('[data-testid="down-dead"]').click()
+        page.wait_for_selector('[data-testid="down-prompt"]', state="detached")
     assert page.input_value(f'[data-testid="npc-status-{npc_id}"]') == "dead"
 
 
@@ -149,10 +188,8 @@ def test_public_view_shows_totals_but_not_how(page, page_anon, live_server_url):
     page.locator('[data-testid="new-round-btn"]').click()
     page.wait_for_selector(f'[data-testid="npc-die-{npc_id}-0"]')
     page.locator(f'[data-testid="npc-die-{npc_id}-0"]').click()
-    page.locator('[data-testid="menu-other"]').click()
-    page.fill('[data-testid="other-label"]', "Taunts")
-    page.locator('[data-testid="other-btn"]').click()
-    page.wait_for_selector('[data-testid="combat-dialog"]', state="detached")
+    _roller(page).locator('[data-action="action-die-spent"]').click()
+    _roller_gone(page)
     page.locator('[data-testid="new-round-btn"]').click()
     page.wait_for_function("document.querySelector('[data-testid=\"combat-round\"]').textContent.includes('Round 2')")
 
@@ -284,8 +321,14 @@ def test_players_see_an_npcs_tn_only_after_it_was_attacked(page, page_anon, live
     assert page_anon.locator(f'[data-testid="npc-public-tn-{npc_id}"]').count() == 0
 
     page.locator(f'[data-testid="npc-took-damage-{npc_id}"]').click()
-    page.fill('[data-testid="damage-amount"]', "3")
-    page.locator('[data-testid="wound-check-btn"]').click()
+    frame = _roller(page)
+    frame.locator('input[x-model="lwAddAmount"]').fill("3")
+    frame.locator('button:visible', has_text="Add").first.click()
+    force_dice(page, [9])  # a passed check: the sheet asks keep or take
+    frame.locator('[data-action="roll-wound-check-go"]').click()
+    frame.locator('button:visible', has_text="Keep Light Wounds").click()
+    restore_dice(page)
+    _roller_gone(page)
     page.wait_for_function(f"document.querySelector('[data-testid=\"npc-lw-{npc_id}\"]')?.textContent !== '0' || document.querySelector('[data-testid=\"npc-sw-{npc_id}\"]')?.textContent !== '0'")
     tn = _state(page, live_server_url, gid)["npcs"][0]["tn_to_be_hit"]
     shown = page_anon.locator(f'[data-testid="npc-public-tn-{npc_id}"]')

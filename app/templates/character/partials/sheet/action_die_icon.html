@@ -1,0 +1,15 @@
+{# One action die as the sheet draws it, for the Alpine variable `die`
+   ({value, spent, athletics_only}). Shared by the sheet's Actions section
+   and the combat page's dice. #}
+                                {# Same SVG kite shape as the roll-animation
+                                   dice (see app/static/js/dice.js). Color
+                                   variants are categorical only: spent,
+                                   Kakita Phase 0 interrupt, Togashi athletics-
+                                   only (blue), or default. #}
+                                <svg viewBox="0 0 100 116" xmlns="http://www.w3.org/2000/svg"
+                                     class="die action-die"
+                                     :class="(die.spent ? 'spent ' : '') + (die.athletics_only ? 'athletics-only ' : '') + (die.value === 0 ? 'phase-zero ' : '') + (die.value === 10 ? 'two-digit' : '')">
+                                    <path class="die-shape" d="M 54.59 6.55 L 95.41 64.85 Q 100 71.4 94.03 76.73 L 55.97 110.67 Q 50 116 44.03 110.67 L 5.97 76.73 Q 0 71.4 4.59 64.85 L 45.41 6.55 Q 50 0 54.59 6.55 Z"/>
+                                    <text class="die-text" x="50" y="65" text-anchor="middle" dominant-baseline="middle"
+                                          x-text="die.value"></text>
+                                </svg>

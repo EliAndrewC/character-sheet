@@ -22,7 +22,7 @@
   // playerView: the GM's "Player view" tab (?view=player), shown as players
   // see it for screen sharing. It polls the public state, and keeps polling
   // while hidden: a shared window can count as hidden when it is covered.
-  window.combatPage = function (groupId, gm, state, npcTypes, share, weapons, playerView) {
+  window.combatPage = function (groupId, gm, state, npcTypes, share, playerView) {
     return {
       groupId: groupId,
       gm: gm,
@@ -30,7 +30,6 @@
       state: state,
       npcTypes: npcTypes,
       share: share,
-      weapons: weapons,
       busy: false,
       error: "",
       fightName: "",
@@ -38,6 +37,7 @@
       roster: null,
       dlg: null,
       _timer: null,
+      _roller: null,
 
       start: function () {
         var self = this;
@@ -45,6 +45,11 @@
         // A tab coming back into view catches up at once, not a tick later.
         document.addEventListener("visibilitychange", function () {
           if (!document.hidden) self.poll();
+        });
+        window.addEventListener("message", function (e) {
+          if (e.origin === window.location.origin && e.data && e.data.type === "l7r-npc-roller-closed") {
+            self.onRollerClosed();
+          }
         });
       },
 
@@ -193,15 +198,49 @@
         await this.post("/npcs/" + npc.id + "/remove");
       },
 
-      // ---- dialogs ----
-      openMenu: function (npc, die) {
-        this.dlg = { kind: "menu", npc: npc, die: die, error: "", step: null, result: null,
-                     void: 0, label: "", attackTotal: null, attacker: "", predeclared: false,
-                     interrupt: false, secondDie: null };
+      // ---- the NPC roll overlay ----
+      // An NPC's dice, light wounds and rolls use the sheet's OWN die menu,
+      // light-wounds modal and roll modals (one implementation): they are
+      // served for that NPC by /npcs/{id}/roller and laid over this page in
+      // a full-window, transparent iframe. ``die`` opens that die's menu
+      // just under the clicked die; null opens the light-wounds modal (its
+      // wound check is the sheet's). The overlay says when nothing is open
+      // any more; then it goes and the state refreshes.
+      openRoller: function (npc, die, event) {
+        this.closeRoller();
+        var query = "?wounds=1";
+        if (die !== null) {
+          var r = event.currentTarget.getBoundingClientRect();
+          query = "?die=" + die + "&x=" + Math.round(r.left + r.width / 2) + "&y=" + Math.round(r.bottom);
+        }
+        var frame = document.createElement("iframe");
+        frame.src = this.url("/npcs/" + npc.id + "/roller") + query;
+        frame.title = npc.name;
+        frame.setAttribute("data-testid", "npc-roller-frame");
+        frame.style.cssText = "position:fixed;inset:0;width:100vw;height:100vh;border:0;" +
+          "z-index:60;background:transparent;color-scheme:normal";
+        frame.allowTransparency = true;
+        document.body.appendChild(frame);
+        this._roller = { frame: frame, npc: npc.id };
       },
+      closeRoller: function () {
+        if (this._roller) this._roller.frame.remove();
+        this._roller = null;
+      },
+      onRollerClosed: async function () {
+        var npcId = this._roller && this._roller.npc;
+        this.closeRoller();
+        await this.refresh();
+        // At 2 x Earth serious wounds the GM says unconscious or dead (D9).
+        var npc = (this.state.npcs || []).find(function (n) { return n.id === npcId; });
+        if (npc && npc.status === "fighting" && npc.serious_wounds >= npc.max_serious_wounds) {
+          this.promptDown(npc);
+        }
+      },
+
+      // ---- dialogs ----
       openDialog: function (kind, npc) {
-        var d = { kind: kind, npc: npc, error: "", result: null, void: 0, chosen: false };
-        if (kind === "damage") d.amount = null;
+        var d = { kind: kind, npc: npc, error: "" };
         if (kind === "adjust") {
           d.light = npc.light_wounds; d.serious = npc.serious_wounds; d.voidPts = npc.void;
         }
@@ -210,18 +249,9 @@
         this.dlg = d;
       },
       closeDialog: function () { this.dlg = null; },
-      dieValue: function () {
-        var die = this.dlg && this.dlg.npc.action_dice[this.dlg.die];
-        return die ? die.value : "?";
-      },
       dialogTitle: function () {
         if (!this.dlg) return "";
         var titles = {
-          menu: "What does " + this.dlg.npc.name + " do?",
-          attack: this.dlg.npc.name + ": " + (this.dlg.attack ? this.dlg.attack.label : "Attack"),
-          parry: this.dlg.npc.name + ": Parry",
-          other: this.dlg.npc.name + ": Something else",
-          damage: this.dlg.npc.name + " took damage",
           down: this.dlg.npc.name + " is down",
           adjust: "Adjust " + this.dlg.npc.name,
           rebuild: "Rebuild " + this.dlg.npc.name,
@@ -230,77 +260,6 @@
         return titles[this.dlg.kind] || "";
       },
 
-      chooseAttack: function (atk) {
-        this.dlg.kind = "attack";
-        this.dlg.attack = atk;
-        this.dlg.step = "target";
-      },
-      chooseTarget: function (pc) {
-        this.dlg.target = pc;
-        this.dlg.tn = pc ? pc.tn_to_be_hit : null;
-        this.dlg.parrySkill = pc ? pc.parry : 0;
-        this.dlg.step = "roll";
-      },
-      rollAttack: async function () {
-        var d = this.dlg;
-        var body = { roll_key: d.attack.key, die: d.die, tn: d.tn, void: d.void || 0 };
-        if (d.target) body.target_id = d.target.id;
-        var data = await this.post("/npcs/" + d.npc.id + "/attack", body);
-        if (data === null) return;
-        d.result = data;
-        d.parry = "none";
-        d.weapon = "katana";
-        d.damage = null;
-        d.step = "result";
-      },
-      rollDamage: async function () {
-        var d = this.dlg;
-        var body = { parry: d.parry, weapon: d.weapon };
-        if (d.parry === "failed") body.parry_skill = d.parrySkill;
-        var data = await this.post("/actions/" + d.result.action_id + "/damage", body);
-        if (data === null) return;
-        d.damage = data.outcome === "parried" ? "parried" : data.damage;
-      },
-      rollParry: async function () {
-        var d = this.dlg;
-        var dice = [d.die];
-        if (d.interrupt) {
-          if (d.secondDie === null || d.secondDie === "") { d.error = "Pick the second die"; return; }
-          dice.push(Number(d.secondDie));
-        }
-        var body = { dice: dice, attack_total: d.attackTotal, void: d.void || 0,
-                     predeclared: !!d.predeclared };
-        if (d.attacker) body.attacker_id = Number(d.attacker);
-        var data = await this.post("/npcs/" + d.npc.id + "/parry", body);
-        if (data !== null) d.result = data;
-      },
-      doOther: async function () {
-        var d = this.dlg;
-        var data = await this.post("/npcs/" + d.npc.id + "/other", { die: d.die, label: d.label });
-        if (data !== null) this.closeDialog();
-      },
-      takeDamage: async function () {
-        var d = this.dlg;
-        var data = await this.post("/npcs/" + d.npc.id + "/take-damage",
-                                   { amount: d.amount, void: d.void || 0 });
-        if (data === null) return;
-        d.result = data;
-        if (data.down_prompt) this.promptDown(d.npc);
-      },
-      woundCheckText: function () {
-        var r = this.dlg.result;
-        if (r.passed) return "Wound check " + r.total + " vs " + r.light_wounds + " - passed";
-        return "Wound check " + r.total + " vs " + r.light_wounds + " - failed, " +
-          r.serious_wounds_taken + " serious wound" + (r.serious_wounds_taken === 1 ? "" : "s");
-      },
-      keepLightWounds: function () { this.dlg.chosen = true; this.closeDialog(); },
-      takeSeriousWound: async function () {
-        var npc = this.dlg.npc;
-        var data = await this.post("/npcs/" + npc.id + "/take-serious-wound");
-        if (data === null) return;
-        this.dlg.chosen = true;
-        if (data.down_prompt) this.promptDown(npc); else this.closeDialog();
-      },
       promptDown: function (npc) {
         this.dlg = { kind: "down", npc: npc, error: "" };
       },

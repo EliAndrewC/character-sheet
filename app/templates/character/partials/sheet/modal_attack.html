@@ -44,6 +44,16 @@
                         before using <span x-text="attackActionName()"></span>?
                     </div>
 
+                    <div x-show="combatTargets.length" x-cloak class="mb-3">
+                        <label class="block text-sm font-medium mb-1">Target</label>
+                        <select @change="atkPickTarget($event.target.value)" data-testid="atk-target"
+                                class="w-full border rounded px-2 py-1.5 text-sm">
+                            <option value="" :selected="atkTargetId === null">- None (enter a TN) -</option>
+                            <template x-for="t in combatTargets" :key="t.id">
+                                <option :value="t.id" :selected="atkTargetId === t.id" x-text="t.name + ' (TN ' + t.tn + ')'"></option>
+                            </template>
+                        </select>
+                    </div>
                     <div class="grid grid-cols-2 gap-4">
                         <div>
                             <label class="block text-sm font-medium mb-1">

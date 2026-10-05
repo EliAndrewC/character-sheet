@@ -23,7 +23,7 @@ from app.services.auth import (
     get_admin_ids,
     get_all_editors,
 )
-from app.services import roll_sessions
+from app.services import fight_log, roll_sessions
 from app.services.roll_descriptions import label_for_roll
 from app.services.rolls_history import (
     coerce_action_die_spent,
@@ -421,6 +421,7 @@ async def make_roll(request: Request, char_id: int, db: Session = Depends(get_db
         )
     except roll_sessions.RollRefused as exc:
         return JSONResponse({"error": str(exc)}, status_code=400)
+    fight_log.record_roll(db, character, body, result)
     db.commit()
     return JSONResponse(result)
 
@@ -462,5 +463,6 @@ async def act_on_roll(request: Request, char_id: int, session_id: str,
     except roll_sessions.RollRefused as exc:
         return JSONResponse({"error": str(exc), "tracking": roll_sessions.tracking_snapshot(character)},
                             status_code=400)
+    fight_log.record_act(db, character, session_id, action, result)
     db.commit()
     return JSONResponse(result)

@@ -20,14 +20,14 @@ def _app_modules():
 
 
 def _annotated(module):
-    for _name, obj in vars(module).items():
+    for _name, obj in list(vars(module).items()):  # reading annotations can import
         if getattr(obj, "__module__", None) != module.__name__:
             continue
         if inspect.isfunction(obj):
             yield obj
         elif inspect.isclass(obj):
             yield obj
-            yield from (m for m in vars(obj).values() if inspect.isfunction(m))
+            yield from [m for m in list(vars(obj).values()) if inspect.isfunction(m)]
 
 
 def test_every_annotation_in_app_resolves():

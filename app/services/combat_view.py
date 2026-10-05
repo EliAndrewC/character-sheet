@@ -23,7 +23,7 @@ from sqlalchemy.orm import Session
 from app.models import Character, Encounter, EncounterAction, GamingGroup
 from app.services import npc_generator as gen
 from app.services import npcs
-from app.services.combat_actions import attack_options, tn_to_be_hit
+from app.services.combat_actions import tn_to_be_hit
 from app.services.dice import is_impaired
 from app.services.per_adventure import per_adventure_abilities, remaining
 from app.services.void_spend import void_limits, void_pools
@@ -63,8 +63,10 @@ def _dice(character: Character, *, spent: bool) -> List[Dict[str, Any]]:
         if d.get("spent") and not spent:
             continue
         entry = {"value": d.get("value")}
-        if spent:
+        if spent:  # the GM's view: the sheet's die icon and its tooltip
             entry["spent"] = bool(d.get("spent"))
+            entry["spent_by"] = d.get("spent_by") or ""
+            entry["athletics_only"] = bool(d.get("athletics_only"))
         out.append(entry)
     return out
 
@@ -190,7 +192,6 @@ def gm_state(db: Session, group: GamingGroup) -> Dict[str, Any]:
             "type": gen.npc_type_label(g.get("npc_type") or npcs._infer_type(npc)),
             "earned_xp": npc.earned_xp or 0,
             "combat_share": g.get("combat_share"),
-            "attacks": attack_options(npc),
         })
     return {
         "rev": _rev(encounter, pcs + [link.character for link in links]),
