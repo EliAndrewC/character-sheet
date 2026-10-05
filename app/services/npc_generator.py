@@ -28,6 +28,7 @@ import importlib.metadata
 import json
 import os
 import random
+import re
 import statistics
 import subprocess
 from typing import Any, Dict, List, Optional, Tuple
@@ -35,6 +36,7 @@ from typing import Any, Dict, List, Optional, Tuple
 from simulation.schools.factory import get_school
 from simulation.templates.generator import generate_template
 from simulation.templates.strategies import SCHOOL_NAMES as SIM_SCHOOL_NAMES
+from simulation.templates.strategies import SCHOOL_PRIORITIES as SIM_SCHOOL_PRIORITIES
 
 from app.game_data import (
     ADVANTAGES,
@@ -54,6 +56,7 @@ from app.services.xp import (
     _advantage_is_combat,
     _combat_advantage_labels,
     advantage_items,
+    calculate_total_xp,
     disadvantage_items,
 )
 
@@ -350,6 +353,90 @@ def match_trait_lines(lines: List[str]) -> Tuple[Dict[str, Any], List[str]]:
 
 
 # ---------------------------------------------------------------------------
+# Recorded stats
+# ---------------------------------------------------------------------------
+# Numbers the GM has already used in play ("NPC numbers: Air 4, sincerity 1"
+# in an Obsidian Portal character's GM info). They do not add XP: they move to
+# the front of the build order, so the same budget buys them first.
+
+_RINGS = ("Air", "Earth", "Fire", "Water", "Void")
+
+
+def _stat_names() -> Dict[str, str]:
+    """Lower-cased stat name or id -> canonical key (ring name or id)."""
+    names: Dict[str, str] = {r.lower(): r for r in _RINGS}
+    names.update(attack="attack", parry="parry")
+    for catalog in (SKILLS, SCHOOL_KNACKS):
+        for sid, entry in catalog.items():
+            names[sid] = sid
+            names[entry.name.lower()] = sid
+    return names
+
+
+def normalize_recorded(recorded: Optional[Dict[str, Any]]) -> Dict[str, int]:
+    """Validated recorded stats keyed by ring name or skill / knack id."""
+    names = _stat_names()
+    out: Dict[str, int] = {}
+    for key, value in (recorded or {}).items():
+        canonical = names.get(str(key).strip().lower())
+        if canonical is None:
+            raise ValueError(f"unknown stat {key!r}")
+        try:
+            rank = int(value)
+        except (TypeError, ValueError):
+            raise ValueError(f"{key} must be a whole number") from None
+        if not 0 <= rank <= 6:
+            raise ValueError(f"{key} must be between 0 and 6")
+        out[canonical] = rank
+    return out
+
+
+_STAT_LINE = re.compile(r"^\s*[-*]?\s*(.+?)\s+(\d+)\s*$")
+
+
+def match_stat_lines(lines: List[str]) -> Tuple[Dict[str, int], List[str]]:
+    """``(recorded, unrecognised lines)`` from "- Air 4" style lines."""
+    names = _stat_names()
+    recorded: Dict[str, int] = {}
+    unknown: List[str] = []
+    for line in lines:
+        if not line.strip():
+            continue
+        m = _STAT_LINE.match(line)
+        key = names.get(m.group(1).strip().lower()) if m else None
+        if key is None:
+            unknown.append(line.strip())
+        else:
+            recorded[key] = int(m.group(2))
+    return recorded, unknown
+
+
+def _recorded_plan(sim_key: str, recorded: Dict[str, int]) -> Tuple[list, Dict[str, int]]:
+    """``(priority entries to put first, stats to buy from the remainder)``.
+
+    What the simulator's own build order buys for this school (rings, attack,
+    parry, its knacks and skills) leads that order, inside the combat budget;
+    anything else (a courtier's Heraldry on a bushi) is bought afterwards out
+    of the non-combat XP the simulator leaves unspent.
+    """
+    priorities = SIM_SCHOOL_PRIORITIES[SIM_SCHOOL_NAMES[sim_key]]
+    sim_skills = {name for cat, name, _r in priorities if cat == "skill"} | {"attack", "parry"}
+    to_sim = {v: k for k, v in SIM_KNACK_RENAMES.get(sim_key, {}).items()}
+    lead: list = []
+    rest: Dict[str, int] = {}
+    for key, rank in recorded.items():
+        if key in _RINGS:
+            lead.append(("ring", key.lower(), rank))
+            continue
+        sim_name = to_sim.get(key, key).replace("_", " ")
+        if sim_name in sim_skills:
+            lead.append(("skill", sim_name, rank))
+        elif rank > 0:
+            rest[key] = rank
+    return lead + list(priorities), rest
+
+
+# ---------------------------------------------------------------------------
 # Building
 # ---------------------------------------------------------------------------
 
@@ -396,6 +483,7 @@ def _technique_choices(school_id: str, sim_school: Any) -> Dict[str, Any]:
 def build_npc(
     npc_type: str, earned_xp: int, combat_share: float,
     traits: Optional[Dict[str, Any]] = None,
+    recorded: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     """Character fields for one NPC, in ``Character.to_dict()`` shape.
 
@@ -408,12 +496,17 @@ def build_npc(
     combat advantages (Lucky, Strength of the Earth, Quick Healer, combat
     specializations) come out of the combat share; the rest come out of the
     unspent remainder, and only shrink the combat spend when they do not fit.
+
+    ``recorded`` (``normalize_recorded``) are stats already used in play.
+    They cost no extra XP: they are bought first (``_recorded_plan``), and a
+    build that cannot reach one is refused rather than quietly built short.
     """
     if npc_type not in npc_types():
         raise ValueError(f"unknown NPC type {npc_type!r}")
     if earned_xp < 0:
         raise ValueError("earned XP cannot be negative")
     traits = normalize_traits(traits)
+    recorded = normalize_recorded(recorded)
     adv_combat, adv_total, gained = trait_budget(traits)
     total = STARTING_XP + earned_xp
     budget = total + gained
@@ -431,7 +524,13 @@ def build_npc(
     unchanged = sim_combat == int(total * combat_share)
     fraction = combat_share if unchanged else min(1.0, (sim_combat + 0.5) / total)
     sim_key = npc_types()[npc_type]
-    config, breakdown = generate_template(sim_key, total, combat_xp_fraction=fraction)
+    if recorded:
+        priorities, rest = _recorded_plan(sim_key, recorded)
+        config, breakdown = generate_template(
+            sim_key, total, priorities=priorities, combat_xp_fraction=fraction)
+    else:
+        rest = {}
+        config, breakdown = generate_template(sim_key, total, combat_xp_fraction=fraction)
 
     is_profession = npc_type == WAVE_MAN
     school_id = "" if is_profession else npc_type
@@ -459,6 +558,9 @@ def build_npc(
             raise LookupError(f"simulator skill {name!r} has no match in this app")
     for knack in school_knacks:
         knacks.setdefault(knack, 1)  # school knacks start at 1 for free
+    for key, rank in rest.items():
+        bucket = knacks if key in school_knacks else foreign if key in SCHOOL_KNACKS else skills
+        bucket[key] = max(rank, bucket.get(key, 0))
 
     abilities: Dict[str, int] = {}
     for name, count in config.abilities.items():
@@ -467,6 +569,8 @@ def build_npc(
         abilities[_SIM_ABILITY_TO_SHEET[name]] = count
 
     rings = {ring.capitalize(): rank for ring, rank in config.rings.items()}
+    if recorded:
+        _check_recorded(recorded, rings, attack, parry, {**skills, **knacks, **foreign})
     generation = {
         "npc_type": npc_type,
         "earned_xp": earned_xp,
@@ -476,7 +580,9 @@ def build_npc(
     }
     if any(traits.values()):
         generation["traits"] = traits
-    return {
+    if recorded:
+        generation["recorded"] = recorded
+    out = {
         "school": school_id,
         "school_ring_choice": "" if is_profession else sim_school.school_ring().capitalize(),
         "profession": PROFESSION_CHARACTER_TYPE if is_profession else "",
@@ -493,6 +599,23 @@ def build_npc(
         **traits,
         "generation": generation,
     }
+    if rest:
+        spent = calculate_total_xp(dict(out, name=""))["total"]
+        if spent > budget:
+            raise ValueError(
+                f"the recorded stats need more XP than this NPC has ({spent} of {budget})"
+            )
+    return out
+
+
+def _check_recorded(recorded: Dict[str, int], rings: Dict[str, int], attack: int,
+                    parry: int, ranks: Dict[str, int]) -> None:
+    for key, rank in recorded.items():
+        have = rings.get(key) if key in _RINGS else {"attack": attack, "parry": parry}.get(
+            key, ranks.get(key, 0))
+        if have < rank:
+            name = key if key in _RINGS else key.replace("_", " ")
+            raise ValueError(f"the build could not reach {name} {rank} within its XP")
 
 
 def never_below(previous: Dict[str, Any], build: Dict[str, Any]) -> Dict[str, Any]:

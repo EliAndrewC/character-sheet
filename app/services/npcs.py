@@ -150,7 +150,7 @@ def rebuild_npc(
     share = gen.clamp_combat_share(combat_share if combat_share is not None
                                    else g.get("combat_share", gen.default_combat_share()))
     earned = earned_xp if earned_xp is not None else npc.earned_xp or 0
-    build = gen.build_npc(npc_type, earned, share, traits=g.get("traits"))
+    build = gen.build_npc(npc_type, earned, share, traits=g.get("traits"), recorded=g.get("recorded"))
     if earned >= (npc.earned_xp or 0) and combat_share is None:
         build = gen.never_below(npc.to_dict(), build)
     apply_build(npc, build)
@@ -300,7 +300,8 @@ def generate(
             share = plan["combat_share"]
             if share is None:
                 share = gen.draw_combat_share(plan["combat_target"], rng)
-            build = gen.build_npc(plan["npc_type"], earned, share, traits=plan["traits"])
+            build = gen.build_npc(plan["npc_type"], earned, share, traits=plan["traits"],
+                                  recorded=plan["recorded"])
             npc = create_npc(db, group.id, owner_discord_id, build, names[i])
             add_to_encounter(db, encounter, npc)
             created.append(npc)
@@ -323,8 +324,9 @@ def _plan_row(row: Dict[str, Any]) -> Dict[str, Any]:
     override = None if override in (None, "") else gen.clamp_combat_share(_share(override))
     names = [str(n).strip()[:80] for n in (row.get("names") or []) if str(n).strip()]
     traits = gen.normalize_traits(row.get("traits"))
+    recorded = gen.normalize_recorded(row.get("recorded"))
     return {
-        "_planned": True, "traits": traits,
+        "_planned": True, "traits": traits, "recorded": recorded,
         "npc_type": npc_type, "count": count, "earned_xp": earned,
         "roll_extra": bool(row.get("roll_extra", True)),
         "combat_target": target, "combat_share": override, "names": names[:count],

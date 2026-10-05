@@ -393,10 +393,10 @@ def _capture_budget(monkeypatch):
     seen = {}
     real = gen.generate_template
 
-    def spy(sim_key, total_xp, combat_xp_fraction):
+    def spy(sim_key, total_xp, combat_xp_fraction, **kw):
         seen["total"] = total_xp
         seen["combat"] = int(total_xp * combat_xp_fraction)
-        return real(sim_key, total_xp, combat_xp_fraction=combat_xp_fraction)
+        return real(sim_key, total_xp, combat_xp_fraction=combat_xp_fraction, **kw)
 
     monkeypatch.setattr(gen, "generate_template", spy)
     return seen
@@ -549,3 +549,67 @@ def test_a_specialization_line_is_left_for_the_gm():
     traits, flavor = gen.match_trait_lines(["Specialization", "Specialization: spears"])
     assert traits["advantages"] == [] and traits["specializations"] == []
     assert flavor == ["Specialization", "Specialization: spears"]
+
+
+# ---------------------------------------------------------------------------
+# Recorded stats ("NPC numbers" already used in play)
+# ---------------------------------------------------------------------------
+
+def test_recorded_stats_are_bought_first_without_raising_the_spend():
+    plain = gen.build_npc("yogo_warden", 105, 0.67)
+    pinned = gen.build_npc("yogo_warden", 105, 0.67, recorded={"Air": 4, "Water": 3})
+    assert pinned["rings"]["Air"] >= 4 and pinned["rings"]["Water"] >= 3
+    assert pinned["generation"]["combat_budget"] == plain["generation"]["combat_budget"]
+    for b in (plain, pinned):
+        spent = calculate_total_xp(_as_character(b))["total"]
+        assert spent <= b["generation"]["combat_budget"]
+    assert pinned["generation"]["recorded"] == {"Air": 4, "Water": 3}
+
+
+def test_recorded_noncombat_skills_come_from_the_remainder(monkeypatch):
+    seen = _capture_budget(monkeypatch)
+    build = gen.build_npc("yogo_warden", 105, 0.67,
+                          recorded={"sincerity": 1, "heraldry": 3, "tact": 2, "precepts": 0})
+    assert seen["combat"] == int(255 * 0.67)  # the combat spend is untouched
+    assert build["skills"]["sincerity"] == 1 and build["skills"]["heraldry"] == 3
+    assert build["skills"]["tact"] == 2 and "precepts" not in build["skills"]
+    assert calculate_total_xp(_as_character(build))["total"] <= 255
+
+
+def test_recorded_knacks_and_combat_skills_lead_the_build_order():
+    build = gen.build_npc("brotherhood_of_shinsei_monk", 0, 0.75,
+                          recorded={"precepts": 3, "attack": 3, "conviction": 3})
+    assert build["skills"]["precepts"] >= 3 and build["attack"] >= 3
+    assert build["knacks"]["conviction"] >= 3
+
+
+def test_a_recorded_lunge_reaches_the_simulators_hiruma_as_counterattack():
+    build = gen.build_npc("hiruma_scout", 0, 0.75, recorded={"lunge": 3})
+    assert build["knacks"]["lunge"] >= 3
+
+
+def test_recorded_stats_that_do_not_fit_are_refused():
+    with pytest.raises(ValueError, match="could not reach Air 6"):
+        gen.build_npc("yogo_warden", 0, 0.6, recorded={"Air": 6})
+    with pytest.raises(ValueError, match="more XP than"):
+        gen.build_npc("akodo_bushi", 0, 0.91, recorded={s: 5 for s in (
+            "sincerity", "heraldry", "tact", "intimidation", "manipulation", "etiquette")})
+
+
+@pytest.mark.parametrize("recorded,message", [
+    ({"Flying": 3}, "unknown stat 'Flying'"),
+    ({"Air": "x"}, "whole number"),
+    ({"Air": 9}, "between 0 and 6"),
+])
+def test_bad_recorded_stats_are_refused(recorded, message):
+    with pytest.raises(ValueError, match=message):
+        gen.build_npc("akodo_bushi", 50, 0.7, recorded=recorded)
+
+
+def test_npc_number_lines_parse_to_stat_ids():
+    recorded, unknown = gen.match_stat_lines(
+        ["- Air 4", "- Water 3", "- sincerity 1", "- precepts 0", "  - Double Attack 2",
+         "- Parry 3", "- Bushido 2", "nonsense", ""])
+    assert recorded == {"Air": 4, "Water": 3, "sincerity": 1, "precepts": 0,
+                        "double_attack": 2, "parry": 3}
+    assert unknown == ["- Bushido 2", "nonsense"]
