@@ -2175,6 +2175,7 @@ The combat page is public (design D27): the GM gets the tracker, everyone else t
 - [x] NPC parry (pre-declared) from an action die, and "something else" spends a die with the GM's label - `test_combat.py::test_npc_parries_and_spends_a_die_on_something_else`
 - [x] "Took damage" rolls the NPC's wound check (keep-or-take on a pass); adjusting serious wounds to 2 x Earth prompts unconscious / dead and sets the status - `test_combat.py::test_npc_takes_damage_and_goes_down`
 - [x] Public view shows the NPC's name, this round's actions with totals, and last round's action count, but no dice, void, XP or GM controls; the public poll's NPC keys are exactly the allow-list - `test_combat.py::test_public_view_shows_totals_but_not_how`
+- [x] GM "Player view" opens a new tab (`?view=player`) rendered as players see it (no GM controls, no XP), with a "GM view" way back; it follows the GM's actions in the other tab by polling, and the GM's tab keeps the tracker - `test_combat.py::test_gm_opens_a_player_view_tab_that_follows_the_fight`
 - [x] A player gets 404 on an NPC sheet; the home page never lists NPCs; the GM can open the sheet - `test_combat.py::test_players_cannot_open_an_npc_sheet_and_home_never_lists_npcs`
 - [x] Ending a fight keeps its NPCs in the roster; a new fight brings one back with gained XP - `test_combat.py::test_roster_brings_an_npc_back_to_the_next_fight`
 - [x] Rebuild (earned XP + combat %) and rename an NPC from its card - `test_combat.py::test_rebuild_and_rename_an_npc`

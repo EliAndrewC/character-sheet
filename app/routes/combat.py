@@ -495,17 +495,26 @@ def _group_or_404(db: Session, group_id: int) -> Optional[GamingGroup]:
 
 
 @router.get("/groups/{group_id}/combat", response_class=HTMLResponse)
-def combat_page(group_id: int, request: Request, db: Session = Depends(get_db)):
+def combat_page(group_id: int, request: Request, view: Optional[str] = None,
+                db: Session = Depends(get_db)):
     """Public (D27). The GM, logged in, gets the tracker; everyone else -
-    logged in or not - gets the same public view."""
+    logged in or not - gets the same public view.
+
+    ``?view=player`` gives the GM the public view in THIS tab only (the URL
+    is the toggle, so the GM's other tabs keep the tracker): a tab to share
+    on screen. It is rendered from the public state, so nothing GM-only
+    reaches it, and it polls ``/state?view=player``."""
     group = _group_or_404(db, group_id)
     if group is None:
         return HTMLResponse("Group not found", status_code=404)
-    gm = _gm_id(request) is not None
+    is_gm = _gm_id(request) is not None
+    player_view = view == "player"
+    gm = is_gm and not player_view
     state = combat_view.gm_state(db, group) if gm else combat_view.public_state(db, group)
     low, high = gen.combat_share_bounds()
     context = {
         "group": group, "gm": gm, "state": state,
+        "gm_in_player_view": is_gm and player_view,
         "npc_types": [{"id": t, "label": label} for t, label in gen.npc_type_options()] if gm else [],
         "share": {"default": round(100 * gen.default_combat_share()), "min": round(100 * low), "max": round(100 * high)},
         "weapons": list(cm.WEAPONS),
@@ -514,12 +523,14 @@ def combat_page(group_id: int, request: Request, db: Session = Depends(get_db)):
 
 
 @router.get("/groups/{group_id}/combat/state")
-def combat_state(group_id: int, request: Request, db: Session = Depends(get_db)):
-    """What the page polls. The GM's full state, or the public allow-list."""
+def combat_state(group_id: int, request: Request, view: Optional[str] = None,
+                 db: Session = Depends(get_db)):
+    """What the page polls. The GM's full state, or the public allow-list
+    (always, for a ``?view=player`` tab)."""
     group = _group_or_404(db, group_id)
     if group is None:
         return _error("No such group", 404)
-    if _gm_id(request) is not None:
+    if _gm_id(request) is not None and view != "player":
         return combat_view.gm_state(db, group)
     return combat_view.public_state(db, group)
 

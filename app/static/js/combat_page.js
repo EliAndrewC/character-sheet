@@ -19,10 +19,14 @@
     };
   }
 
-  window.combatPage = function (groupId, gm, state, npcTypes, share, weapons) {
+  // playerView: the GM's "Player view" tab (?view=player), shown as players
+  // see it for screen sharing. It polls the public state, and keeps polling
+  // while hidden: a shared window can count as hidden when it is covered.
+  window.combatPage = function (groupId, gm, state, npcTypes, share, weapons, playerView) {
     return {
       groupId: groupId,
       gm: gm,
+      playerView: !!playerView,
       state: state,
       npcTypes: npcTypes,
       share: share,
@@ -38,6 +42,14 @@
       start: function () {
         var self = this;
         this._timer = setInterval(function () { self.poll(); }, POLL_MS);
+        // A tab coming back into view catches up at once, not a tick later.
+        document.addEventListener("visibilitychange", function () {
+          if (!document.hidden) self.poll();
+        });
+      },
+
+      stateUrl: function () {
+        return this.url("/state") + (this.playerView ? "?view=player" : "");
       },
 
       url: function (path) {
@@ -45,9 +57,9 @@
       },
 
       poll: async function () {
-        if (this.busy || document.hidden) return;
+        if (this.busy || (document.hidden && !this.playerView)) return;
         try {
-          var resp = await fetch(this.url("/state"), { cache: "no-store" });
+          var resp = await fetch(this.stateUrl(), { cache: "no-store" });
           if (!resp.ok) return;
           var data = await resp.json();
           if (data.rev !== this.state.rev) this.state = data;
@@ -55,7 +67,7 @@
       },
 
       refresh: async function () {
-        var resp = await fetch(this.url("/state"), { cache: "no-store" });
+        var resp = await fetch(this.stateUrl(), { cache: "no-store" });
         if (resp.ok) this.state = await resp.json();
       },
 

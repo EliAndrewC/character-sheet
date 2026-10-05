@@ -248,3 +248,29 @@ def test_combat_page_has_no_js_errors_and_fits_a_phone(page, live_server_url):
     overflow = page.evaluate("document.documentElement.scrollWidth > document.documentElement.clientWidth")
     assert not overflow
     assert errors == []
+
+
+def test_gm_opens_a_player_view_tab_that_follows_the_fight(page, live_server_url):
+    """The GM's "Player view" opens this page in a new tab as players see it
+    (for screen sharing); it keeps updating from the GM's own tab, even while
+    hidden, and the GM's tab keeps the full tracker."""
+    gid = _group_with_pc(page, live_server_url, "SharePC")
+    npc_id = _start_fight_with_wave_men(page, live_server_url, gid)
+    with page.context.expect_page() as new_tab:
+        page.locator('[data-testid="open-player-view"]').click()
+    shared = new_tab.value
+    shared.wait_for_selector(f'[data-testid="npc-card-{npc_id}"]')
+    assert "view=player" in shared.url
+    assert shared.locator('[data-testid="new-round-btn"]').count() == 0
+    assert shared.locator('[data-testid="open-player-view"]').count() == 0
+    assert "earned XP" not in shared.locator(f'[data-testid="npc-card-{npc_id}"]').text_content()
+    assert shared.locator('[data-testid="leave-player-view"]').is_visible()
+
+    # The GM acts in the original tab; the shared tab follows by itself.
+    page.bring_to_front()
+    page.locator('[data-testid="new-round-btn"]').click()
+    shared.wait_for_function(
+        "document.querySelector('[data-testid=\"combat-round\"]').textContent.includes('Round 1')",
+        timeout=15000)
+    assert page.locator('[data-testid="new-round-btn"]').is_visible()
+    assert page.locator(f'[data-testid^="npc-die-{npc_id}-"]').count() > 0

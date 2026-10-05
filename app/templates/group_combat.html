@@ -12,7 +12,7 @@
    allow-listed payload (app/services/combat_view.public_state) - nothing
    about an NPC beyond its name, wounds, being down, and this round's
    actions with their totals ever reaches a player's browser. #}
-<div x-data='combatPage({{ group.id }}, {{ gm | tojson }}, {{ state | tojson }}, {{ npc_types | tojson }}, {{ share | tojson }}, {{ weapons | tojson }})'
+<div x-data='combatPage({{ group.id }}, {{ gm | tojson }}, {{ state | tojson }}, {{ npc_types | tojson }}, {{ share | tojson }}, {{ weapons | tojson }}, {{ gm_in_player_view | tojson }})'
      x-init="start()"
      class="space-y-5 max-w-6xl mx-auto" data-testid="combat-page">
 
@@ -38,8 +38,17 @@
                 </template>
                 <a :href="'/groups/' + groupId + '/combat/rolls'" data-testid="combat-rolls-link"
                    class="text-sm text-accent hover:underline">Combat rolls</a>
+                {% if gm %}
+                <a :href="'/groups/' + groupId + '/combat?view=player'" target="_blank" rel="noopener"
+                   data-testid="open-player-view"
+                   class="relative text-sm text-accent hover:underline tooltip-trigger">Player view<span class="tooltip-content absolute right-0 top-full z-10 mt-1 p-2 bg-ink text-parchment text-xs rounded shadow-lg w-56 whitespace-normal text-left font-normal no-underline">Opens this page in a new tab exactly as the players see it - a tab to share on screen. This tab keeps the full tracker.</span></a>
+                {% endif %}
             </div>
         </template>
+        {% if gm_in_player_view %}
+        <a href="/groups/{{ group.id }}/combat" data-testid="leave-player-view"
+           class="text-xs text-ink/40 hover:text-accent hover:underline">GM view</a>
+        {% endif %}
     </div>
 
     <p x-show="error" x-cloak class="text-sm text-red-700 bg-red-50 border border-red-200 rounded px-3 py-2"

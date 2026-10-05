@@ -390,6 +390,24 @@ def test_page_and_state_for_gm_and_public(client, world):
     assert client.get("/groups/999/combat/state").status_code == 404
 
 
+def test_the_gm_can_open_this_one_tab_as_the_player_view(client, world):
+    """?view=player renders exactly what a player gets, for the GM too, so a
+    screen-shared tab shows nothing the players may not see; the GM's other
+    tabs are untouched."""
+    shared = client.get(_url(world, "?view=player"))
+    assert shared.status_code == 200
+    assert '"earned_xp"' not in shared.text and 'data-testid="builder"' in shared.text
+    assert 'data-testid="leave-player-view"' in shared.text
+    state = client.get(_url(world, "/state?view=player")).json()
+    assert state == client.get(_url(world, "/state"), headers=PLAYER).json()
+    gm = client.get(_url(world, ""))
+    assert 'data-testid="open-player-view"' in gm.text and '"earned_xp"' in gm.text
+    # A player asking for it gets what they always get, without the way back.
+    player = client.get(_url(world, "?view=player"), headers=PLAYER)
+    assert 'data-testid="leave-player-view"' not in player.text
+    assert 'data-testid="open-player-view"' not in player.text
+
+
 def test_combat_rolls_page(client, world):
     assert client.get(_url(world, "/rolls"), headers=PLAYER).status_code == 403
     assert client.get("/groups/999/combat/rolls").status_code == 404
