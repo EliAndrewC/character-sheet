@@ -244,6 +244,12 @@ def _migrate_add_columns():
                 f"ALTER TABLE users ADD COLUMN {col_name} {col_type} DEFAULT {default}"
             )
 
+    # Encounter NPCs table migrations
+    cursor.execute("PRAGMA table_info(encounter_npcs)")
+    enc_npc_cols = {row[1] for row in cursor.fetchall()}
+    if enc_npc_cols and "spent_by_round" not in enc_npc_cols:  # pragma: no cover
+        cursor.execute("ALTER TABLE encounter_npcs ADD COLUMN spent_by_round TEXT DEFAULT '{}'")
+
     # Roll History: roll_label was dropped in favour of deriving the display
     # label from payload.title at read time (see
     # app/services/roll_descriptions.label_for_roll). Drop the now-unused column

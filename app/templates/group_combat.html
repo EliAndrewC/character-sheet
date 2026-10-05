@@ -196,15 +196,25 @@
                         </div>
                     </template>
 
-                    {# Public: this round's actions (totals only) and last round's count #}
+                    {# Public: the NPC's spent dice (values are public) and "?" dice for
+                       the actions players know of from earlier rounds, then this
+                       round's rolls (totals only). #}
                     <template x-if="!gm">
-                        <div class="text-xs text-ink/70 space-y-0.5" :data-testid="'npc-actions-' + npc.id">
-                            <template x-for="(a, i) in npc.actions_this_round" :key="i">
-                                <div x-text="publicActionText(a)"></div>
-                            </template>
-                            <div x-show="npc.actions_last_round !== null" class="text-ink/50"
-                                 :data-testid="'npc-last-round-' + npc.id"
-                                 x-text="'Last round: ' + npc.actions_last_round + ' action' + (npc.actions_last_round === 1 ? '' : 's')"></div>
+                        <div class="space-y-1">
+                            <div x-show="npc.spent_dice.length || npc.unknown_dice" class="flex flex-wrap items-center gap-1"
+                                 :data-testid="'npc-public-dice-' + npc.id">
+                                <template x-for="(die, i) in publicDice(npc)" :key="i">
+                                    <span class="block" :data-testid="(die.spent ? 'npc-spent-die-' : 'npc-unknown-die-') + npc.id"
+                                          :title="die.spent ? '' : 'An action this opponent has from an earlier round, not taken yet'">
+{% include 'character/partials/sheet/action_die_icon.html' %}
+                                    </span>
+                                </template>
+                            </div>
+                            <div class="text-xs text-ink/70 space-y-0.5" :data-testid="'npc-actions-' + npc.id">
+                                <template x-for="(a, i) in npc.actions_this_round" :key="i">
+                                    <div x-text="publicActionText(a)"></div>
+                                </template>
+                            </div>
                         </div>
                     </template>
 

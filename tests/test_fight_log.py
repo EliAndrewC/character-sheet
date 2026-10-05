@@ -108,19 +108,27 @@ def test_other_rolls_and_a_pc_or_an_npc_outside_a_fight_log_nothing(client, worl
     assert _actions(world) == []
 
 
-def test_marking_a_die_spent_by_hand_logs_an_action(client, world):
+def test_marking_a_die_spent_by_hand_logs_no_action(client, world):
+    """A hand-spent die shows as a spent die; spending, unspending and
+    spending it again is still one die, not three actions."""
     _arm(world)
     npc = world["npc"]
-    r = client.post(f"/characters/{npc.id}/track/op",
-                    json={"op": "action_die", "args": {"index": 0, "action": "spend"}})
-    assert r.status_code == 200
-    (a,) = _actions(world)
-    assert a.kind == "other" and a.label == "Action" and a.detail == {"die": 3}
-    # A die the roller spends carries a label ("Attack (rolling...)"): not an extra action.
-    client.post(f"/characters/{npc.id}/track/op",
-                json={"op": "action_die", "args": {"index": 1, "action": "spend", "label": "Attack (rolling...)"}})
-    assert len(_actions(world)) == 1
+    for action in ("spend", "unspend", "spend"):
+        r = client.post(f"/characters/{npc.id}/track/op",
+                        json={"op": "action_die", "args": {"index": 0, "action": action}})
+        assert r.status_code == 200
+    assert _actions(world) == []
 
+
+def test_an_initiative_roll_on_the_npcs_sheet_closes_out_the_round(client, world):
+    """Initiative replaces the dice, so the round's spent count is noted first."""
+    s, enc, npc = world["s"], world["enc"], world["npc"]
+    enc.current_round = 1
+    npc.action_dice = [{"value": 3, "spent": True}, {"value": 7, "spent": True}, {"value": 9, "spent": False}]
+    s.commit()
+    assert _roll(client, npc, roll_key="initiative").status_code == 200
+    s.expire_all()
+    assert npcs.link_for(enc, npc.id).spent_by_round == {"1": 2}
 
 def test_the_hooks_ignore_what_is_not_theirs(client, world):
     from app.services import fight_log
@@ -132,9 +140,7 @@ def test_the_hooks_ignore_what_is_not_theirs(client, world):
     fight_log.record_act(s, npc, out["session_id"], "raise", {"damage": {"total": 9}})
     fight_log.record_act(s, pc, out["session_id"], "damage", {"damage": {"total": 9}})
     fight_log.record_act(s, npc, "no-such-session", "damage", {"damage": {"total": 9}})
-    fight_log.record_op(s, npc, "action_die", {"action": "spend", "index": 7})
-    fight_log.record_op(s, pc, "action_die", {"action": "spend", "index": 0})
-    fight_log.record_op(s, npc, "light_wounds", {"mode": "add", "value": 3})
+    fight_log.note_dice_replaced(s, pc)
     (a,) = _actions(world)
     assert "damage" not in a.detail
 

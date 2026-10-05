@@ -113,6 +113,13 @@
         if (b.left !== undefined) return b.name + ": " + b.left + "/" + b.max;
         return b.name + (b.used ? ": used" : ": ready");
       },
+      // A player's view of an NPC's dice: the spent ones (public, with
+      // their values), then a "?" for each action known from earlier rounds.
+      publicDice: function (npc) {
+        var out = (npc.spent_dice || []).map(function (v) { return { value: v, spent: true }; });
+        for (var i = 0; i < (npc.unknown_dice || 0); i++) out.push({ value: "?", spent: false });
+        return out;
+      },
       publicActionText: function (a) {
         var s = a.label;
         if (a.target) s += " on " + a.target;

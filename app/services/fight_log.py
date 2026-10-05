@@ -9,8 +9,11 @@ total and outcome, never how it was reached):
 * an attack (any live roll whose answer carries an ``attack`` block), with
   its target when the GM picked a PC in the fight, and later its damage;
 * a parry, with its outcome when the attack total it parried was given;
-* a feint;
-* an action die the GM marked spent by hand ("Mark as spent").
+* a feint.
+
+A die marked spent by hand is not an action of its own: spent dice are
+public and the view shows them (spending, unspending and spending it again
+is still one die). ``note_dice_replaced`` keeps each round's spent count.
 
 Only for an NPC in its group's active fight, and only live rolls.
 """
@@ -124,15 +127,22 @@ def record_act(db: Session, character: Character, session_id: str, action: str,
     db.flush()
 
 
-def record_op(db: Session, character: Character, op: str, args: Dict[str, Any]) -> None:
-    """After a tracking op: a die marked spent by hand is an action. A die the
-    roller spends carries a label ("Attack (rolling...)") and is logged by
-    its roll instead."""
-    if op != "action_die" or args.get("action") != "spend" or args.get("label"):
-        return
+def note_dice_replaced(db: Session, character: Character) -> None:
+    """Before an NPC's action dice are replaced (initiative, a new round):
+    note how many it spent this round. Spent dice are public; what the NPC
+    spent in earlier rounds is how many actions players know it has."""
     encounter = npc_encounter(db, character)
-    index = _int(args.get("index"))
-    dice = character.action_dice or []
-    if encounter is None or index is None or not 0 <= index < len(dice):
+    if encounter is None:
         return
-    _log(db, encounter, character, "other", "Action", detail={"die": dice[index].get("value")})
+    link = npcs.link_for(encounter, character.id)
+    key = str(encounter.current_round or 0)
+    spent = sum(1 for d in character.action_dice or [] if d.get("spent"))
+    counts = dict(link.spent_by_round or {})
+    counts[key] = max(spent, counts.get(key, 0))
+    link.spent_by_round = counts
+    db.flush()
+
+
+def known_actions(link: Any, current_round: int) -> int:
+    """The most dice the NPC spent in any earlier round of this fight."""
+    return max((n for r, n in (link.spent_by_round or {}).items() if int(r) < current_round), default=0)

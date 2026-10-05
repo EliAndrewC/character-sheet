@@ -138,7 +138,7 @@ def test_npc_parries_and_marks_a_die_spent(page, live_server_url):
         page.locator(f'[data-testid="npc-die-{npc_id}-1"]').click()
         _roller(page).locator('[data-action="action-die-spent"]').click()
         _roller_gone(page)
-        page.wait_for_function("document.querySelector('[data-testid=\"action-log\"]').textContent.includes('Action')")
+        page.wait_for_selector(f'[data-testid="npc-die-{npc_id}-1"][data-die-spent="true"]')
 
 
 def test_a_die_menu_closed_without_choosing_removes_the_overlay(page, live_server_url):
@@ -196,18 +196,19 @@ def test_public_view_shows_totals_but_not_how(page, page_anon, live_server_url):
     page_anon.goto(f"{live_server_url}/groups/{gid}/combat")
     card = page_anon.locator(f'[data-testid="npc-card-{npc_id}"]')
     assert "Wave Man 1" in card.text_content()
-    assert "Last round: 1 action" in card.text_content()
+    # One action known from round 1, not taken yet this round: one "?" die.
+    assert page_anon.locator(f'[data-testid="npc-unknown-die-{npc_id}"]').count() == 1
     # GM-only markup sits in <template x-if="gm"> blocks that never render
     # here; nothing of it reaches the page's text or elements.
     shown = card.text_content()
     for secret in ("Void", "earned XP", "% combat", "Took damage", "Roll initiative"):
         assert secret not in shown, secret
     assert page_anon.locator('[data-testid^="npc-die-"]').count() == 0
-    # The public poll carries no dice, void or stats.
+    # The public poll carries no unspent dice, void or stats.
     state = page_anon.request.get(f"{live_server_url}/groups/{gid}/combat/state").json()
     assert set(state["npcs"][0]) == {
         "id", "name", "light_wounds", "serious_wounds", "down",
-        "actions_this_round", "actions_last_round", "tn_to_be_hit",
+        "actions_this_round", "spent_dice", "unknown_dice", "tn_to_be_hit",
     }
 
 
@@ -360,3 +361,34 @@ def test_player_view_puts_wounds_on_the_name_line(page, page_anon, live_server_u
     # The GM's own card keeps its separate stats row.
     assert page.locator(f'[data-testid="npc-public-stats-{npc_id}"]').count() == 0
     assert page.locator(f'[data-testid="npc-void-{npc_id}"]').is_visible()
+
+
+def test_players_see_spent_dice_once_however_often_the_gm_changes_their_mind(page, page_anon, live_server_url):
+    """Spend, unspend, spend: players see ONE spent die with its value and no
+    extra actions; next round the action they know of is a "?" die until
+    the NPC spends a die again."""
+    gid = _group_with_pc(page, live_server_url, "DicePC")
+    npc_id = _start_fight_with_wave_men(page, live_server_url, gid)
+    _round(page, npc_id)
+    for item in ("action-die-spent", "action-die-unspent", "action-die-spent"):
+        page.locator(f'[data-testid="npc-die-{npc_id}-0"]').click()
+        _roller(page).locator(f'[data-action="{item}"]').click()
+        _roller_gone(page)
+    value = _state(page, live_server_url, gid)["npcs"][0]["action_dice"][0]["value"]
+
+    page_anon.goto(f"{live_server_url}/groups/{gid}/combat")
+    spent = page_anon.locator(f'[data-testid="npc-spent-die-{npc_id}"]')
+    spent.first.wait_for()
+    assert spent.count() == 1 and spent.first.text_content().strip() == str(value)
+    assert page_anon.locator(f'[data-testid="npc-unknown-die-{npc_id}"]').count() == 0
+    assert page_anon.locator(f'[data-testid="npc-actions-{npc_id}"]').text_content().strip() == ""
+
+    _round(page, npc_id)
+    page_anon.locator(f'[data-testid="npc-unknown-die-{npc_id}"]').first.wait_for(timeout=15000)
+    assert page_anon.locator(f'[data-testid="npc-unknown-die-{npc_id}"]').text_content().strip() == "?"
+    assert page_anon.locator(f'[data-testid="npc-spent-die-{npc_id}"]').count() == 0
+    page.locator(f'[data-testid="npc-die-{npc_id}-0"]').click()
+    _roller(page).locator('[data-action="action-die-spent"]').click()
+    _roller_gone(page)
+    page_anon.locator(f'[data-testid="npc-spent-die-{npc_id}"]').first.wait_for(timeout=15000)
+    assert page_anon.locator(f'[data-testid="npc-unknown-die-{npc_id}"]').count() == 0

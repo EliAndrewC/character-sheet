@@ -21,7 +21,7 @@ from typing import Any, Dict, List, Optional
 from sqlalchemy.orm import Session
 
 from app.models import Character, Encounter, RollHistory
-from app.services import npcs
+from app.services import fight_log, npcs
 from app.services.roll_engine import execute_initiative, impaired_now
 from app.services.tracking import start_combat_round
 
@@ -69,6 +69,7 @@ def _down_prompt(encounter: Encounter, npc: Character) -> bool:
 def roll_initiative(db: Session, encounter: Encounter, npc: Character, gm: str,
                     rng: Optional[random.Random] = None) -> List[int]:
     result = execute_initiative(npc.to_dict(), rng=rng, party_members=[])
+    fight_log.note_dice_replaced(db, npc)
     start_combat_round(npc, result["action_dice"])
     _record(db, npc, "initiative", result["payload"], gm)
     npcs.touch(encounter)
@@ -80,6 +81,8 @@ def new_round(db: Session, encounter: Encounter, gm: str,
               rng: Optional[random.Random] = None) -> Dict[int, List[int]]:
     """The GM's "New round" (D31): initiative for every NPC still fighting.
     PCs roll their own."""
+    for link in encounter.npcs:  # close out the round that is ending
+        fight_log.note_dice_replaced(db, link.character)
     encounter.current_round = (encounter.current_round or 0) + 1
     rolled = {}
     for link in encounter.npcs:

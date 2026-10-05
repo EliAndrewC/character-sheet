@@ -17,7 +17,6 @@ from app.game_data import (
     ring_max,
 )
 from app.models import Character, CharacterVersion, GamingGroup, User
-from app.services import fight_log
 from app.services.npcs import npc_guard
 from app.services.auth import can_edit_character, can_view_drafts, get_admin_ids, get_all_editors
 from app.services.dark_secret import (
@@ -2008,13 +2007,11 @@ async def track_op(request: Request, char_id: int, db: Session = Depends(get_db)
     body = await request.json()
     if not isinstance(body, dict):
         return JSONResponse({"error": "Expected a JSON object"}, status_code=400)
-    op, args = str(body.get("op") or ""), body.get("args") or {}
     try:
-        apply_op(character, op, args)
+        apply_op(character, str(body.get("op") or ""), body.get("args") or {})
     except OpRefused as exc:
         return JSONResponse({"error": str(exc), "tracking": tracking_snapshot(character)},
                             status_code=400)
-    fight_log.record_op(db, character, op, args)
     db.commit()
     return JSONResponse({"status": "ok", "tracking": tracking_snapshot(character)})
 

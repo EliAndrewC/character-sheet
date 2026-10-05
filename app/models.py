@@ -927,6 +927,10 @@ class EncounterNpc(Base):
     )
     status: Mapped[str] = mapped_column(String, default="fighting")
     joined_at: Mapped[datetime] = mapped_column(server_default=func.now())
+    # Round number (as a string) -> the most action dice this NPC had spent
+    # in that round, noted whenever its dice are replaced (fight_log). The
+    # public view shows "?" dice for the most it spent in an earlier round.
+    spent_by_round: Mapped[Optional[Dict[str, int]]] = mapped_column(JSON, default=dict)
 
     encounter: Mapped["Encounter"] = relationship(back_populates="npcs")
     character: Mapped["Character"] = relationship()

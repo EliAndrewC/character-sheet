@@ -23,6 +23,7 @@ from sqlalchemy.orm import Session
 from app.models import Character, Encounter, EncounterAction, GamingGroup
 from app.services import npc_generator as gen
 from app.services import npcs
+from app.services import fight_log
 from app.services.combat_actions import tn_to_be_hit
 from app.services.dice import is_impaired
 from app.services.per_adventure import per_adventure_abilities, remaining
@@ -99,6 +100,7 @@ def public_state(db: Session, group: GamingGroup) -> Dict[str, Any]:
     for link in links:
         npc = link.character
         mine = [a for a in actions if a.character_id == npc.id]
+        spent = [d.get("value") for d in npc.action_dice or [] if d.get("spent")]
         # Players learn an NPC's TN once someone has attacked it: it has
         # wounds from this fight (a returning NPC is healed) or has parried.
         attacked = (npc.current_light_wounds or 0) + (npc.current_serious_wounds or 0) > 0 \
@@ -110,9 +112,10 @@ def public_state(db: Session, group: GamingGroup) -> Dict[str, Any]:
             "serious_wounds": npc.current_serious_wounds or 0,
             "down": link.status != "fighting",
             "actions_this_round": [_public_action(a, names) for a in mine if a.round == current],
-            "actions_last_round": (
-                sum(1 for a in mine if a.round == current - 1) if current >= 2 else None
-            ),
+            # Spent dice are public (their values too); unspent ones never
+            # are. "?" dice: the actions players know of from earlier rounds.
+            "spent_dice": spent,
+            "unknown_dice": max(0, fight_log.known_actions(link, current) - len(spent)),
             "tn_to_be_hit": tn_to_be_hit(npc) if attacked else None,
         })
     return {

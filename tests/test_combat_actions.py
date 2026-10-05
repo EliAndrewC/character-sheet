@@ -127,14 +127,21 @@ def test_down_prompt_needs_the_npc_in_the_fight(world):
 # ---------------------------------------------------------------------------
 
 _PUBLIC_NPC_KEYS = {"id", "name", "light_wounds", "serious_wounds", "down",
-                    "actions_this_round", "actions_last_round", "tn_to_be_hit"}
+                    "actions_this_round", "spent_dice", "unknown_dice", "tn_to_be_hit"}
 _PUBLIC_ACTION_KEYS = {"kind", "label", "target", "total", "outcome", "damage"}
+
+
+def _spend(npc, *indices, spent=True):
+    dice = [dict(d) for d in npc.action_dice]
+    for i in indices:
+        dice[i]["spent"] = spent
+    npc.action_dice = dice
 
 
 def test_public_state_is_the_allow_list(world):
     s, g, enc = world["s"], world["g"], world["enc"]
     ca.new_round(s, enc, GM, rng=ConstRng(3))
-    _act(world)
+    _act(world, kind="attack", label="Attack", total=20)
     state = cv.public_state(s, g)
     assert set(state) == {"rev", "group", "encounter", "pcs", "npcs"}
     assert state["encounter"] == {"name": "Ambush", "round": 1}
@@ -142,11 +149,49 @@ def test_public_state_is_the_allow_list(world):
     assert set(state["pcs"][0]) == {"id", "name", "light_wounds", "serious_wounds", "action_dice"}
     (row,) = state["npcs"]
     assert set(row) == _PUBLIC_NPC_KEYS
-    assert row["actions_last_round"] is None  # no full round yet
     assert set(row["actions_this_round"][0]) == _PUBLIC_ACTION_KEYS
     ca.new_round(s, enc, GM, rng=ConstRng(3))
+    assert cv.public_state(s, g)["npcs"][0]["actions_this_round"] == []
+
+
+def test_players_see_spent_dice_and_the_actions_they_know_of(world):
+    """Spent dice are public, with their values; unspent ones never are.
+    From round 2, "?" dice stand for the most actions the NPC has spent in
+    an earlier round of this fight, and turn into spent dice as it acts."""
+    s, g, enc, npc = world["s"], world["g"], world["enc"], world["npc"]
+    ca.new_round(s, enc, GM, rng=ConstRng(3))
+    assert len(npc.action_dice) >= 2
     row = cv.public_state(s, g)["npcs"][0]
-    assert row["actions_last_round"] == 1 and row["actions_this_round"] == []
+    assert (row["spent_dice"], row["unknown_dice"]) == ([], 0)  # round 1: nothing known yet
+    _spend(npc, 0)
+    _spend(npc, 0, spent=False)  # changed its mind...
+    _spend(npc, 0)               # ...and spent it again: still one action
+    _spend(npc, 1)
+    s.flush()
+    row = cv.public_state(s, g)["npcs"][0]
+    assert row["spent_dice"] == [npc.action_dice[0]["value"], npc.action_dice[1]["value"]]
+    assert row["unknown_dice"] == 0
+    ca.new_round(s, enc, GM, rng=ConstRng(3))
+    row = cv.public_state(s, g)["npcs"][0]
+    assert (row["spent_dice"], row["unknown_dice"]) == ([], 2)
+    _spend(npc, 0)
+    s.flush()
+    row = cv.public_state(s, g)["npcs"][0]
+    assert (row["spent_dice"], row["unknown_dice"]) == ([npc.action_dice[0]["value"]], 1)
+
+
+def test_known_actions_are_the_most_spent_in_any_earlier_round(world):
+    s, g, enc, npc = world["s"], world["g"], world["enc"], world["npc"]
+    ca.new_round(s, enc, GM, rng=ConstRng(3))
+    _spend(npc, 0, 1)
+    ca.new_round(s, enc, GM, rng=ConstRng(3))
+    _spend(npc, 0)
+    # A mid-round initiative reroll keeps this round's count out of "known".
+    ca.roll_initiative(s, enc, npc, GM, rng=ConstRng(3))
+    assert cv.public_state(s, g)["npcs"][0]["unknown_dice"] == 2
+    _spend(npc, 0, 1)
+    ca.new_round(s, enc, GM, rng=ConstRng(3))
+    assert cv.public_state(s, g)["npcs"][0]["unknown_dice"] == 2
 
 
 def test_public_state_without_a_fight(client):
