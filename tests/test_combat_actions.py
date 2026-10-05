@@ -127,7 +127,7 @@ def test_down_prompt_needs_the_npc_in_the_fight(world):
 # ---------------------------------------------------------------------------
 
 _PUBLIC_NPC_KEYS = {"id", "name", "light_wounds", "serious_wounds", "down",
-                    "actions_this_round", "spent_dice", "unknown_dice", "tn_to_be_hit"}
+                    "actions_this_round", "spent_dice", "unknown_dice", "tn_to_be_hit", "impaired"}
 _PUBLIC_ACTION_KEYS = {"kind", "label", "target", "total", "outcome", "damage"}
 
 
@@ -146,7 +146,7 @@ def test_public_state_is_the_allow_list(world):
     assert set(state) == {"rev", "group", "encounter", "pcs", "npcs"}
     assert state["encounter"] == {"name": "Ambush", "round": 1}
     assert [p["name"] for p in state["pcs"]] == ["Yudai"]  # the hidden PC is not in the fight
-    assert set(state["pcs"][0]) == {"id", "name", "light_wounds", "serious_wounds", "action_dice"}
+    assert set(state["pcs"][0]) == {"id", "name", "light_wounds", "serious_wounds", "action_dice", "impaired"}
     (row,) = state["npcs"]
     assert set(row) == _PUBLIC_NPC_KEYS
     assert set(row["actions_this_round"][0]) == _PUBLIC_ACTION_KEYS
@@ -178,6 +178,17 @@ def test_players_see_spent_dice_and_the_actions_they_know_of(world):
     s.flush()
     row = cv.public_state(s, g)["npcs"][0]
     assert (row["spent_dice"], row["unknown_dice"]) == ([npc.action_dice[0]["value"]], 1)
+
+
+def test_players_see_who_is_impaired(world):
+    s, g, npc, pc = world["s"], world["g"], world["npc"], world["pc"]
+    state = cv.public_state(s, g)
+    assert state["npcs"][0]["impaired"] is False and state["pcs"][0]["impaired"] is False
+    npc.current_serious_wounds = npc.ring_earth
+    pc.current_serious_wounds = pc.ring_earth
+    s.flush()
+    state = cv.public_state(s, g)
+    assert state["npcs"][0]["impaired"] is True and state["pcs"][0]["impaired"] is True
 
 
 def test_known_actions_are_the_most_spent_in_any_earlier_round(world):

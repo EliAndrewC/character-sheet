@@ -117,6 +117,7 @@ def public_state(db: Session, group: GamingGroup) -> Dict[str, Any]:
             "spent_dice": spent,
             "unknown_dice": max(0, fight_log.known_actions(link, current) - len(spent)),
             "tn_to_be_hit": tn_to_be_hit(npc) if attacked else None,
+            "impaired": is_impaired(npc.to_dict()),  # shown as an orange SW count
         })
     return {
         "rev": _rev(encounter, pcs + [link.character for link in links]),
@@ -129,6 +130,7 @@ def public_state(db: Session, group: GamingGroup) -> Dict[str, Any]:
                 "light_wounds": pc.current_light_wounds or 0,
                 "serious_wounds": pc.current_serious_wounds or 0,
                 "action_dice": _dice(pc, spent=False),
+                "impaired": is_impaired(pc.to_dict()),
             }
             for pc in pcs
         ],

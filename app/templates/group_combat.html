@@ -7,6 +7,13 @@
 {% block nav_new_character %}{% endblock %}
 
 {% block content %}
+{# The SW count for combatant ``who`` (an Alpine variable: pc or npc).
+   Impaired (serious wounds at least Earth) turns it orange with a tooltip,
+   in both views - players may know who is Impaired. #}
+{% macro sw_count(who, show_max=False) -%}
+<span class="relative" :class="{{ who }}.impaired ? 'tooltip-trigger text-orange-600 font-semibold' : ''" data-tap-toggle
+      :data-impaired="{{ who }}.impaired ? 'true' : 'false'"><span :class="{{ who }}.impaired ? '' : 'text-ink/50'">SW</span> <b :data-testid="'{{ who }}-sw-' + {{ who }}.id" x-text="{{ who }}.serious_wounds"></b>{% if show_max %}<span class="text-ink/50 font-normal" x-text="' / ' + {{ who }}.max_serious_wounds"></span>{% endif %}<span x-show="{{ who }}.impaired" class="tooltip-content absolute left-0 top-full z-10 mt-1 p-2 bg-ink text-parchment text-xs rounded shadow-lg w-56 whitespace-normal text-left font-normal">Impaired: serious wounds at least Earth. 10s are not rerolled, except on wound checks and damage.</span></span>
+{%- endmacro %}
 {# The combat page (combat-design/design.md 4.5). Public (D27): the GM gets
    the tracker, everyone else the public view, which is rendered from an
    allow-listed payload (app/services/combat_view.public_state) - nothing
@@ -80,13 +87,12 @@
                 <div class="bg-white rounded-lg shadow border border-ink/10 p-3 space-y-2" :data-testid="'pc-card-' + pc.id">
                     <div class="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
                         <span class="font-semibold text-ink truncate min-w-0" x-text="pc.name"></span>
-                        <span x-show="gm && pc.impaired" class="text-xs px-2 py-0.5 rounded bg-amber-100 text-amber-800">Impaired</span>
                         {# Players: wounds ride the name line, right-aligned, wrapping below when narrow. #}
                         <template x-if="!gm">
                             <span class="ml-auto text-sm text-ink/80 whitespace-nowrap" :data-testid="'pc-public-stats-' + pc.id">
                                 <span class="text-ink/50">LW</span> <b :data-testid="'pc-lw-' + pc.id" x-text="pc.light_wounds"></b>
                                 <span class="text-ink/30 mx-1">&middot;</span>
-                                <span class="text-ink/50">SW</span> <b :data-testid="'pc-sw-' + pc.id" x-text="pc.serious_wounds"></b>
+                                {{ sw_count('pc') }}
                             </span>
                         </template>
                     </div>
@@ -101,7 +107,7 @@
                     <template x-if="gm">
                     <div class="text-sm text-ink/80 flex flex-wrap gap-x-4 gap-y-1">
                         <span><span class="text-ink/50">LW</span> <b :data-testid="'pc-lw-' + pc.id" x-text="pc.light_wounds"></b></span>
-                        <span><span class="text-ink/50">SW</span> <b :data-testid="'pc-sw-' + pc.id" x-text="pc.serious_wounds"></b><span class="text-ink/50" x-text="' / ' + pc.max_serious_wounds"></span></span>
+                        {{ sw_count('pc', show_max=True) }}
                         <span><span class="text-ink/50">Void</span> <b x-text="voidText(pc)"></b></span>
                         <span><span class="text-ink/50">TN</span> <b x-text="pc.tn_to_be_hit"></b></span>
                     </div>
@@ -126,10 +132,15 @@
                      :class="npc.down || (npc.status && npc.status !== 'fighting') ? 'opacity-60' : ''"
                      :data-testid="'npc-card-' + npc.id">
                     <div class="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
-                        <div class="min-w-0">
-                            <span class="font-semibold text-ink truncate" :data-testid="'npc-name-' + npc.id" x-text="npc.name"></span>
-                            <template x-if="gm">
-                                <span class="block text-xs text-ink/60" x-text="npc.type + ', ' + npc.earned_xp + ' earned XP, ' + pct(npc.combat_share) + '% combat'"></span>
+                        <div class="min-w-0 flex items-center gap-2">
+                            {# GM: the build is a tooltip on the name. #}
+                            <span class="font-semibold text-ink truncate relative" :class="gm ? 'tooltip-trigger cursor-help' : ''" data-tap-toggle
+                                  :data-testid="'npc-name-' + npc.id"><span x-text="npc.name"></span><template x-if="gm"><span class="tooltip-content absolute left-0 top-full z-20 mt-1 p-2 bg-ink text-parchment text-xs rounded shadow-lg w-60 whitespace-normal text-left font-normal"
+                                        :data-testid="'npc-build-' + npc.id"
+                                        x-text="npc.type + ', ' + npc.earned_xp + ' earned XP, ' + pct(npc.combat_share) + '% combat'"></span></template></span>
+                            <template x-if="gm && npc.status !== 'fighting'">
+                                <span class="text-xs px-2 py-0.5 rounded bg-ink/10 text-ink/70" :data-testid="'npc-status-label-' + npc.id"
+                                      x-text="npc.status === 'dead' ? 'Dead' : 'Down'"></span>
                             </template>
                         </div>
                         <template x-if="!gm">
@@ -137,7 +148,7 @@
                                 <span>
                                     <span class="text-ink/50">LW</span> <b :data-testid="'npc-lw-' + npc.id" x-text="npc.light_wounds"></b>
                                     <span class="text-ink/30 mx-1">&middot;</span>
-                                    <span class="text-ink/50">SW</span> <b :data-testid="'npc-sw-' + npc.id" x-text="npc.serious_wounds"></b>
+                                    {{ sw_count('npc') }}
                                     <template x-if="npc.tn_to_be_hit">
                                         <span :data-testid="'npc-public-tn-' + npc.id"><span class="text-ink/30 mx-1">&middot;</span><span class="text-ink/50">TN</span> <b x-text="npc.tn_to_be_hit"></b></span>
                                     </template>
@@ -147,14 +158,36 @@
                                 </template>
                             </span>
                         </template>
+                        {# GM: everything else about the NPC lives in its kebab menu. #}
                         <template x-if="gm">
-                            <select class="border rounded px-1 py-0.5 text-xs" :value="npc.status"
-                                    :data-testid="'npc-status-' + npc.id"
-                                    @change="setStatus(npc, $event.target.value)">
-                                <option value="fighting">Fighting</option>
-                                <option value="unconscious">Unconscious</option>
-                                <option value="dead">Dead</option>
-                            </select>
+                            <div class="relative" x-data="{ open: false }" @click.outside="open = false">
+                                <button type="button" @click="open = !open" :data-testid="'npc-menu-' + npc.id"
+                                        title="NPC options" aria-label="NPC options"
+                                        class="btn-ghost rounded leading-none font-bold px-2 py-1 text-xl">&#8942;</button>
+                                <div x-show="open" x-cloak @click="open = false"
+                                     class="absolute right-0 top-full mt-1 z-30 bg-white rounded-lg shadow-xl border border-ink/20 py-1 min-w-[180px] text-sm">
+                                    <button type="button" @click="rollInitiative(npc)" :disabled="busy" :data-testid="'npc-init-' + npc.id"
+                                            class="block w-full text-left px-4 py-2 hover:bg-parchment">Roll initiative</button>
+                                    <button type="button" @click="openDialog('adjust', npc)" :data-testid="'npc-adjust-' + npc.id"
+                                            class="block w-full text-left px-4 py-2 hover:bg-parchment">Adjust</button>
+                                    <button type="button" @click="openDialog('rebuild', npc)" :data-testid="'npc-rebuild-' + npc.id"
+                                            class="block w-full text-left px-4 py-2 hover:bg-parchment">Rebuild</button>
+                                    <button type="button" @click="openDialog('rename', npc)" :data-testid="'npc-rename-' + npc.id"
+                                            class="block w-full text-left px-4 py-2 hover:bg-parchment">Rename</button>
+                                    <a :href="npc.sheet_url" target="_blank" :data-testid="'npc-sheet-' + npc.id"
+                                       class="block w-full text-left px-4 py-2 hover:bg-parchment">Sheet</a>
+                                    <button type="button" @click="removeNpc(npc)" :data-testid="'npc-remove-' + npc.id"
+                                            class="block w-full text-left px-4 py-2 hover:bg-parchment">Leave fight</button>
+                                    <div class="border-t border-ink/10 mt-1 pt-1 px-4 py-1 text-[10px] uppercase tracking-wide text-ink/40">Status</div>
+                                    <template x-for="opt in [['fighting', 'Fighting'], ['unconscious', 'Down'], ['dead', 'Dead']]" :key="opt[0]">
+                                        <button type="button" @click="setStatus(npc, opt[0])"
+                                                :data-testid="'npc-status-' + npc.id + '-' + opt[0]"
+                                                class="block w-full text-left px-4 py-2 hover:bg-parchment"
+                                                :class="npc.status === opt[0] ? 'font-semibold text-accent' : ''"
+                                                x-text="(npc.status === opt[0] ? '\u2713 ' : '') + opt[1]"></button>
+                                    </template>
+                                </div>
+                            </div>
                         </template>
                     </div>
 
@@ -172,19 +205,18 @@
                                 </button>
                             </template>
                             <span x-show="npc.action_dice.length === 0" class="text-xs text-ink/50">No action dice</span>
-                            <button type="button" @click="rollInitiative(npc)" :disabled="busy"
-                                    :data-testid="'npc-init-' + npc.id"
-                                    class="btn-ghost text-xs px-2 py-0.5 rounded">Roll initiative</button>
                         </div>
                     </template>
 
                     <template x-if="gm">
                     <div class="text-sm text-ink/80 flex flex-wrap gap-x-4 gap-y-1">
-                        <span><span class="text-ink/50">LW</span> <b :data-testid="'npc-lw-' + npc.id" x-text="npc.light_wounds"></b></span>
-                        <span><span class="text-ink/50">SW</span> <b :data-testid="'npc-sw-' + npc.id" x-text="npc.serious_wounds"></b><span class="text-ink/50" x-text="' / ' + npc.max_serious_wounds"></span></span>
+                        {# LW opens the sheet's light-wounds modal and its wound check. #}
+                        <button type="button" @click="openRoller(npc, null, $event)" :data-testid="'npc-lw-btn-' + npc.id"
+                                title="Took damage: add light wounds and roll the wound check"
+                                class="hover:text-accent underline decoration-dotted underline-offset-2"><span class="text-ink/50">LW</span> <b :data-testid="'npc-lw-' + npc.id" x-text="npc.light_wounds"></b></button>
+                        {{ sw_count('npc', show_max=True) }}
                         <span><span class="text-ink/50">Void</span> <b :data-testid="'npc-void-' + npc.id" x-text="voidText(npc)"></b></span>
                         <span><span class="text-ink/50">TN</span> <b x-text="npc.tn_to_be_hit"></b></span>
-                        <span x-show="npc.impaired" class="text-xs px-2 py-0.5 rounded bg-amber-100 text-amber-800">Impaired</span>
                     </div>
                     </template>
 
@@ -218,21 +250,6 @@
                         </div>
                     </template>
 
-                    <template x-if="gm">
-                        <div class="flex flex-wrap gap-2 pt-1">
-                            <button type="button" @click="openRoller(npc, null, $event)" :data-testid="'npc-took-damage-' + npc.id"
-                                    class="btn-danger-soft text-xs px-2 py-1 rounded">Took damage</button>
-                            <button type="button" @click="openDialog('adjust', npc)" :data-testid="'npc-adjust-' + npc.id"
-                                    class="btn-ghost text-xs px-2 py-1 rounded">Adjust</button>
-                            <button type="button" @click="openDialog('rebuild', npc)" :data-testid="'npc-rebuild-' + npc.id"
-                                    class="btn-ghost text-xs px-2 py-1 rounded">Rebuild</button>
-                            <button type="button" @click="openDialog('rename', npc)" :data-testid="'npc-rename-' + npc.id"
-                                    class="btn-ghost text-xs px-2 py-1 rounded">Rename</button>
-                            <a :href="npc.sheet_url" target="_blank" class="text-xs text-accent hover:underline self-center">Sheet</a>
-                            <button type="button" @click="removeNpc(npc)" :data-testid="'npc-remove-' + npc.id"
-                                    class="btn-ghost text-xs px-2 py-1 rounded">Leave fight</button>
-                        </div>
-                    </template>
                 </div>
             </template>
         </section>
@@ -351,7 +368,7 @@
                         <p class="text-sm" x-text="dlg.npc.name + ' has taken twice their Earth in serious wounds.'"></p>
                         <div class="flex gap-2">
                             <button type="button" @click="setStatus(dlg.npc, 'unconscious', true)" data-testid="down-unconscious"
-                                    class="btn-secondary px-3 py-1.5 rounded text-sm">Unconscious</button>
+                                    class="btn-secondary px-3 py-1.5 rounded text-sm">Down</button>
                             <button type="button" @click="setStatus(dlg.npc, 'dead', true)" data-testid="down-dead"
                                     class="btn-danger px-3 py-1.5 rounded text-sm">Dead</button>
                         </div>

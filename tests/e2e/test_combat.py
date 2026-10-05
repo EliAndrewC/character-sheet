@@ -70,6 +70,12 @@ def _roller_gone(page):
     page.wait_for_selector('[data-testid="npc-roller-frame"]', state="detached", timeout=10000)
 
 
+def _menu(page, npc_id, item):
+    """Pick ``item`` (a testid prefix like "npc-adjust") from the NPC's kebab menu."""
+    page.locator(f'[data-testid="npc-menu-{npc_id}"]').click()
+    page.locator(f'[data-testid="{item}-{npc_id}"]').click()
+
+
 def _round(page, npc_id):
     page.locator('[data-testid="new-round-btn"]').click()
     page.wait_for_selector(f'[data-testid="npc-die-{npc_id}-0"]')
@@ -157,7 +163,7 @@ def test_npc_takes_damage_and_goes_down(page, live_server_url):
     gid = _group_with_pc(page, live_server_url, "HitterPC")
     npc_id = _start_fight_with_wave_men(page, live_server_url, gid)
     force_dice(page, [1])  # a failed check
-    page.locator(f'[data-testid="npc-took-damage-{npc_id}"]').click()
+    page.locator(f'[data-testid="npc-lw-btn-{npc_id}"]').click()
     frame = _roller(page)
     frame.locator('input[x-model="lwAddAmount"]').fill("40")
     frame.locator('button:visible', has_text="Add").first.click()
@@ -173,13 +179,13 @@ def test_npc_takes_damage_and_goes_down(page, live_server_url):
         page.wait_for_selector('[data-testid="down-prompt"]', state="detached")
     else:
         # Adjusting serious wounds to 2 x Earth asks unconscious or dead (D9).
-        page.locator(f'[data-testid="npc-adjust-{npc_id}"]').click()
+        _menu(page, npc_id, "npc-adjust")
         page.fill('[data-testid="adjust-sw"]', "20")
         page.locator('[data-testid="adjust-save-btn"]').click()
         page.wait_for_selector('[data-testid="down-prompt"]')
         page.locator('[data-testid="down-dead"]').click()
         page.wait_for_selector('[data-testid="down-prompt"]', state="detached")
-    assert page.input_value(f'[data-testid="npc-status-{npc_id}"]') == "dead"
+    assert page.locator(f'[data-testid="npc-status-label-{npc_id}"]').text_content() == "Dead"
 
 
 def test_public_view_shows_totals_but_not_how(page, page_anon, live_server_url):
@@ -208,7 +214,7 @@ def test_public_view_shows_totals_but_not_how(page, page_anon, live_server_url):
     state = page_anon.request.get(f"{live_server_url}/groups/{gid}/combat/state").json()
     assert set(state["npcs"][0]) == {
         "id", "name", "light_wounds", "serious_wounds", "down",
-        "actions_this_round", "spent_dice", "unknown_dice", "tn_to_be_hit",
+        "actions_this_round", "spent_dice", "unknown_dice", "tn_to_be_hit", "impaired",
     }
 
 
@@ -243,18 +249,18 @@ def test_roster_brings_an_npc_back_to_the_next_fight(page, live_server_url):
 def test_rebuild_and_rename_an_npc(page, live_server_url):
     gid = _group_with_pc(page, live_server_url, "RebuildPC")
     npc_id = _start_fight_with_wave_men(page, live_server_url, gid)
-    page.locator(f'[data-testid="npc-rebuild-{npc_id}"]').click()
+    _menu(page, npc_id, "npc-rebuild")
     page.fill('[data-testid="rebuild-xp"]', "150")
     page.fill('[data-testid="rebuild-share"]', "85")
     page.locator('[data-testid="rebuild-save-btn"]').click()
     page.wait_for_selector('[data-testid="combat-dialog"]', state="detached")
     card = page.locator(f'[data-testid="npc-card-{npc_id}"]')
     assert "150 earned XP, 85% combat" in card.text_content()
-    page.locator(f'[data-testid="npc-rename-{npc_id}"]').click()
+    _menu(page, npc_id, "npc-rename")
     page.fill('[data-testid="rename-input"]', "Big Goro")
     page.locator('[data-testid="rename-save-btn"]').click()
     page.wait_for_selector('[data-testid="combat-dialog"]', state="detached")
-    assert page.locator(f'[data-testid="npc-name-{npc_id}"]').text_content() == "Big Goro"
+    assert page.locator(f'[data-testid="npc-name-{npc_id}"] > span').first.text_content() == "Big Goro"
 
 
 def test_combat_rolls_view_filters_npc_rolls(page, live_server_url):
@@ -321,7 +327,7 @@ def test_players_see_an_npcs_tn_only_after_it_was_attacked(page, page_anon, live
     page_anon.wait_for_selector(f'[data-testid="npc-card-{npc_id}"]')
     assert page_anon.locator(f'[data-testid="npc-public-tn-{npc_id}"]').count() == 0
 
-    page.locator(f'[data-testid="npc-took-damage-{npc_id}"]').click()
+    page.locator(f'[data-testid="npc-lw-btn-{npc_id}"]').click()
     frame = _roller(page)
     frame.locator('input[x-model="lwAddAmount"]').fill("3")
     frame.locator('button:visible', has_text="Add").first.click()
@@ -354,7 +360,7 @@ def test_player_view_puts_wounds_on_the_name_line(page, page_anon, live_server_u
     assert _same_line(page_anon, f'[data-testid="npc-name-{npc_id}"]', f'[data-testid="npc-public-stats-{npc_id}"]')
     pc_name = f'[data-testid="pc-card-{pc_id}"] span.font-semibold'
     assert _same_line(page_anon, pc_name, f'[data-testid="pc-public-stats-{pc_id}"]')
-    text = " ".join(page_anon.locator(f'[data-testid="pc-public-stats-{pc_id}"]').text_content().split())
+    text = " ".join(page_anon.locator(f'[data-testid="pc-public-stats-{pc_id}"]').inner_text().split())
     assert text == "LW 0 · SW 0"
     page_anon.set_viewport_size({"width": 360, "height": 800})
     assert page_anon.evaluate("document.documentElement.scrollWidth <= window.innerWidth")
@@ -392,3 +398,44 @@ def test_players_see_spent_dice_once_however_often_the_gm_changes_their_mind(pag
     _roller_gone(page)
     page_anon.locator(f'[data-testid="npc-spent-die-{npc_id}"]').first.wait_for(timeout=15000)
     assert page_anon.locator(f'[data-testid="npc-unknown-die-{npc_id}"]').count() == 0
+
+
+def test_gm_card_keeps_npc_controls_in_a_kebab_menu(page, page_anon, live_server_url):
+    """The GM card: build as a tooltip on the name, every control in the
+    kebab menu (status reads Fighting / Down / Dead), LW opens the wound
+    modal. Impaired shows as an orange SW count, for players too."""
+    gid = _group_with_pc(page, live_server_url, "KebabPC")
+    npc_id = _start_fight_with_wave_men(page, live_server_url, gid)
+    card = page.locator(f'[data-testid="npc-card-{npc_id}"]')
+    build = page.locator(f'[data-testid="npc-build-{npc_id}"]')
+    assert "50 earned XP" in build.text_content() and not build.is_visible()
+    for gone in ("Took damage", "Roll initiative", "Adjust", "Rebuild", "Rename", "Leave fight"):
+        assert gone not in card.inner_text(), gone
+    page.locator(f'[data-testid="npc-menu-{npc_id}"]').click()
+    menu_text = card.inner_text()
+    for item in ("Roll initiative", "Adjust", "Rebuild", "Rename", "Sheet", "Leave fight", "Fighting", "Down", "Dead"):
+        assert item in menu_text, item
+    assert "Unconscious" not in menu_text
+    page.locator(f'[data-testid="npc-status-{npc_id}-unconscious"]').click()
+    page.wait_for_selector(f'[data-testid="npc-status-label-{npc_id}"]')
+    assert page.locator(f'[data-testid="npc-status-label-{npc_id}"]').text_content() == "Down"
+    page.locator(f'[data-testid="npc-menu-{npc_id}"]').click()
+    page.locator(f'[data-testid="npc-status-{npc_id}-fighting"]').click()
+    page.wait_for_selector(f'[data-testid="npc-status-label-{npc_id}"]', state="detached")
+
+    # Impaired: serious wounds at Earth turns SW orange, with a tooltip.
+    earth = _state(page, live_server_url, gid)["npcs"][0]["earth"]
+    _menu(page, npc_id, "npc-adjust")
+    page.fill('[data-testid="adjust-sw"]', str(earth))
+    page.locator('[data-testid="adjust-save-btn"]').click()
+    page.wait_for_selector('[data-testid="combat-dialog"]', state="detached")
+    page.wait_for_selector(f'[data-testid="npc-card-{npc_id}"] [data-impaired="true"]')
+    page_anon.goto(f"{live_server_url}/groups/{gid}/combat")
+    public_sw = page_anon.locator(f'[data-testid="npc-card-{npc_id}"] [data-impaired="true"]')
+    public_sw.wait_for()
+    assert "Impaired" in public_sw.text_content()
+    assert "text-orange-600" in public_sw.get_attribute("class")
+
+    # LW is the "took damage" control.
+    page.locator(f'[data-testid="npc-lw-btn-{npc_id}"]').click()
+    _roller(page).locator('input[x-model="lwAddAmount"]').wait_for()
