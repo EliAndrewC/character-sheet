@@ -145,6 +145,8 @@
                                         class="btn-ghost rounded leading-none font-bold px-2 py-1 text-xl">&#8942;</button>
                                 <div x-show="open" x-cloak
                                      class="absolute right-0 top-full mt-1 z-30 bg-white rounded-lg shadow-xl border border-ink/20 py-1 min-w-[180px] text-sm">
+                                    <button type="button" @click="open = false; openRoller(pc, null, $event, 'initiative')" :data-testid="'pc-init-' + pc.id"
+                                            class="block w-full text-left px-4 py-2 hover:bg-parchment">Roll initiative</button>
                                     {{ can_strike('pc', 'npcs', 'pc.id', 'o.id', 'lg:left-full lg:ml-1') }}
                                 </div>
                             </div>
@@ -158,13 +160,36 @@
                             </span>
                         </template>
                     </div>
-                    <div class="flex flex-wrap gap-1" :data-testid="'pc-dice-' + pc.id">
-                        <template x-for="(d, i) in pc.action_dice" :key="i">
-                            <span class="inline-flex items-center justify-center w-7 h-7 rounded text-sm font-bold"
-                                  :class="d.spent ? 'bg-ink/10 text-ink/40 line-through' : 'bg-ink text-parchment dark-surface'"
-                                  x-text="d.value"></span>
+                    <div class="flex flex-wrap items-center gap-1" :data-testid="'pc-dice-' + pc.id">
+                        {# The GM, and a player on their own PC, use the dice with the
+                           sheet's own menu and modals (the roll overlay). #}
+                        <template x-if="gm || pc.mine">
+                            <div class="contents">
+                                <template x-for="(die, i) in pc.action_dice" :key="i">
+                                    <button type="button" :disabled="busy" class="block"
+                                            @click="openRoller(pc, i, $event)"
+                                            :data-testid="'pc-die-' + pc.id + '-' + i"
+                                            :data-die-spent="die.spent ? 'true' : 'false'"
+                                            :title="die.spent_by || ''">
+{% include 'character/partials/sheet/action_die_icon.html' %}
+                                    </button>
+                                </template>
+                            </div>
+                        </template>
+                        <template x-if="!gm && !pc.mine">
+                            <div class="contents">
+                                <template x-for="(d, i) in pc.action_dice" :key="i">
+                                    <span class="inline-flex items-center justify-center w-7 h-7 rounded text-sm font-bold bg-ink text-parchment dark-surface"
+                                          x-text="d.value"></span>
+                                </template>
+                            </div>
                         </template>
                         <span x-show="pc.action_dice.length === 0" class="text-xs text-ink/50">No action dice</span>
+                        <template x-if="!gm && pc.mine">
+                            <button type="button" @click="openRoller(pc, null, $event, 'initiative')" :disabled="busy"
+                                    :data-testid="'pc-init-' + pc.id"
+                                    class="btn-ghost text-xs px-2 py-0.5 rounded">Roll initiative</button>
+                        </template>
                     </div>
                     <template x-if="gm">
                     <div class="text-sm text-ink/80 flex flex-wrap gap-x-4 gap-y-1">

@@ -294,7 +294,8 @@ def test_the_gm_can_open_this_one_tab_as_the_player_view(client, world):
     assert '"earned_xp"' not in shared.text and 'data-testid="builder"' in shared.text
     assert 'data-testid="leave-player-view"' in shared.text
     state = client.get(_url(world, "/state?view=player")).json()
-    assert state == client.get(_url(world, "/state"), headers=PLAYER).json()
+    # Exactly what a player who owns none of these PCs gets.
+    assert state == client.get(_url(world, "/state"), headers={"X-Test-User": "test_user_2:other"}).json()
     gm = client.get(_url(world, ""))
     assert 'data-testid="open-player-view"' in gm.text and '"earned_xp"' in gm.text
     # A player asking for it gets what they always get, without the way back.
@@ -362,7 +363,7 @@ def test_npc_roller_overlay_serves_the_sheets_roller(client, world):
     s, npc, pc = world["s"], world["npc"], world["pc"]
     _dice(npc, (3, 7))
     s.commit()
-    page = client.get(_url(world, f"/npcs/{npc.id}/roller?die=1&x=100&y=50"))
+    page = client.get(_url(world, f"/roller/{npc.id}?die=1&x=100&y=50"))
     assert page.status_code == 200
     html = page.text
     assert 'x-data="diceRoller()"' in html and 'id="roll-formulas"' in html
@@ -371,18 +372,19 @@ def test_npc_roller_overlay_serves_the_sheets_roller(client, world):
     targets = re.search(r'id="combat-targets">(.*?)</script>', html, re.S).group(1)
     assert json.loads(targets) == [{"id": pc.id, "name": "Yudai", "parry": 3, "tn": ca.tn_to_be_hit(pc)}]
     assert "lwPlusModal = true" not in html
-    wounds = client.get(_url(world, f"/npcs/{npc.id}/roller?wounds=1")).text
+    wounds = client.get(_url(world, f"/roller/{npc.id}?wounds=1")).text
     assert "Light Wounds" in wounds and "lwPlusModal = true" in wounds
 
 
 def test_npc_roller_overlay_is_the_gms_and_only_for_npcs_in_the_fight(client, world):
     s, npc, pc = world["s"], world["npc"], world["pc"]
-    assert client.get(_url(world, f"/npcs/{npc.id}/roller"), headers=PLAYER).status_code == 403
-    assert client.get(_url(world, f"/npcs/{pc.id}/roller")).status_code == 404
-    assert client.get(f"/groups/999/combat/npcs/{npc.id}/roller").status_code == 404
+    assert client.get(_url(world, f"/roller/{npc.id}"), headers=PLAYER).status_code == 403
+    assert client.get(_url(world, f"/roller/{world['hidden'].id}")).status_code == 404
+    assert client.get(_url(world, "/roller/99999")).status_code == 404
+    assert client.get(f"/groups/999/combat/roller/{npc.id}").status_code == 404
     npcs.end_encounter(s, world["enc"])
     s.commit()
-    assert client.get(_url(world, f"/npcs/{npc.id}/roller")).status_code == 404
+    assert client.get(_url(world, f"/roller/{npc.id}")).status_code == 404
 
 
 # ---------------------------------------------------------------------------
@@ -511,3 +513,43 @@ def test_a_line_joins_a_pc_and_an_npc_in_this_fight(client, lineup):
     client.post(_url(w, "/end"))
     assert _reach(client, w, pc, npc).status_code == 409
     assert client.post(_url(w, "/reach-visible"), json={"visible": True}).status_code == 409
+
+
+# ---------------------------------------------------------------------------
+# Players use their own action dice from the combat page
+# ---------------------------------------------------------------------------
+
+OTHER = {"X-Test-User": "test_user_2:other"}
+
+
+def test_a_player_opens_the_roller_for_their_own_pc(client, world):
+    pc = world["pc"]  # owned by test_user_1
+    page = client.get(_url(world, f"/roller/{pc.id}?initiative=1&x=10&y=20"), headers=PLAYER)
+    assert page.status_code == 200
+    assert "openRollMenu('initiative'" in page.text
+    targets = re.search(r'id="combat-targets">(.*?)</script>', page.text, re.S).group(1)
+    assert json.loads(targets) == []  # no NPC TNs for a player
+    assert client.get(_url(world, f"/roller/{pc.id}"), headers=OTHER).status_code == 403
+    assert client.get(_url(world, f"/roller/{pc.id}"), headers={"X-Test-User": ""}).status_code == 403
+    anon = client.get(_url(world, "/state"), headers={"X-Test-User": ""}).json()["pcs"][0]
+    assert "mine" not in anon
+    assert client.get(_url(world, f"/roller/{pc.id}")).status_code == 200  # the GM may too
+
+
+def test_players_get_their_own_pcs_dice_whole(client, world):
+    s, g, pc = world["s"], world["g"], world["pc"]
+    pc.action_dice = [{"value": 2, "spent": True, "spent_by": "Attack"}, {"value": 6, "spent": False}]
+    s.commit()
+    mine = client.get(_url(world, "/state"), headers=PLAYER).json()["pcs"][0]
+    assert mine["mine"] is True
+    assert mine["action_dice"] == [
+        {"value": 2, "spent": True, "spent_by": "Attack", "athletics_only": False},
+        {"value": 6, "spent": False, "spent_by": "", "athletics_only": False},
+    ]
+    other = client.get(_url(world, "/state"), headers=OTHER).json()["pcs"][0]
+    assert "mine" not in other and other["action_dice"] == [{"value": 6}]
+    # The GM's screen-share tab shows the players' view, controls and all off.
+    shared = client.get(_url(world, "/state?view=player")).json()["pcs"][0]
+    assert "mine" not in shared and shared["action_dice"] == [{"value": 6}]
+    page = client.get(_url(world, ""), headers=PLAYER).text
+    assert '"mine": true' in page

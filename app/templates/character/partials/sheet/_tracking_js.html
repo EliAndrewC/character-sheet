@@ -621,6 +621,14 @@
                     this.actionMenuOpen = null;
                     this.op('action_die', {index: i, action: 'unspend'});
                 },
+                // Set a die to what was rolled at the table (physical dice) or
+                // correct it. The server keeps the dice in order.
+                setActionDieValue(i, value) {
+                    const v = parseInt(value, 10);
+                    if (!this.canEdit || !this.actionDice[i] || !(v >= 1 && v <= 10)) return;
+                    this.actionMenuOpen = null;
+                    this.op('action_die', {index: i, action: 'set_value', value: v});
+                },
                 // Returns the index of the die that was spent, or -1 if none
                 // were available. An optional spentBy label is attached.
                 // When ``isAthletics`` is falsy (default), any die flagged

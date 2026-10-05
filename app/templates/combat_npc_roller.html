@@ -9,8 +9,9 @@
 {% block bare_content %}
 {# The combat page's NPC roll overlay (routes/combat.py npc_roller): laid
    over the combat page in a full-window iframe, it shows ONE piece of the
-   NPC's sheet - an action die's menu at the spot that die sits on the
-   combat page, or the light-wounds modal - and the sheet's own roll modals
+   character's sheet - an action die's menu at the spot that die sits on the
+   combat page, the light-wounds modal, or the initiative menu - and the
+   sheet's own roll modals
    behind it. Everything is the sheet's: the same partials, the same
    diceRoller(), the same server roll routes. When nothing is open any more
    it tells the combat page, which removes it and refreshes. #}
@@ -37,6 +38,16 @@
     {% endif %}
 </div>
 {% include 'character/partials/sheet/roller.html' %}
+{% if roller_initiative %}
+{# The sheet's own initiative menu (variants, void), opened at the spot the
+   combat page's "Roll initiative" sits. #}
+<span id="initiative-anchor" class="fixed block" style="left: {{ roller_x }}px; top: {{ roller_y }}px; width: 1px; height: 1px;"></span>
+<script>
+    document.addEventListener('alpine:initialized', function () {
+        window._diceRoller.openRollMenu('initiative', document.getElementById('initiative-anchor'));
+    });
+</script>
+{% endif %}
 <script>
     // Tell the combat page once nothing is open: no die menu, no light-wounds
     // modal, no roll modal. Three quiet checks in a row, so the moment between
@@ -50,7 +61,8 @@
         }
         setInterval(function () {
             var t = window._trackingBridge;
-            var open = (t && (t.actionMenuOpen !== null || t.lwPlusModal)) || anyModalShowing();
+            var r = window._diceRoller;
+            var open = (t && (t.actionMenuOpen !== null || t.lwPlusModal)) || (r && r.rollMenuOpen) || anyModalShowing();
             quiet = open ? 0 : quiet + 1;
             if (quiet === 3 && window.parent !== window) {
                 window.parent.postMessage({ type: 'l7r-npc-roller-closed' }, window.location.origin);

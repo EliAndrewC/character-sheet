@@ -15,7 +15,7 @@ could have changed (the encounter's own ``rev`` plus every combatant's
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Set
 
 from sqlalchemy import func
 from sqlalchemy.orm import Session
@@ -97,7 +97,25 @@ def _sides(db: Session, group: GamingGroup):
     return encounter, pcs, links
 
 
-def public_state(db: Session, group: GamingGroup) -> Dict[str, Any]:
+def _public_pc(pc: Character, mine: bool) -> Dict[str, Any]:
+    out = {
+        "id": pc.id,
+        "name": pc.name,
+        "light_wounds": pc.current_light_wounds or 0,
+        "serious_wounds": pc.current_serious_wounds or 0,
+        "action_dice": _dice(pc, spent=mine),
+        "impaired": is_impaired(pc.to_dict()),
+    }
+    if mine:
+        out["mine"] = True
+    return out
+
+
+def public_state(db: Session, group: GamingGroup, mine: Optional[Set[int]] = None) -> Dict[str, Any]:
+    """The allow-listed view. ``mine``: PCs this viewer can edit - for those
+    (their own character) the whole action dice, spent ones included, so
+    they can use them from the combat page."""
+    own_pcs = mine or set()
     encounter, pcs, links = _sides(db, group)
     names = {c.id: c.name for c in pcs}
     names.update({link.character_id: link.character.name for link in links})
@@ -130,17 +148,7 @@ def public_state(db: Session, group: GamingGroup) -> Dict[str, Any]:
         "rev": _rev(encounter, pcs + [link.character for link in links]),
         "group": {"id": group.id, "name": group.name},
         "encounter": {"name": encounter.name, "round": current} if encounter else None,
-        "pcs": [
-            {
-                "id": pc.id,
-                "name": pc.name,
-                "light_wounds": pc.current_light_wounds or 0,
-                "serious_wounds": pc.current_serious_wounds or 0,
-                "action_dice": _dice(pc, spent=False),
-                "impaired": is_impaired(pc.to_dict()),
-            }
-            for pc in pcs
-        ],
+        "pcs": [_public_pc(pc, pc.id in own_pcs) for pc in pcs],
         "npcs": out_npcs,
         # Who can strike whom, only while the GM shows the lines.
         "reach": (npcs.current_reach(encounter, [pc.id for pc in pcs], [link.character_id for link in links])

@@ -11,19 +11,19 @@ first query to its commit without yielding.
 
 from __future__ import annotations
 
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional, Set
 
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 from sqlalchemy.orm import Session
 
 from app.database import get_db, prefetch_body
-from app.models import Character, Encounter, GamingGroup
+from app.models import Character, Encounter, GamingGroup, User
 from app.services import combat_actions as actions
 from app.services import combat_view
 from app.services import npc_generator as gen
 from app.services import npcs
-from app.services.auth import is_admin
+from app.services.auth import can_edit_character, get_all_editors, is_admin
 from app.services.npc_names import fetch_names
 
 router = APIRouter(dependencies=[Depends(prefetch_body)])
@@ -455,7 +455,8 @@ def combat_page(group_id: int, request: Request, view: Optional[str] = None,
     is_gm = _gm_id(request) is not None
     player_view = view == "player"
     gm = is_gm and not player_view
-    state = combat_view.gm_state(db, group) if gm else combat_view.public_state(db, group)
+    state = combat_view.gm_state(db, group) if gm else combat_view.public_state(
+        db, group, mine=_player_pcs(db, request, group, combat_view.visible_pcs(db, group)))
     low, high = gen.combat_share_bounds()
     context = {
         "group": group, "gm": gm, "state": state,
@@ -466,32 +467,68 @@ def combat_page(group_id: int, request: Request, view: Optional[str] = None,
     return _templates().TemplateResponse(request=request, name="group_combat.html", context=context)
 
 
-@router.get("/groups/{group_id}/combat/npcs/{npc_id}/roller", response_class=HTMLResponse)
-def npc_roller(group_id: int, npc_id: int, request: Request, die: Optional[int] = None,
-               wounds: bool = False, x: int = 0, y: int = 0, db: Session = Depends(get_db)):
-    """The NPC roll overlay: the sheet's own die menu, light-wounds modal and
-    roll modals for one NPC, laid over the combat page in an iframe (the
-    combat page has no roller of its own). ``die`` opens that action die's
-    menu at ``(x, y)``; ``wounds`` opens the light-wounds modal, whose wound
-    check is the sheet's. Rolls go through the ordinary roll routes, and
-    ``fight_log`` turns them into fight actions."""
+def _can_edit(db: Session, viewer: Optional[str], character: Character) -> bool:
+    if not viewer:
+        return False
+    owner = db.query(User).filter(User.discord_id == character.owner_discord_id).first()
+    editors = get_all_editors(character.editor_discord_ids or [], (owner.granted_account_ids or []) if owner else [])
+    return can_edit_character(viewer, character.owner_discord_id, editors)
+
+
+def _player_pcs(db: Session, request: Request, group: GamingGroup, pcs: List[Character]) -> Set[int]:
+    """The PCs a (non-GM) viewer may drive from the player view: their own,
+    or any they can edit. Never in the GM's own player-view tab, which is
+    for screen sharing."""
+    if _gm_id(request) is not None:
+        return set()
+    viewer = npcs.viewer_id(request)
+    return {pc.id for pc in pcs if _can_edit(db, viewer, pc)}
+
+
+@router.get("/groups/{group_id}/combat/roller/{who_id}", response_class=HTMLResponse)
+def roller(group_id: int, who_id: int, request: Request, die: Optional[int] = None,
+           wounds: bool = False, initiative: bool = False, x: int = 0, y: int = 0,
+           db: Session = Depends(get_db)):
+    """The roll overlay: one character's sheet's own die menu, light-wounds
+    modal or initiative menu and its roll modals, laid over the combat page
+    in an iframe (the combat page has no roller of its own). ``die`` opens
+    that action die's menu at ``(x, y)``; ``wounds`` the light-wounds modal,
+    whose wound check is the sheet's; ``initiative`` the sheet's initiative
+    menu at ``(x, y)``.
+
+    For an NPC in the fight: the GM. For a visible PC of the group: the GM,
+    or anyone who can edit that PC (a player driving their own action dice).
+    Rolls go through the ordinary roll routes; ``fight_log`` turns an NPC's
+    into fight actions."""
     from app.routes.pages import sheet_context
 
-    _, group, err = _load(db, group_id, request)
-    if err:
-        return err
+    group = _group_or_404(db, group_id)
+    if group is None:
+        return HTMLResponse("Group not found", status_code=404)
+    who = db.get(Character, who_id)
     encounter = _active(db, group)
-    npc = _npc(db, group, npc_id)
-    if encounter is None or npc is None or npcs.link_for(encounter, npc.id) is None:
+    gm = _gm_id(request) is not None
+    pcs = combat_view.visible_pcs(db, group)
+    if who is not None and who.is_npc:
+        if encounter is None or who.npc_group_id != group.id or npcs.link_for(encounter, who.id) is None:
+            return HTMLResponse("Not in the fight", status_code=404)
+        allowed = gm
+    elif who is not None and who.id in {pc.id for pc in pcs}:
+        allowed = gm or _can_edit(db, npcs.viewer_id(request), who)
+    else:
         return HTMLResponse("Not in the fight", status_code=404)
-    context = sheet_context(request, npc, db)
+    if not allowed:
+        return HTMLResponse("Not yours to roll for", status_code=403)
+    context = sheet_context(request, who, db)
     context.update(
         bare_page=True, group=group, roller_die=die, roller_wounds=wounds,
-        roller_x=max(0, x), roller_y=max(0, y),
+        roller_initiative=initiative, roller_x=max(0, x), roller_y=max(0, y),
+        # An NPC's attack modal offers the fight's PCs as targets. A PC's
+        # offers none: an NPC's TN is the GM's to reveal.
         combat_targets=[
             {"id": pc.id, "name": pc.name, "parry": pc.parry or 0, "tn": actions.tn_to_be_hit(pc)}
-            for pc in combat_view.visible_pcs(db, group)
-        ],
+            for pc in pcs
+        ] if who.is_npc else [],
     )
     return _templates().TemplateResponse(request=request, name="combat_npc_roller.html", context=context)
 
@@ -506,7 +543,8 @@ def combat_state(group_id: int, request: Request, view: Optional[str] = None,
         return _error("No such group", 404)
     if _gm_id(request) is not None and view != "player":
         return combat_view.gm_state(db, group)
-    return combat_view.public_state(db, group)
+    return combat_view.public_state(
+        db, group, mine=_player_pcs(db, request, group, combat_view.visible_pcs(db, group)))
 
 
 @router.get("/groups/{group_id}/combat/rolls", response_class=HTMLResponse)

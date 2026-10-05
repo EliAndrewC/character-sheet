@@ -218,8 +218,16 @@ def _action_die(c: Character, args: Dict[str, Any]) -> None:
             dice[i]["spent_by"] = label
         else:
             dice[i].pop("spent_by", None)
+    elif action == "set_value":
+        # A player who rolled physical dice sets each die to match (or the
+        # GM corrects one); the dice stay in order, spent state and all.
+        value = args.get("value")
+        if isinstance(value, bool) or not isinstance(value, int) or not 1 <= value <= 10:
+            raise OpRefused("an action die's value is 1 to 10")
+        dice[i]["value"] = value
+        dice.sort(key=lambda d: d.get("value") or 0)
     else:
-        raise OpRefused("action must be spend, unspend or annotate")
+        raise OpRefused("action must be spend, unspend, annotate or set_value")
     c.action_dice = dice
 
 

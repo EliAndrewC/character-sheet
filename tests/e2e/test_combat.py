@@ -536,3 +536,39 @@ def test_gm_draws_striking_lines_players_see_them_and_the_gm_can_hide_them(page,
     page_anon.wait_for_selector(f'[data-testid="pc-reach-{pcs[1]}"]', state="hidden", timeout=15000)
     state = page_anon.request.get(f"{live_server_url}/groups/{gid}/combat/state").json()
     assert state["reach"] == []
+
+
+def test_a_player_rolls_initiative_and_sets_a_die_on_their_own_pc(page, page_nonadmin, live_server_url):
+    """From the combat page a player uses their own PC's action dice with the
+    sheet's own initiative roll and die menu - "Set value" included, to match
+    physical dice - and gets no controls for anyone else's PC."""
+    gid = _group_with_pc(page, live_server_url, "GmOwnedPC")
+    _start_fight_with_wave_men(page, live_server_url, gid)
+    gname = page.locator('[data-testid="group-nav-link"]').text_content().strip()
+    create_and_apply(page_nonadmin, live_server_url, name="PlayerOwnedPC", school="akodo_bushi")
+    page_nonadmin.goto(page_nonadmin.url + "/edit")
+    page_nonadmin.wait_for_selector('select[name="gaming_group_id"]')
+    page_nonadmin.locator('select[name="gaming_group_id"]').select_option(label=gname)
+    page_nonadmin.wait_for_timeout(400)
+
+    page_nonadmin.goto(f"{live_server_url}/groups/{gid}/combat")
+    state = page_nonadmin.request.get(f"{live_server_url}/groups/{gid}/combat/state").json()
+    mine = next(p for p in state["pcs"] if p["name"] == "PlayerOwnedPC")
+    theirs = next(p for p in state["pcs"] if p["name"] == "GmOwnedPC")
+    assert mine.get("mine") is True and "mine" not in theirs
+    assert page_nonadmin.locator(f'[data-testid="pc-init-{theirs["id"]}"]').count() == 0
+
+    page_nonadmin.locator(f'[data-testid="pc-init-{mine["id"]}"]').click()
+    frame = _roller(page_nonadmin)
+    frame.locator('[data-modal="dice-roller"] button:has-text("×")').click(timeout=15000)
+    _roller_gone(page_nonadmin)
+    page_nonadmin.wait_for_selector(f'[data-testid="pc-die-{mine["id"]}-0"]')
+
+    page_nonadmin.locator(f'[data-testid="pc-die-{mine["id"]}-0"]').click()
+    _roller(page_nonadmin).locator('[data-action="action-die-set-value"]').select_option("10")
+    _roller_gone(page_nonadmin)
+    dice = page_nonadmin.request.get(f"{live_server_url}/groups/{gid}/combat/state").json()
+    dice = next(p for p in dice["pcs"] if p["id"] == mine["id"])["action_dice"]
+    assert dice[-1]["value"] == 10
+    assert page_nonadmin.request.get(
+        f"{live_server_url}/groups/{gid}/combat/roller/{theirs['id']}").status == 403

@@ -1420,6 +1420,21 @@ def test_spent_action_die_dropdown_marks_unspent(page, live_server_url):
     assert spent is False
 
 
+def test_action_die_set_value_matches_a_physical_roll(page, live_server_url):
+    """'Set value' in an action die's menu sets it to what was rolled at the
+    table; the dice stay in order."""
+    _create_roller(page, live_server_url, "ActionDieSetValue")
+    page.locator('[data-roll-key="initiative"]').click()
+    _wait_for_roll_result(page)
+    _close_dice_modal(page)
+    before = page.evaluate("window._trackingBridge.actionDice.map(d => d.value)")
+    page.locator('[data-testid="action-dice-section"] [data-action="action-die"]').first.click()
+    page.locator('[data-testid="action-dice-section"] [data-action="action-die-set-value"]').first.select_option("10")
+    page.wait_for_function("window._trackingBridge.actionDice.some(d => d.value === 10)")
+    after = page.evaluate("window._trackingBridge.actionDice.map(d => d.value)")
+    assert after == sorted(before[1:] + [10])
+
+
 def test_clear_action_dice_hides_section(page, live_server_url):
     """Clear button removes every action die and hides the section."""
     _create_roller(page, live_server_url, "ActionDieClear")

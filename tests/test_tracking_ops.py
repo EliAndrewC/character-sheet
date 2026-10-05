@@ -343,3 +343,30 @@ def test_bank_hand_edits(client):
     t = _op(client, cid, "bank", key="hiruma_banked_attack_bonus", clear=True).json()["tracking"]
     assert "hiruma_banked_attack_bonus" not in t["adventure_state"]
     assert "no such bank" in _op(client, cid, "bank", key="lucky_used", clear=True).json()["error"]
+
+
+def test_an_action_die_can_be_set_to_what_was_rolled_at_the_table(client):
+    """A player who rolls physical dice sets each die to match; the dice
+    stay in order and a spent die keeps its spent state."""
+    cid = _char(client, action_dice=[{"value": 2, "spent": False}, {"value": 5, "spent": True, "spent_by": "Parry"},
+                                     {"value": 8, "spent": False}])
+    r = _op(client, cid, "action_die", index=2, action="set_value", value=1)
+    assert r.status_code == 200
+    assert _get(client, cid).action_dice == [{"value": 1, "spent": False}, {"value": 2, "spent": False},
+                                             {"value": 5, "spent": True, "spent_by": "Parry"}]
+    _op(client, cid, "action_die", index=2, action="set_value", value=10)
+    assert [d["value"] for d in _get(client, cid).action_dice] == [1, 2, 10]
+    assert _get(client, cid).action_dice[2]["spent"] is True
+
+
+@pytest.mark.parametrize("value", [0, 11, "x", None, True])
+def test_an_action_die_value_must_be_one_to_ten(client, value):
+    cid = _char(client, action_dice=[{"value": 2, "spent": False}])
+    r = _op(client, cid, "action_die", index=0, action="set_value", value=value)
+    assert r.status_code == 400 and "1 to 10" in r.json()["error"]
+    assert _get(client, cid).action_dice == [{"value": 2, "spent": False}]
+
+
+def test_only_an_editor_sets_a_die(client):
+    cid = _char(client, action_dice=[{"value": 2, "spent": False}])
+    assert _op(client, cid, "action_die", headers=OTHER, index=0, action="set_value", value=9).status_code == 403

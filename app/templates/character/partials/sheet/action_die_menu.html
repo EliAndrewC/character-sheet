@@ -142,4 +142,18 @@
                                         {% endif %}
                                     </div>
                                 </template>
+                                {# Any die, spent or not: match a physical roll, or correct it. #}
+                                {% if viewer_can_edit %}
+                                <label class="flex items-center justify-between gap-3 px-3 py-2 border-t border-ink/10 text-ink/60"
+                                       @click.stop>
+                                    Set value
+                                    <select data-action="action-die-set-value"
+                                            class="border border-ink/20 rounded px-1 py-0.5 text-sm text-ink"
+                                            @change="setActionDieValue(i, $event.target.value)">
+                                        <template x-for="v in [1,2,3,4,5,6,7,8,9,10]" :key="v">
+                                            <option :value="v" :selected="v === die.value" x-text="v"></option>
+                                        </template>
+                                    </select>
+                                </label>
+                                {% endif %}
                             </div>

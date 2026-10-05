@@ -376,36 +376,37 @@
       },
 
       // ---- the NPC roll overlay ----
-      // An NPC's dice, light wounds and rolls use the sheet's OWN die menu,
-      // light-wounds modal and roll modals (one implementation): they are
-      // served for that NPC by /npcs/{id}/roller and laid over this page in
-      // a full-window, transparent iframe. ``die`` opens that die's menu
-      // just under the clicked die; null opens the light-wounds modal (its
-      // wound check is the sheet's). The overlay says when nothing is open
-      // any more; then it goes and the state refreshes.
-      openRoller: function (npc, die, event) {
+      // A character's dice, light wounds, initiative and rolls use the
+      // sheet's OWN die menu, light-wounds modal, roll menu and roll modals
+      // (one implementation): served for that character by /roller/{id} and
+      // laid over this page in a full-window, transparent iframe. ``die``
+      // opens that die's menu just under the clicked die; mode "initiative"
+      // the initiative menu there; otherwise the light-wounds modal (its
+      // wound check is the sheet's). The GM may open any NPC or PC; a
+      // player only a PC they can edit. The overlay says when nothing is
+      // open any more; then it goes and the state refreshes.
+      openRoller: function (who, die, event, mode) {
         this.closeRoller();
-        var query = "?wounds=1";
-        if (die !== null) {
-          var r = event.currentTarget.getBoundingClientRect();
-          query = "?die=" + die + "&x=" + Math.round(r.left + r.width / 2) + "&y=" + Math.round(r.bottom);
-        }
+        var r = event.currentTarget.getBoundingClientRect();
+        var at = "&x=" + Math.round(r.left + r.width / 2) + "&y=" + Math.round(r.bottom);
+        var query = mode === "initiative" ? "?initiative=1" + at
+          : die !== null ? "?die=" + die + at : "?wounds=1";
         var frame = document.createElement("iframe");
-        frame.src = this.url("/npcs/" + npc.id + "/roller") + query;
-        frame.title = npc.name;
+        frame.src = this.url("/roller/" + who.id) + query;
+        frame.title = who.name;
         frame.setAttribute("data-testid", "npc-roller-frame");
         frame.style.cssText = "position:fixed;inset:0;width:100vw;height:100vh;border:0;" +
           "z-index:60;background:transparent;color-scheme:normal";
         frame.allowTransparency = true;
         document.body.appendChild(frame);
-        this._roller = { frame: frame, npc: npc.id };
+        this._roller = { frame: frame, id: who.id };
       },
       closeRoller: function () {
         if (this._roller) this._roller.frame.remove();
         this._roller = null;
       },
       onRollerClosed: async function () {
-        var npcId = this._roller && this._roller.npc;
+        var npcId = this._roller && this._roller.id;
         this.closeRoller();
         await this.refresh();
         // At 2 x Earth serious wounds the GM says unconscious or dead (D9).
