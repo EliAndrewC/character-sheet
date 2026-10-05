@@ -13,7 +13,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, List
 
-from app.game_data import SCHOOL_KNACKS, SCHOOL_TECHNIQUE_BONUSES, SCHOOLS, SKILLS
+from app.game_data import SCHOOL_KNACKS, SCHOOL_TECHNIQUE_BONUSES, SCHOOLS
 
 
 def per_adventure_abilities(character: Any) -> List[Dict[str, Any]]:
@@ -42,10 +42,9 @@ def per_adventure_abilities(character: Any) -> List[Dict[str, Any]]:
         source_skill = t3["source_skill"]
         source_rank = (character.skills or {}).get(source_skill, 0)
         if source_rank > 0:
-            skill_name = SKILLS[source_skill].name if source_skill in SKILLS else source_skill
             per_adventure.append({
                 "id": "adventure_raises",
-                "name": f"3rd Dan Free Raises ({skill_name})",
+                "name": "3rd Dan Free Raises",
                 "type": "counter",
                 "max": 2 * source_rank,
             })

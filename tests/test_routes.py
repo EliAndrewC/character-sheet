@@ -5248,6 +5248,7 @@ class TestPerAdventureAbilitiesOnSheet:
         resp = client.get(f"/characters/{cid}")
         assert resp.status_code == 200
         assert "3rd Dan Free Raises" in resp.text
+        assert "3rd Dan Free Raises (" not in resp.text  # the skill is not named
 
     def test_third_dan_with_zero_source_skill_not_shown(self, client):
         """If source_skill rank is 0, no per-adventure raises are listed."""

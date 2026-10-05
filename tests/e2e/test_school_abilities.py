@@ -10875,12 +10875,13 @@ def test_kitsune_3rd_dan_wound_check_always_offers_raise(page, live_server_url):
 
 @pytest.mark.school_abilities
 def test_kitsune_3rd_dan_per_adventure_counter_visible(page, live_server_url):
-    """The Tracking section shows the '3rd Dan Free Raises (Precepts)'
-    counter for a Dan 3 Kitsune with non-zero precepts."""
+    """The Tracking section shows the '3rd Dan Free Raises' counter for a
+    Dan 3 Kitsune with non-zero precepts, without naming the skill."""
     _make_kitsune(page, live_server_url, "K3Counter", dan=3, picks=[],
                   skill_overrides={"precepts": 2})
-    counter_label = page.locator('text="3rd Dan Free Raises (Precepts)"')
+    counter_label = page.locator('text="3rd Dan Free Raises"')
     assert counter_label.is_visible()
+    assert page.locator('text="3rd Dan Free Raises (Precepts)"').count() == 0
 
 
 # ---------------------------------------------------------------------------
