@@ -88,10 +88,17 @@ def _public_action(action: EncounterAction, names: Dict[int, str]) -> Dict[str, 
     }
 
 
-def public_state(db: Session, group: GamingGroup) -> Dict[str, Any]:
+def _sides(db: Session, group: GamingGroup):
+    """``(encounter, pcs, npc links)``, each side in its standing order."""
     encounter = npcs.active_encounter(db, group.id)
-    pcs = visible_pcs(db, group)
-    links = list(encounter.npcs) if encounter else []
+    pcs = npcs.in_standing_order(encounter, "pcs", visible_pcs(db, group))
+    links = npcs.in_standing_order(encounter, "npcs", list(encounter.npcs) if encounter else [],
+                                   id_of=lambda link: link.character_id)
+    return encounter, pcs, links
+
+
+def public_state(db: Session, group: GamingGroup) -> Dict[str, Any]:
+    encounter, pcs, links = _sides(db, group)
     names = {c.id: c.name for c in pcs}
     names.update({link.character_id: link.character.name for link in links})
     actions = _actions(db, encounter)
@@ -182,9 +189,7 @@ def _gm_action(action: EncounterAction, names: Dict[int, str]) -> Dict[str, Any]
 
 
 def gm_state(db: Session, group: GamingGroup) -> Dict[str, Any]:
-    encounter = npcs.active_encounter(db, group.id)
-    pcs = visible_pcs(db, group)
-    links = list(encounter.npcs) if encounter else []
+    encounter, pcs, links = _sides(db, group)
     names = {c.id: c.name for c in pcs}
     names.update({link.character_id: link.character.name for link in links})
     out_npcs = []

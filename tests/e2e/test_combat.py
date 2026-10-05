@@ -12,18 +12,19 @@ from tests.e2e.helpers import create_and_apply
 pytestmark = [pytest.mark.combat]
 
 
-def _group_with_pc(page, live_server_url, pc_name):
-    """A fresh group with one visible PC in it. Returns the group id."""
+def _group_with_pc(page, live_server_url, pc_name, *more_pcs):
+    """A fresh group with visible PCs in it. Returns the group id."""
     gname = "Fight-" + uuid.uuid4().hex[:8]
     page.goto(f"{live_server_url}/admin/groups")
     page.fill('input[name="name"][placeholder*="Friday"]', gname)
     page.locator('form[action="/admin/groups/new"] button[type="submit"]').click()
     page.wait_for_load_state("networkidle")
-    create_and_apply(page, live_server_url, name=pc_name, school="akodo_bushi")
-    page.goto(page.url + "/edit")
-    page.wait_for_selector('select[name="gaming_group_id"]')
-    page.locator('select[name="gaming_group_id"]').select_option(label=gname)
-    page.wait_for_timeout(400)
+    for name in (pc_name,) + more_pcs:
+        create_and_apply(page, live_server_url, name=name, school="akodo_bushi")
+        page.goto(page.url + "/edit")
+        page.wait_for_selector('select[name="gaming_group_id"]')
+        page.locator('select[name="gaming_group_id"]').select_option(label=gname)
+        page.wait_for_timeout(400)
     page.goto(live_server_url)
     page.locator('[data-testid="group-link"]', has_text=gname).first.click()
     page.wait_for_url(re.compile(r".*/groups/\d+$"))
@@ -439,3 +440,48 @@ def test_gm_card_keeps_npc_controls_in_a_kebab_menu(page, page_anon, live_server
     # LW is the "took damage" control.
     page.locator(f'[data-testid="npc-lw-btn-{npc_id}"]').click()
     _roller(page).locator('input[x-model="lwAddAmount"]').wait_for()
+
+
+def _drag(page, grip, target, below=True):
+    """Drag by ``grip`` to just below (or above) ``target``, the way a hand does."""
+    g = page.locator(grip).bounding_box()
+    t = page.locator(target).bounding_box()
+    page.mouse.move(g["x"] + g["width"] / 2, g["y"] + g["height"] / 2)
+    page.mouse.down()
+    y = t["y"] + t["height"] + 5 if below else t["y"] - 5
+    page.mouse.move(t["x"] + t["width"] / 2, y, steps=8)
+    page.mouse.up()
+
+
+def _names(page, side):
+    return page.locator(f'[data-order-side="{side}"] [data-order-id]').evaluate_all(
+        "els => els.map(e => e.getAttribute('data-order-id'))")
+
+
+def test_gm_drags_each_side_into_the_order_they_stand_in(page, page_anon, live_server_url):
+    """Each column reorders within itself, persists for the fight, and the
+    player view follows; an NPC dragged over the PC column stays an NPC."""
+    gid = _group_with_pc(page, live_server_url, "AlphaPC", "BetaPC")
+    _start_fight_with_wave_men(page, live_server_url, gid, count=2)
+    pcs, npcs = _names(page, "pcs"), _names(page, "npcs")
+    assert len(pcs) == 2 and len(npcs) == 2
+
+    _drag(page, f'[data-testid="pc-grip-{pcs[0]}"]', f'[data-testid="pc-card-{pcs[1]}"]')
+    page.wait_for_function(f"document.querySelector('[data-order-side=\"pcs\"] [data-order-id]').getAttribute('data-order-id') === '{pcs[1]}'")
+    _drag(page, f'[data-testid="npc-grip-{npcs[1]}"]', f'[data-testid="npc-card-{npcs[0]}"]', below=False)
+    page.wait_for_function(f"document.querySelector('[data-order-side=\"npcs\"] [data-order-id]').getAttribute('data-order-id') === '{npcs[1]}'")
+    page.wait_for_timeout(300)
+
+    page.reload()  # it persists
+    assert _names(page, "pcs") == [pcs[1], pcs[0]] and _names(page, "npcs") == [npcs[1], npcs[0]]
+    page_anon.goto(f"{live_server_url}/groups/{gid}/combat")
+    page_anon.wait_for_selector('[data-order-side="npcs"] [data-order-id]')
+    assert _names(page_anon, "pcs") == [pcs[1], pcs[0]] and _names(page_anon, "npcs") == [npcs[1], npcs[0]]
+    assert page_anon.locator('[data-testid^="pc-grip-"], [data-testid^="npc-grip-"]').count() == 0
+
+    # Dragging an NPC across into the PC column changes neither column.
+    _drag(page, f'[data-testid="npc-grip-{npcs[1]}"]', f'[data-testid="pc-card-{pcs[0]}"]')
+    page.wait_for_timeout(500)
+    page.reload()
+    assert _names(page, "pcs") == [pcs[1], pcs[0]]
+    assert sorted(_names(page, "npcs")) == sorted(npcs)

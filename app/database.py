@@ -244,6 +244,12 @@ def _migrate_add_columns():
                 f"ALTER TABLE users ADD COLUMN {col_name} {col_type} DEFAULT {default}"
             )
 
+    # Encounters table migrations
+    cursor.execute("PRAGMA table_info(encounters)")
+    enc_cols = {row[1] for row in cursor.fetchall()}
+    if enc_cols and "standing_order" not in enc_cols:  # pragma: no cover
+        cursor.execute("ALTER TABLE encounters ADD COLUMN standing_order TEXT DEFAULT '{}'")
+
     # Encounter NPCs table migrations
     cursor.execute("PRAGMA table_info(encounter_npcs)")
     enc_npc_cols = {row[1] for row in cursor.fetchall()}

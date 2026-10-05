@@ -900,6 +900,9 @@ class Encounter(Base):
     rev: Mapped[int] = mapped_column(default=0)
     started_at: Mapped[datetime] = mapped_column(server_default=func.now())
     ended_at: Mapped[Optional[datetime]] = mapped_column(default=None, nullable=True)
+    # The order each side stands in, as the GM dragged it: {"pcs": [ids],
+    # "npcs": [ids]}. No mechanical effect; both views list each side in it.
+    standing_order: Mapped[Optional[Dict[str, List[int]]]] = mapped_column(JSON, default=dict)
 
     npcs: Mapped[List["EncounterNpc"]] = relationship(
         back_populates="encounter", cascade="all, delete-orphan",

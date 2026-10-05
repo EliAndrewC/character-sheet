@@ -2185,6 +2185,7 @@ The combat page is public (design D27): the GM gets the tracker, everyone else t
 - [x] Rebuild (earned XP + combat %) and rename an NPC from its card - `test_combat.py::test_rebuild_and_rename_an_npc`
 - [x] Combat rolls view lists the fight's rolls and filters PC / NPC - `test_combat.py::test_combat_rolls_view_filters_npc_rolls`
 - [x] No JS errors and no horizontal overflow at phone width - `test_combat.py::test_combat_page_has_no_js_errors_and_fits_a_phone`
+- [x] GM drags PC and NPC cards by their grips to reorder each side; the order persists for the fight and the player view (no grips) follows; dragging an NPC over the PC column changes neither column - `test_combat.py::test_gm_drags_each_side_into_the_order_they_stand_in`
 - [x] GM NPC card: the build is a tooltip on the name; Roll initiative / Adjust / Rebuild / Rename / Sheet / Leave fight and the Fighting / Down / Dead status live in a kebab menu (a non-fighting NPC shows a Down / Dead label); LW opens the sheet's light-wounds modal; Impaired is an orange SW count with a tooltip, for players too - `test_combat.py::test_gm_card_keeps_npc_controls_in_a_kebab_menu`
 
 ## Server-made Rolls (mark: `server_rolls`; server-rolls-design; POST /characters/{id}/roll)

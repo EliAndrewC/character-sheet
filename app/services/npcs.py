@@ -241,6 +241,33 @@ def add_to_encounter(db: Session, encounter: Encounter, npc: Character) -> Encou
     return link
 
 
+ORDER_SIDES = ("pcs", "npcs")
+
+
+def in_standing_order(encounter: Optional[Encounter], side: str, items: Sequence[Any],
+                      id_of: Callable[[Any], int] = lambda c: c.id) -> List[Any]:
+    """``items`` in the order the GM dragged this side into; anyone not in
+    it (joined since) keeps the default order, after the rest."""
+    saved = ((encounter.standing_order or {}).get(side) or []) if encounter else []
+    rank = {cid: i for i, cid in enumerate(saved)}
+    return sorted(items, key=lambda c: rank.get(id_of(c), len(saved)))
+
+
+def set_standing_order(db: Session, encounter: Encounter, side: str, ids: Any,
+                       members: Sequence[int]) -> None:
+    """Save one side's order. ``ids`` must be exactly that side's ``members``,
+    each once - a PC never lands among the NPCs or the reverse."""
+    if side not in ORDER_SIDES:
+        raise ValueError("side must be pcs or npcs")
+    if not isinstance(ids, list) or not all(isinstance(i, int) and not isinstance(i, bool) for i in ids):
+        raise ValueError("ids must be a list of character ids")
+    if len(ids) != len(set(ids)) or set(ids) != set(members):
+        raise ValueError("the order must name everyone on that side, once")
+    encounter.standing_order = {**(encounter.standing_order or {}), side: ids}
+    touch(encounter)
+    db.flush()
+
+
 def set_status(db: Session, encounter: Encounter, npc: Character, status: str) -> EncounterNpc:
     if status not in NPC_STATUSES:
         raise ValueError(f"unknown status {status!r}")

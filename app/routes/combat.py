@@ -164,6 +164,30 @@ async def generate(group_id: int, request: Request, db: Session = Depends(get_db
 # NPCs in the fight
 # ---------------------------------------------------------------------------
 
+@router.post("/groups/{group_id}/combat/order")
+async def standing_order(group_id: int, request: Request, db: Session = Depends(get_db)):
+    """The GM dragged one side into a new order: ``{"side": "pcs" | "npcs",
+    "ids": [...]}``, exactly that side's members. Both views follow it."""
+    _, group, err = _load(db, group_id, request)
+    if err:
+        return err
+    encounter = _active(db, group)
+    if encounter is None:
+        return _error("No fight in progress", 409)
+    body = await _body(request)
+    side = body.get("side")
+    members = (
+        [pc.id for pc in combat_view.visible_pcs(db, group)] if side == "pcs"
+        else [link.character_id for link in encounter.npcs]
+    )
+    try:
+        npcs.set_standing_order(db, encounter, side, body.get("ids"), members)
+    except ValueError as exc:
+        return _error(str(exc))
+    db.commit()
+    return {"status": "ok"}
+
+
 @router.post("/groups/{group_id}/combat/npcs/{npc_id}/status")
 async def set_status(group_id: int, npc_id: int, request: Request, db: Session = Depends(get_db)):
     _, group, err = _load(db, group_id, request)

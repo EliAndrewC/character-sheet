@@ -383,3 +383,70 @@ def test_npc_roller_overlay_is_the_gms_and_only_for_npcs_in_the_fight(client, wo
     npcs.end_encounter(s, world["enc"])
     s.commit()
     assert client.get(_url(world, f"/npcs/{npc.id}/roller")).status_code == 404
+
+
+# ---------------------------------------------------------------------------
+# Standing order (drag to reorder each side)
+# ---------------------------------------------------------------------------
+
+@pytest.fixture
+def lineup(client, world):
+    """A second visible PC and a second NPC, so each side can be reordered."""
+    s, g, enc = world["s"], world["g"], world["enc"]
+    pc2 = Character(name="Aiko", owner_discord_id="test_user_1", gaming_group_id=g.id,
+                    school="akodo_bushi", school_ring_choice="Water",
+                    knacks={"double_attack": 1, "feint": 1, "iaijutsu": 1})
+    s.add(pc2)
+    (npc2,) = npcs.generate(s, g, enc, GM, [{"npc_type": "wave_man", "count": 1, "earned_xp": 50,
+                                             "roll_extra": False, "combat_share": 0.74}])
+    s.commit()
+    return {**world, "pc2": pc2, "npc2": npc2}
+
+
+def _order(client, world, side, ids, **kw):
+    return client.post(_url(world, "/order"), json={"side": side, "ids": ids}, **kw)
+
+
+def test_each_side_keeps_the_order_the_gm_drags_it_into(client, lineup):
+    w = lineup
+    s, g = w["s"], w["g"]
+    pcs_default = [p["id"] for p in cv.public_state(s, g)["pcs"]]
+    assert pcs_default == [w["pc2"].id, w["pc"].id]  # by name: Aiko, Yudai
+    assert _order(client, w, "pcs", [w["pc"].id, w["pc2"].id]).status_code == 200
+    assert _order(client, w, "npcs", [w["npc2"].id, w["npc"].id]).status_code == 200
+    s.expire_all()
+    for state in (cv.public_state(s, g), cv.gm_state(s, g)):
+        assert [p["id"] for p in state["pcs"]] == [w["pc"].id, w["pc2"].id]
+        assert [n["id"] for n in state["npcs"]] == [w["npc2"].id, w["npc"].id]
+
+
+def test_someone_who_joins_later_stands_at_the_end(client, lineup):
+    w = lineup
+    s, g, enc = w["s"], w["g"], w["enc"]
+    _order(client, w, "npcs", [w["npc2"].id, w["npc"].id])
+    (npc3,) = npcs.generate(s, g, enc, GM, [{"npc_type": "wave_man", "count": 1, "earned_xp": 50,
+                                             "roll_extra": False, "combat_share": 0.74}])
+    s.commit()
+    s.expire_all()
+    assert [n["id"] for n in cv.public_state(s, g)["npcs"]] == [w["npc2"].id, w["npc"].id, npc3.id]
+
+
+@pytest.mark.parametrize("side,ids,status", [
+    ("pcs", "x", 400),
+    ("pcs", ["a"], 400),
+    ("left", [], 400),
+])
+def test_bad_orders_are_refused(client, lineup, side, ids, status):
+    assert _order(client, lineup, side, ids).status_code == status
+
+
+def test_an_order_must_be_exactly_that_sides_members(client, lineup):
+    w = lineup
+    pcs = [w["pc"].id, w["pc2"].id]
+    assert _order(client, w, "pcs", pcs[:1]).status_code == 400                   # one missing
+    assert _order(client, w, "pcs", pcs + [w["npc"].id]).status_code == 400       # an NPC on the PC side
+    assert _order(client, w, "npcs", [w["npc"].id, w["pc"].id]).status_code == 400  # a PC on the NPC side
+    assert _order(client, w, "pcs", [pcs[0], pcs[0]]).status_code == 400          # twice
+    assert _order(client, w, "pcs", pcs, headers=PLAYER).status_code == 403
+    client.post(_url(w, "/end"))
+    assert _order(client, w, "pcs", pcs).status_code == 409

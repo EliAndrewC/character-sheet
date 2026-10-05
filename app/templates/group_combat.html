@@ -80,13 +80,21 @@
     {# ---------------- Combatants ---------------- #}
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-5">
         {# PCs #}
-        <section class="space-y-3" data-testid="pc-section">
+        <section class="space-y-3" data-testid="pc-section" data-order-side="pcs">
             <h2 class="font-bold text-ink">Player characters</h2>
             <p x-show="state.pcs.length === 0" class="text-sm text-ink/60">No visible characters in this group.</p>
             <template x-for="pc in state.pcs" :key="'pc' + pc.id">
-                <div class="bg-white rounded-lg shadow border border-ink/10 p-3 space-y-2" :data-testid="'pc-card-' + pc.id">
+                <div class="bg-white rounded-lg shadow border border-ink/10 p-3 space-y-2" :data-testid="'pc-card-' + pc.id"
+                     :data-order-id="pc.id" :class="drag && drag.side === 'pcs' && drag.id === pc.id ? 'ring-2 ring-accent' : ''">
                     <div class="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
-                        <span class="font-semibold text-ink truncate min-w-0" x-text="pc.name"></span>
+                        <span class="flex items-center gap-2 min-w-0">
+                            <template x-if="gm">
+                                <button type="button" @pointerdown="startDrag($event, 'pcs', pc.id)" :data-testid="'pc-grip-' + pc.id"
+                                        title="Drag to change the order they stand in" aria-label="Drag to reorder"
+                                        class="cursor-grab touch-none select-none text-ink/30 hover:text-ink leading-none">&#10303;</button>
+                            </template>
+                            <span class="font-semibold text-ink truncate min-w-0" x-text="pc.name"></span>
+                        </span>
                         {# Players: wounds ride the name line, right-aligned, wrapping below when narrow. #}
                         <template x-if="!gm">
                             <span class="ml-auto text-sm text-ink/80 whitespace-nowrap" :data-testid="'pc-public-stats-' + pc.id">
@@ -124,15 +132,20 @@
         </section>
 
         {# NPCs #}
-        <section class="space-y-3" data-testid="npc-section">
+        <section class="space-y-3" data-testid="npc-section" data-order-side="npcs">
             <h2 class="font-bold text-ink">Opponents</h2>
             <p x-show="state.encounter && state.npcs.length === 0" class="text-sm text-ink/60">No opponents yet.</p>
             <template x-for="npc in state.npcs" :key="'npc' + npc.id">
                 <div class="bg-white rounded-lg shadow border border-ink/10 p-3 space-y-2"
-                     :class="npc.down || (npc.status && npc.status !== 'fighting') ? 'opacity-60' : ''"
-                     :data-testid="'npc-card-' + npc.id">
+                     :class="(npc.down || (npc.status && npc.status !== 'fighting') ? 'opacity-60 ' : '') + (drag && drag.side === 'npcs' && drag.id === npc.id ? 'ring-2 ring-accent' : '')"
+                     :data-testid="'npc-card-' + npc.id" :data-order-id="npc.id">
                     <div class="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
                         <div class="min-w-0 flex items-center gap-2">
+                            <template x-if="gm">
+                                <button type="button" @pointerdown="startDrag($event, 'npcs', npc.id)" :data-testid="'npc-grip-' + npc.id"
+                                        title="Drag to change the order they stand in" aria-label="Drag to reorder"
+                                        class="cursor-grab touch-none select-none text-ink/30 hover:text-ink leading-none">&#10303;</button>
+                            </template>
                             {# GM: the build is a tooltip on the name. #}
                             <span class="font-semibold text-ink truncate relative" :class="gm ? 'tooltip-trigger cursor-help' : ''" data-tap-toggle
                                   :data-testid="'npc-name-' + npc.id"><span x-text="npc.name"></span><template x-if="gm"><span class="tooltip-content absolute left-0 top-full z-20 mt-1 p-2 bg-ink text-parchment text-xs rounded shadow-lg w-60 whitespace-normal text-left font-normal"

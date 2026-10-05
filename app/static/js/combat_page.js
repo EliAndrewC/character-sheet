@@ -38,6 +38,7 @@
       dlg: null,
       _timer: null,
       _roller: null,
+      drag: null,
 
       start: function () {
         var self = this;
@@ -62,7 +63,7 @@
       },
 
       poll: async function () {
-        if (this.busy || (document.hidden && !this.playerView)) return;
+        if (this.busy || this.drag || (document.hidden && !this.playerView)) return;
         try {
           var resp = await fetch(this.stateUrl(), { cache: "no-store" });
           if (!resp.ok) return;
@@ -203,6 +204,53 @@
       removeNpc: async function (npc) {
         if (!window.confirm(npc.name + " leaves this fight (they stay in the roster)?")) return;
         await this.post("/npcs/" + npc.id + "/remove");
+      },
+
+      // ---- standing order: the GM drags a card by its grip ----
+      // Pointer events (mouse and touch alike). Each side reorders only
+      // within its own column: the move compares the pointer with the cards
+      // of the side being dragged, so a PC can never land among the NPCs.
+      startDrag: function (event, side, id) {
+        if (!this.gm) return;
+        event.preventDefault();
+        var self = this;
+        this.drag = { side: side, id: id };
+        var move = function (e) { self.dragTo(e.clientY); };
+        var up = function () {
+          window.removeEventListener("pointermove", move);
+          window.removeEventListener("pointerup", up);
+          window.removeEventListener("pointercancel", up);
+          self.endDrag();
+        };
+        window.addEventListener("pointermove", move);
+        window.addEventListener("pointerup", up);
+        window.addEventListener("pointercancel", up);
+      },
+      dragTo: function (y) {
+        var d = this.drag;
+        if (!d) return;
+        var list = this.state[d.side];
+        var from = list.findIndex(function (c) { return c.id === d.id; });
+        // The new place is how many OTHER cards on this side sit above the pointer.
+        var cards = document.querySelectorAll('[data-order-side="' + d.side + '"] [data-order-id]');
+        var to = 0;
+        cards.forEach(function (el, i) {
+          if (i === from) return;
+          var r = el.getBoundingClientRect();
+          if (y > r.top + r.height / 2) to++;
+        });
+        if (to === from || from < 0) return;
+        var moved = list.splice(from, 1)[0];
+        list.splice(to, 0, moved);
+        d.moved = true;
+      },
+      endDrag: async function () {
+        var d = this.drag;
+        this.drag = null;
+        if (!d || !d.moved) return;
+        var ids = this.state[d.side].map(function (c) { return c.id; });
+        var data = await this.post("/order", { side: d.side, ids: ids });
+        if (data === null) await this.refresh();
       },
 
       // ---- the NPC roll overlay ----
