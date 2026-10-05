@@ -167,6 +167,9 @@
                         <template x-if="gm">
                             <span><span class="text-ink/50">TN</span> <b x-text="npc.tn_to_be_hit"></b></span>
                         </template>
+                        <template x-if="!gm && npc.tn_to_be_hit">
+                            <span :data-testid="'npc-public-tn-' + npc.id"><span class="text-ink/50">TN</span> <b x-text="npc.tn_to_be_hit"></b></span>
+                        </template>
                         <span x-show="gm && npc.impaired" class="text-xs px-2 py-0.5 rounded bg-amber-100 text-amber-800">Impaired</span>
                     </div>
 

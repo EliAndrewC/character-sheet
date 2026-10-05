@@ -170,7 +170,7 @@ def test_public_view_shows_totals_but_not_how(page, page_anon, live_server_url):
     state = page_anon.request.get(f"{live_server_url}/groups/{gid}/combat/state").json()
     assert set(state["npcs"][0]) == {
         "id", "name", "light_wounds", "serious_wounds", "down",
-        "actions_this_round", "actions_last_round",
+        "actions_this_round", "actions_last_round", "tn_to_be_hit",
     }
 
 
@@ -274,3 +274,20 @@ def test_gm_opens_a_player_view_tab_that_follows_the_fight(page, live_server_url
         timeout=15000)
     assert page.locator('[data-testid="new-round-btn"]').is_visible()
     assert page.locator(f'[data-testid^="npc-die-{npc_id}-"]').count() > 0
+
+
+def test_players_see_an_npcs_tn_only_after_it_was_attacked(page, page_anon, live_server_url):
+    gid = _group_with_pc(page, live_server_url, "TnPC")
+    npc_id = _start_fight_with_wave_men(page, live_server_url, gid)
+    page_anon.goto(f"{live_server_url}/groups/{gid}/combat")
+    page_anon.wait_for_selector(f'[data-testid="npc-card-{npc_id}"]')
+    assert page_anon.locator(f'[data-testid="npc-public-tn-{npc_id}"]').count() == 0
+
+    page.locator(f'[data-testid="npc-took-damage-{npc_id}"]').click()
+    page.fill('[data-testid="damage-amount"]', "3")
+    page.locator('[data-testid="wound-check-btn"]').click()
+    page.wait_for_function(f"document.querySelector('[data-testid=\"npc-lw-{npc_id}\"]')?.textContent !== '0' || document.querySelector('[data-testid=\"npc-sw-{npc_id}\"]')?.textContent !== '0'")
+    tn = _state(page, live_server_url, gid)["npcs"][0]["tn_to_be_hit"]
+    shown = page_anon.locator(f'[data-testid="npc-public-tn-{npc_id}"]')
+    shown.wait_for(timeout=15000)
+    assert f"TN {tn}" in shown.text_content()

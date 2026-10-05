@@ -244,6 +244,24 @@ def test_other_action_logs_its_label(world):
     assert s.get(EncounterAction, out["action_id"]).label == "Action"
 
 
+def test_tn_to_be_hit_is_public_once_the_npc_was_attacked(world):
+    """Unknown to players until the NPC has taken damage or parried in this
+    fight: either one means somebody attacked it."""
+    s, g, enc, npc = world["s"], world["g"], world["enc"], world["npc"]
+    assert cv.public_state(s, g)["npcs"][0]["tn_to_be_hit"] is None
+    _dice(npc, (2, 5, 9))
+    ca.parry(s, enc, npc, GM, dice=[0], attack_total=10, rng=ConstRng(5))
+    assert cv.public_state(s, g)["npcs"][0]["tn_to_be_hit"] == ca.tn_to_be_hit(npc)
+
+
+def test_tn_to_be_hit_is_public_once_the_npc_has_wounds(world):
+    s, g, enc, npc = world["s"], world["g"], world["enc"], world["npc"]
+    ca.take_damage(s, enc, npc, GM, amount=5, rng=ConstRng(9))
+    assert cv.public_state(s, g)["npcs"][0]["tn_to_be_hit"] == ca.tn_to_be_hit(npc)
+    ca.set_tracking(s, enc, npc, light=0, serious=0)  # the GM undoing a mistake
+    assert cv.public_state(s, g)["npcs"][0]["tn_to_be_hit"] is None
+
+
 # ---------------------------------------------------------------------------
 # Wounds
 # ---------------------------------------------------------------------------
@@ -288,7 +306,7 @@ def test_down_prompt_needs_the_npc_in_the_fight(world):
 # ---------------------------------------------------------------------------
 
 _PUBLIC_NPC_KEYS = {"id", "name", "light_wounds", "serious_wounds", "down",
-                    "actions_this_round", "actions_last_round"}
+                    "actions_this_round", "actions_last_round", "tn_to_be_hit"}
 _PUBLIC_ACTION_KEYS = {"kind", "label", "target", "total", "outcome", "damage"}
 
 

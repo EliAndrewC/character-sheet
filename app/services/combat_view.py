@@ -97,6 +97,10 @@ def public_state(db: Session, group: GamingGroup) -> Dict[str, Any]:
     for link in links:
         npc = link.character
         mine = [a for a in actions if a.character_id == npc.id]
+        # Players learn an NPC's TN once someone has attacked it: it has
+        # wounds from this fight (a returning NPC is healed) or has parried.
+        attacked = (npc.current_light_wounds or 0) + (npc.current_serious_wounds or 0) > 0 \
+            or any(a.kind == "parry" for a in mine)
         out_npcs.append({
             "id": npc.id,
             "name": npc.name,
@@ -107,6 +111,7 @@ def public_state(db: Session, group: GamingGroup) -> Dict[str, Any]:
             "actions_last_round": (
                 sum(1 for a in mine if a.round == current - 1) if current >= 2 else None
             ),
+            "tn_to_be_hit": tn_to_be_hit(npc) if attacked else None,
         })
     return {
         "rev": _rev(encounter, pcs + [link.character for link in links]),
