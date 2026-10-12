@@ -1756,7 +1756,7 @@ def _duel_damage(db, session, character, args, rng):
         raise RollRefused(str(exc)) from None
     base = build_all_roll_formulas(character.to_dict()).get("knack:iaijutsu") or {}
     pool = duel_damage_pool(base, weapon, duel["excess"])
-    extras = [f"{weapon[0]}k{weapon[1]} weapon", f"+{max(0, duel['excess'])}k0 from the strike's excess"]
+    extras = pool["parts"]
     return _child_damage(db, session, character, "iaijutsu:damage", "Iaijutsu Duel - Damage",
                          pool["rolled"], pool["kept"], pool["flat"], rng, extras)
 
@@ -1773,7 +1773,7 @@ def _kakita_5th_damage(db, session, character, args, rng):
     except (TypeError, ValueError):
         raise RollRefused("the opponent's roll and weapon dice must be whole numbers") from None
     pool = kakita_5th_damage_pool(session.formula or {}, weapon, _session_total(session) - opponent)
-    extras = [f"{weapon[0]}k{weapon[1]} weapon", f"{pool['adjust']:+d}k0 from the contest"]
+    extras = pool["parts"]
     if pool["rolled"] <= 0 or pool["kept"] <= 0:
         pool.update(rolled=0, kept=0)
     return _child_damage(db, session, character, "kakita_5th_dan:damage", "Kakita 5th Dan damage",

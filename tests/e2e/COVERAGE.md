@@ -882,6 +882,11 @@ The Suzume family of the Sparrow clan is drawn from Crane Doji Artisans and merc
 - [x] Copy-as-image on the iaijutsu duel strike-result panel → `test_iaijutsu_duel.py::test_duel_strike_result_has_copy_as_image_button`
 - [x] Copy-as-image on the iaijutsu duel damage-result panel carries the damage dice and pool (it used to post an empty KEPT row) → `test_iaijutsu_duel.py::test_duel_damage_copy_image_carries_the_damage_dice`
 - [x] Spending a 3rd Dan free raise on a settled skill roll re-prerenders the Copy-as-image card with the bumped total → `test_rolls.py::test_spend_3rd_dan_raise_reprerenders_copy_image`
+- [x] Copy-as-image card lists Hiruma 3rd Dan's post-parry bonus as a BONUSES row (and the attack panel shows it once), and the card adds up to its total → `test_roll_card_bonuses.py::test_card_lists_hiruma_3rd_dan_on_attack`
+- [x] Copy-as-image card lists Bayushi 4th Dan's banked raise applied after the roll (post-roll spends come from the server's session rows) → `test_roll_card_bonuses.py::test_card_lists_bayushi_4th_dan_raise_applied_after_the_roll`
+- [x] Kakita 5th Dan contest card lists the 2nd Dan free raise (also on the panel), the damage result has its own Copy-as-image button, its card names 4th Dan's +5, and the damage gets its own history row → `test_roll_card_bonuses.py::test_kakita_5th_dan_cards_list_2nd_and_4th_dan_and_damage_has_copy`
+- [x] Iaijutsu duel contested card lists Kakita 2nd Dan's free raise (duel cards used to send no bonuses) → `test_roll_card_bonuses.py::test_duel_contested_card_lists_kakita_2nd_dan`
+- [x] Attack card lists ticked Specializations as a bonus and drops their "if related to Specialization" alternative rows → `test_advantage_details.py::test_attack_specialization_checkboxes_on_attack_modal`
 - [x] Undoing a free raise re-prerenders the card back to the original total → `test_rolls.py::test_undo_raise_reprerenders_back_to_original_total`
 - [x] Toggling the post-roll arbitrary attack bonus on the attack result panel re-prerenders the attack card → `test_rolls.py::test_post_roll_attack_bonus_reprerenders_attack_card`
 - [x] Spend-then-undo (net-zero state change) hits the payload-signature dedupe and does NOT spawn a redundant prerender → `test_rolls.py::test_identical_payload_does_not_trigger_redundant_prerender`

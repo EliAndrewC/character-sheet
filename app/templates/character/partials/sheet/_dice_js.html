@@ -240,6 +240,13 @@
             _serverRollRequest: null,
             _serverSessionId: null,
             _serverDice: null,
+            // The post-roll spends the server has on this roll's session
+            // (``payload.bonuses`` rows marked ``post_roll``: raises,
+            // Conviction, banked bonuses, Mirumoto points, ...). The card
+            // lists THESE rather than re-deriving them from the panel's
+            // counters, so every spend the total includes is named on it.
+            _serverPostRollBonuses: [],
+            k5FormulaBonuses: [],
             _serverSessionKind: null,
             _atkRequest: null,
             atkError: '',
@@ -752,6 +759,8 @@
             k5DamageRolled: 0,
             k5DamageKept: 0,
             k5DamageFlat: 0,
+            k5DamageParts: [],
+            k5Extras: [],
             k5DamageDiceAdjust: 0,
             // Wound check
             wcModalOpen: false,
@@ -1156,6 +1165,7 @@
                 this.$watch('atkDamageTotal', reprerender);
                 this.$watch('atkFailedParry', reprerender);
                 this.$watch('atkPostRollBonusApplied', reprerender);
+                this.$watch('_serverPostRollBonuses', reprerender);
                 this.$watch('wcRollTotal', reprerender);
                 this.$watch('wcPassed', reprerender);
                 this.$watch('wcSeriousWounds', reprerender);
@@ -2109,6 +2119,7 @@
                 this._serverSessionMode = data.mode;
                 this._serverSessionKind = 'roll';
                 this._serverDice = data.dice;
+                this._adoptPostRollBonuses(data.payload);
                 this.feintState = data.feint || null;
                 if (data.notes) {
                     this.perRoundResetMessages = [...(this.perRoundResetMessages || []), ...data.notes];
@@ -2359,27 +2370,9 @@
                         + ' from 5th Dan (lowest 3 dice added to result)'
                     );
                 }
-                if ((this.mirumotoPointsSpentThisRoll || 0) > 0) {
-                    const n = this.mirumotoPointsSpentThisRoll;
-                    extras.push(
-                        '+' + (n * 2) + ' from ' + n + ' 3rd Dan point'
-                        + (n > 1 ? 's' : '')
-                    );
-                }
-                if ((this.convictionSpentThisRoll || 0) > 0) {
-                    const n = this.convictionSpentThisRoll;
-                    extras.push(
-                        '+' + n + ' from ' + n + ' Conviction point'
-                        + (n > 1 ? 's' : '')
-                    );
-                }
-                if ((this.togashiRaisesSpentThisRoll || 0) > 0) {
-                    const n = this.togashiRaisesSpentThisRoll;
-                    extras.push(
-                        '+' + (n * 5) + ' from ' + n
-                        + ' Togashi daily athletics raise' + (n > 1 ? 's' : '')
-                    );
-                }
+                // Post-roll spends (raises, Conviction, Mirumoto points,
+                // Togashi raises, ...) are BONUSES rows from the server's
+                // session (_cardBonusRows), not bullets here.
                 if (this.luckyUsedThisRoll) {
                     extras.push('Lucky reroll used');
                 }
@@ -2389,9 +2382,6 @@
                 // Player Character Point uses (rules/10).
                 if (this.pcpRerollUsedThisRoll) {
                     extras.push('Player Character Point reroll used');
-                }
-                if ((this.pcpRaisesSpentThisRoll || 0) > 0) {
-                    extras.push('+5 from a Player Character Point free raise');
                 }
                 if (this.pcpTensRerolledThisRoll) {
                     extras.push('Rerolled 10s while impaired by spending a Player Character Point');
@@ -2490,17 +2480,17 @@
             // Damage-roll extras. Includes:
             // - ``atkDamageParts`` (pre-formatted dice-composition strings
             //   like "3k2 weapon", "+3k0 from Fire", "+4k0 extra from
-            //   attack roll", "+4 flat bonus") - these explain HOW the
-            //   damage roll's XkY formula was assembled. The live damage
+            //   attack roll", "+5 from 4th Dan (iaijutsu)") - these explain
+            //   HOW the damage roll's XkY + N was assembled. The live damage
             //   modal renders them as bullets just below the kept-sum.
+            //   ``parts`` overrides them (a duel's damage carries its own).
             // - Shosuro 5th Dan damage bonus
-            // - Conviction spent on the damage roll
             //
             // Damage rolls do NOT accept VP/OW/overflow - those live on
             // the preceding attack roll, not on damage.
-            _damageExtraBonusBullets() {
+            _damageExtraBonusBullets(parts) {
                 const extras = [];
-                for (const p of (this.atkDamageParts || [])) {
+                for (const p of (parts || this.atkDamageParts || [])) {
                     if (p) extras.push(String(p));
                 }
                 if ((this.atkDamageShosuroBonus || 0) > 0) {
@@ -2509,13 +2499,7 @@
                         + ' from Shosuro 5th Dan (lowest 3 dice added to damage)'
                     );
                 }
-                if ((this.convictionSpentThisRoll || 0) > 0) {
-                    const n = this.convictionSpentThisRoll;
-                    extras.push(
-                        '+' + n + ' from ' + n + ' Conviction point'
-                        + (n > 1 ? 's' : '')
-                    );
-                }
+                // Conviction on the damage roll is a BONUSES row now.
                 return extras;
             },
 
@@ -2529,20 +2513,7 @@
                     parts: Array.isArray(d.parts) && d.parts.length
                         ? d.parts : [d.value],
                 }));
-                const bonuses = [];
-                for (const b of (f.bonuses || [])) {
-                    if (b && b.amount && b.label) {
-                        bonuses.push({label: b.label, amount: b.amount});
-                    }
-                }
-                if ((this.raisesSpentThisRoll || 0) > 0) {
-                    const n = this.raisesSpentThisRoll;
-                    bonuses.push({
-                        label: n === 1 ? 'from 1 raise spent'
-                                       : 'from ' + n + ' raises spent',
-                        amount: n * 5,
-                    });
-                }
+                const bonuses = this._cardBonusRows(f);
                 // Append the skill-rank parenthetical to the formula
                 // subtitle so a reader can disambiguate when a 1st
                 // Dan extra die has inflated the rolled count - e.g.
@@ -2713,27 +2684,7 @@
             },
 
             _buildWoundCheckImagePayload() {
-                const bonuses = [];
-                for (const b of (this.formula?.bonuses || [])) {
-                    if (b && b.amount && b.label) {
-                        bonuses.push({label: b.label, amount: b.amount});
-                    }
-                }
-                if ((this.wcRaisesSpent || 0) > 0) {
-                    const n = this.wcRaisesSpent;
-                    bonuses.push({
-                        label: n === 1 ? 'from 1 raise spent'
-                                       : 'from ' + n + ' raises spent',
-                        amount: n * 5,
-                    });
-                }
-                if ((this.wcPostRollVpSpent || 0) > 0) {
-                    const n = this.wcPostRollVpSpent;
-                    bonuses.push({
-                        label: 'from ' + n + ' VP spent post-roll',
-                        amount: n * 5,
-                    });
-                }
+                const bonuses = this._cardBonusRows(this.formula);
                 const passed = !!this.wcPassed;
                 const margin = passed
                     ? (this.wcRollTotal || this.baseTotal || 0) - (this.wcLightWounds || 0)
@@ -2790,26 +2741,7 @@
             },
 
             _buildAttackImagePayload() {
-                const bonuses = [];
-                for (const b of (this.atkFormula?.bonuses || [])) {
-                    if (b && b.amount && b.label) {
-                        bonuses.push({label: b.label, amount: b.amount});
-                    }
-                }
-                if ((this.atkRaisesSpent || 0) > 0) {
-                    const n = this.atkRaisesSpent;
-                    bonuses.push({
-                        label: n === 1 ? 'from 1 raise spent'
-                                       : 'from ' + n + ' raises spent',
-                        amount: n * 5,
-                    });
-                }
-                if ((this.atkPostRollBonusApplied || 0) !== 0) {
-                    bonuses.push({
-                        label: 'extra bonus',
-                        amount: this.atkPostRollBonusApplied,
-                    });
-                }
+                const bonuses = this._cardBonusRows(this.atkFormula);
                 let footer;
                 if (this.atkHit) {
                     const extras = this.atkExtraDice || 0;
@@ -2852,7 +2784,8 @@
                     dropped: this._cellsFromDice(
                         (this.finalDice || []).filter(d => !d.kept)
                     ),
-                    bonuses: [],
+                    // Post-roll spends on the damage (Conviction).
+                    bonuses: this._cardBonusRows({}),
                     // Damage rolls don't accept VP/OW/etc - pull from the
                     // narrow damage-only extras helper.
                     extras: this._damageExtraBonusBullets(),
@@ -2867,7 +2800,7 @@
                     formula: this.formulaText || '',
                     kept: this._cellsFromDice(this.keptDice || []),
                     dropped: this._cellsFromDice(this.unkeptDice || []),
-                    bonuses: [],
+                    bonuses: this._cardBonusRows(this.formula),
                     extras: this._extraBonusBullets(this.formula),
                     kept_sum: this.keptSum || 0,
                     total: this.duelContestedRoll || this.baseTotal || 0,
@@ -2880,7 +2813,7 @@
                     formula: this.formulaText || '',
                     kept: this._cellsFromDice(this.keptDice || []),
                     dropped: this._cellsFromDice(this.unkeptDice || []),
-                    bonuses: [],
+                    bonuses: this._cardBonusRows(this.formula),
                     extras: this._extraBonusBullets(this.formula),
                     kept_sum: this.keptSum || 0,
                     total: this.duelStrikeRoll || this.baseTotal || 0,
@@ -2896,34 +2829,20 @@
                     formula: this.formulaText || '',
                     kept: this._cellsFromDice(this.keptDice || []),
                     dropped: this._cellsFromDice(this.unkeptDice || []),
-                    bonuses: [],
-                    // Damage rolls don't accept VP/OW; reuse the narrow helper.
-                    extras: this._damageExtraBonusBullets(),
+                    bonuses: this._cardBonusRows({}),
+                    // Damage rolls don't accept VP/OW; reuse the narrow helper
+                    // with the duel damage's own parts (the server's, which
+                    // name Kakita 4th Dan's raise), not the attack modal's.
+                    extras: this._damageExtraBonusBullets(this.formula?.damage_parts || []),
                     kept_sum: this.keptSum || 0,
                     total: this.duelDamageTotal || this.atkDamageTotal || 0,
                 };
             },
 
             _buildKakita5thImagePayload() {
-                const bonuses = [];
-                if ((this.k5NoIaijutsuBonus || 0) > 0) {
-                    bonuses.push({
-                        label: '5th Dan (opponent has no iaijutsu)',
-                        amount: this.k5NoIaijutsuBonus,
-                    });
-                }
-                if ((this.k5KakitaBonus || 0) > 0) {
-                    bonuses.push({
-                        label: 'Kakita 3rd Dan',
-                        amount: this.k5KakitaBonus,
-                    });
-                }
-                if ((this.k5ContestSkillBonus || 0) > 0) {
-                    bonuses.push({
-                        label: 'contested-roll skill gap',
-                        amount: this.k5ContestSkillBonus,
-                    });
-                }
+                // The server's rows: the 5th Dan / 3rd Dan / skill-gap
+                // bonuses AND the iaijutsu formula's own (2nd Dan's free
+                // raise), then any post-roll spend.
                 const all = this.k5RollDice || [];
                 const keptSum = all.filter(d => d.kept)
                     .reduce((s, d) => s + (d.value || 0), 0);
@@ -2932,10 +2851,29 @@
                     formula: this.k5FormulaText || '',
                     kept: this._cellsFromDice(all.filter(d => d.kept)),
                     dropped: this._cellsFromDice(all.filter(d => !d.kept)),
-                    bonuses: bonuses,
-                    extras: this._extraBonusBullets(this.formula),
+                    bonuses: this._cardBonusRows({bonuses: this.k5FormulaBonuses}),
+                    extras: (this.k5Extras || []).map(String),
                     kept_sum: keptSum,
                     total: this.k5RollTotal || 0,
+                };
+            },
+
+            _buildKakita5thDamageImagePayload() {
+                const all = this.k5DamageDice || [];
+                const keptSum = all.filter(d => d.kept)
+                    .reduce((s, d) => s + (d.value || 0), 0);
+                return {
+                    title: 'Kakita 5th Dan Damage',
+                    formula: this.k5DamageRolled + 'k' + this.k5DamageKept
+                        + (this.k5DamageFlat > 0 ? ' + ' + this.k5DamageFlat : ''),
+                    kept: this._cellsFromDice(all.filter(d => d.kept)),
+                    dropped: this._cellsFromDice(all.filter(d => !d.kept)),
+                    bonuses: [],
+                    extras: (this.k5DamageParts || []).map(String),
+                    kept_sum: keptSum,
+                    total: this.k5DamageTotal || 0,
+                    footer: 'vs opponent ' + (this.k5OpponentRoll || 0)
+                        + ' (your iaijutsu ' + (this.k5RollTotal || 0) + ')',
                 };
             },
 
@@ -2961,6 +2899,9 @@
                 }
                 if (this.k5Open && this.k5Phase === 'result') {
                     return this._buildKakita5thImagePayload();
+                }
+                if (this.k5Open && this.k5Phase === 'damage-result') {
+                    return this._buildKakita5thDamageImagePayload();
                 }
                 if (this.open && this.phase === 'done') {
                     return (this.formula && this.formula.is_initiative)
@@ -3099,6 +3040,12 @@
                     return {
                         key: 'kakita_5th_dan',
                         label: (payload && payload.title) || 'Kakita 5th Dan',
+                    };
+                }
+                if (this.k5Open && this.k5Phase === 'damage-result') {
+                    return {
+                        key: 'kakita_5th_dan:damage',
+                        label: (payload && payload.title) || 'Kakita 5th Dan Damage',
                     };
                 }
                 // Default path: the dice-roller's own roll (skill, initiative,
@@ -3313,6 +3260,7 @@
             _adoptActAnswer(data) {
                 const t = window._trackingBridge;
                 if (!data || !t) return;
+                if (data.payload) this._adoptPostRollBonuses(data.payload);
                 if (data.tracking && t.canEdit && this._serverSessionMode === 'live') {
                     t.adoptServerState(data.tracking, false);
                     this.advRaisesConfig.used = t.getCount('adventure_raises') || 0;
@@ -3413,9 +3361,35 @@
                 }
             },
 
+            // Keep the session's post-roll bonus rows for the card.
+            _adoptPostRollBonuses(payload) {
+                this._serverPostRollBonuses = ((payload || {}).bonuses || [])
+                    .filter(b => b && b.post_roll && b.amount && b.label)
+                    .map(b => ({label: b.label, amount: b.amount}));
+            },
+
+            // The card's BONUSES rows: every labeled flat in the rolled
+            // formula, then the post-roll spends the server recorded, then
+            // the one spend not on the session (a Priest ally's Conviction).
+            // tests/test_roll_card_bonuses.py pins that the formula and the
+            // server's rows name every point the total includes.
+            _cardBonusRows(formula) {
+                const rows = [];
+                for (const b of ((formula || {}).bonuses || [])) {
+                    if (b && b.amount && b.label && !b.post_roll) {
+                        rows.push({label: b.label, amount: b.amount});
+                    }
+                }
+                for (const b of (this._serverPostRollBonuses || [])) rows.push({...b});
+                const ally = this.totalPriestAllySpentThisRoll();
+                if (ally) rows.push({label: "ally's Conviction (Priest 5th Dan)", amount: ally});
+                return rows;
+            },
+
             // Show the session's dice and total as the server scored them.
             _adoptServerResult(data) {
                 this._serverDice = data.dice;
+                this._adoptPostRollBonuses(data.payload);
                 this.formula = { ...this.formula, ...data.formula };
                 const p = data.payload || {};
                 if (this.formula.is_initiative) {
@@ -4668,6 +4642,8 @@
                 this.k5DamageRolled = 0;
                 this.k5DamageKept = 0;
                 this.k5DamageFlat = 0;
+                this.k5DamageParts = [];
+                this.k5Extras = [];
                 this.k5DamageDiceAdjust = 0;
                 this.k5Open = true;
             },
@@ -4752,9 +4728,17 @@
                 await window.L7RDice.animateDice(data.dice, !!data.formula.reroll_tens,
                     this.prefs.dice_animation_enabled, playSound, 'dice-animation-k5');
                 const bonus = (label) => (data.payload.bonuses || []).find(b => b.label === label)?.amount || 0;
-                this.k5NoIaijutsuBonus = bonus('opponent has no iaijutsu');
+                this.k5NoIaijutsuBonus = bonus('5th Dan (opponent has no iaijutsu)');
                 this.k5KakitaBonus = bonus('Kakita 3rd Dan (phase 0)');
-                this.k5ContestSkillBonus = bonus('contested skill');
+                this.k5ContestSkillBonus = bonus('contested-roll skill gap');
+                // Every formula bonus (the school's iaijutsu free raise too),
+                // for the panel's "also" lines and the card.
+                this.k5FormulaBonuses = (data.payload.bonuses || []).filter(b => !b.post_roll);
+                // The server's DETAILS lines for the contest. ``this.formula``
+                // is NOT the contest's (this path never sets it), so the
+                // generic _extraBonusBullets would describe the last roll.
+                this.k5Extras = data.payload.extras || [];
+                this._adoptPostRollBonuses(data.payload);
                 const kept = data.payload.kept.map(c => c.parts.reduce((a, b) => a + b, 0));
                 const dropped = data.payload.dropped.map(c => c.parts.reduce((a, b) => a + b, 0));
                 this.k5RollDice = dropped.map(v => ({value: v, kept: false}))
@@ -4794,7 +4778,18 @@
                 this.k5DamageDice = dropped.map(v => ({value: v, kept: false}))
                     .concat(kept.map(v => ({value: v, kept: true})));
                 this.k5DamageTotal = dmg.total;
+                // The card's DETAILS: how the pool was built, as the server
+                // scored it (weapon, ring, the contest, 4th Dan's +5, ...).
+                this.k5DamageParts = (dmg.payload && dmg.payload.extras) || [];
                 this.k5Phase = 'damage-result';
+                this._prerenderRollImage(this._buildKakita5thDamageImagePayload());
+                // The damage is its own recorded row (kakita_5th_dan:damage):
+                // later PATCHes go to it, never over the contest's.
+                this._rollHistoryReqId++;
+                this._rollHistoryId = dmg.history_id || null;
+                this._rollHistoryPendingPayload = null;
+                this._lastRollHistorySig = this._rollHistoryId
+                    ? JSON.stringify(this._currentRollHistoryPayload().payload) : '';
             },
 
             async _kakita5thAnimate(dice, trayId) {

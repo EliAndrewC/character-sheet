@@ -318,7 +318,7 @@ def test_hiruma_bank_adds_to_damage(client, scripted):
     cid = _school(client, "hiruma_scout", adventure_state={"hiruma_banked_attack_bonus": 4})
     sid = _attack(client, cid, tn=5, headers=scripted("9")).json()["session_id"]
     dmg = _act(client, cid, sid, "damage").json()["damage"]
-    assert "+4 from Hiruma post-parry bonus" in dmg["payload"]["extras"]
+    assert "+4 from Hiruma 3rd Dan (after a parry)" in dmg["payload"]["extras"]
     assert dmg["formula"]["flat"] >= 4
 
 

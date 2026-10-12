@@ -1569,7 +1569,7 @@ def test_attack_tooltip_updates_when_conviction_spent_on_damage(page, live_serve
     page.locator('[data-roll-key="attack"]').click()
     page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=5000)
     # TN 5 is trivially low, guaranteeing a hit so damage roll is available.
-    page.locator('[data-modal="attack"] select').first.select_option("5")
+    page.locator('[data-modal="attack"] select:visible').first.select_option("5")
     page.locator('[data-modal="attack"] [data-action="roll-attack"]').click()
     page.wait_for_function("""() => {
         const els = document.querySelectorAll('[x-data]');

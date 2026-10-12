@@ -242,6 +242,11 @@ def test_attack_specialization_checkboxes_on_attack_modal(page, live_server_url)
     breakdown = page.locator('[data-testid="attack-spec-breakdown"]')
     assert breakdown.is_visible()
     assert "+20" in breakdown.text_content()
+    # The exported card lists the applied specs as a bonus, and no longer
+    # offers them as "if related to Specialization" alternative totals.
+    card = page.evaluate("() => window._diceRoller._buildAttackImagePayload()")
+    assert {"label": "Specialization (katana, vs cavalry)", "amount": 20} in card["bonuses"]
+    assert not any("Specialization" in a["label"] for a in card.get("alternatives") or [])
 
 
 def test_attack_specialization_section_hidden_without_attack_spec(page, live_server_url):

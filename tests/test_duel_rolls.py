@@ -67,8 +67,8 @@ def test_kakita_5th_dan_contest_is_latched_once_per_round(client, scripted):
     data = _roll(client, cid, roll_key="kakita_5th_dan", opponent_has_iaijutsu=False, defender_phase=4,
                  opponent_skill_rank=3, headers=scripted("5")).json()
     labels = {b["label"]: b["amount"] for b in data["payload"]["bonuses"]}
-    assert labels["opponent has no iaijutsu"] == 5 and labels["Kakita 3rd Dan (phase 0)"] == 8
-    assert labels["contested skill"] == 10
+    assert labels["5th Dan (opponent has no iaijutsu)"] == 5 and labels["Kakita 3rd Dan (phase 0)"] == 8
+    assert labels["contested-roll skill gap"] == 10
     assert _get(client, cid).adventure_state["kakita_5th_dan_used"] is True
     assert "already been used" in _roll(client, cid, roll_key="kakita_5th_dan").json()["error"]
     assert "no void" in _roll(client, cid, roll_key="kakita_5th_dan", void=1).json()["error"]

@@ -21,6 +21,7 @@ those (design 4.4).
 from __future__ import annotations
 
 import math
+import re
 from typing import Any, Dict, List
 
 WEAPONS: Dict[str, tuple] = {
@@ -114,6 +115,26 @@ def damage_flags(character_data: Dict[str, Any]) -> Dict[str, bool]:
     }
 
 
+def damage_flat_parts(formula: Dict[str, Any], flat: int) -> List[str]:
+    """The damage roll's flat bonus as card lines, one per source.
+
+    ``damage_bonus_sources`` names every school flat ("+5 from 4th Dan
+    (iaijutsu)") beside the dice ones ("+1 rolled die from 1st Dan"); the
+    flat ones are listed as they are, and whatever they do not account for
+    stays a bare "+N flat". A lone "+5 flat" left the reader to guess which
+    technique it was."""
+    parts: List[str] = []
+    named = 0
+    for src in formula.get("damage_bonus_sources") or []:
+        m = re.match(r"^\+(\d+) from ", str(src))
+        if m and named + int(m.group(1)) <= flat:
+            parts.append(str(src))
+            named += int(m.group(1))
+    if flat - named:
+        parts.append(f"{flat - named:+d} flat")
+    return parts
+
+
 def damage_pool(
     formula: Dict[str, Any],
     *,
@@ -187,11 +208,10 @@ def damage_pool(
             parts.append("+1k0 from Lunge (Otaku 4th Dan)")
     if wm_weapon > base_rolled:
         parts.append(f"+{wm_weapon - base_rolled}k0 weapon dice from Wave Man")
-    if flat:
-        parts.append(f"+{flat} flat")
+    parts.extend(damage_flat_parts(formula, flat))
     if hiruma:
         # Hiruma 3rd Dan: the post-parry bank adds to damage as well.
-        parts.append(f"+{hiruma} from Hiruma post-parry bonus")
+        parts.append(f"+{hiruma} from Hiruma 3rd Dan (after a parry)")
         flat += hiruma
     for label, amount in extra_flats:
         parts.append(f"+{amount} flat from {label}")

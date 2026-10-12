@@ -1412,6 +1412,10 @@ def build_wound_check_formula(
     rolled = base_ring_val + 1
     kept = base_ring_val
     flat = 0
+    # Each flat bonus also as a labeled row: the result card and the roll
+    # history list ``bonuses``, and an unlisted flat is a total nobody can
+    # check (tests/test_roll_card_bonuses.py).
+    flat_bonuses: list = []
 
     school_id = character_data.get("school", "")
     knacks = character_data.get("knacks", {}) or {}
@@ -1453,6 +1457,7 @@ def build_wound_check_formula(
         if "wound_check" in sd_list:
             flat += FREE_RAISE_VALUE
             bonus_sources.append("+5 from 2nd Dan")
+            flat_bonuses.append({"label": "2nd Dan", "amount": FREE_RAISE_VALUE})
 
     # Mantis Wave-Treader 2nd Dan: flexible free raise can target wound_check.
     if dan >= 2 and school_id == "mantis_wave_treader":
@@ -1460,6 +1465,7 @@ def build_wound_check_formula(
         if tech_choices_wc.get("mantis_2nd_dan_free_raise") == "wound_check":
             flat += FREE_RAISE_VALUE
             bonus_sources.append("+5 from 2nd Dan")
+            flat_bonuses.append({"label": "2nd Dan", "amount": FREE_RAISE_VALUE})
 
     # Flexible 2nd Dan free raise (Ide Diplomat, Isawa Ishi, Kitsune Warden,
     # Shugenja, Suzume Overseer): if the player picked wound_check as their
@@ -1473,6 +1479,7 @@ def build_wound_check_formula(
         if tech_choices_wc.get("second_dan_choice") == "wound_check":
             flat += FREE_RAISE_VALUE
             bonus_sources.append("+5 from 2nd Dan")
+            flat_bonuses.append({"label": "2nd Dan", "amount": FREE_RAISE_VALUE})
 
     # Shosuro Actor: +acting_rank rolled dice on wound checks
     if school_id == "shosuro_actor":
@@ -1499,12 +1506,14 @@ def build_wound_check_formula(
         air_val = rings.get("Air", 2)
         flat += air_val
         bonus_sources.append(f"+{air_val} from Courtier 5th Dan")
+        flat_bonuses.append({"label": "Courtier 5th Dan", "amount": air_val})
 
     # Strength of the Earth advantage
     advantages = character_data.get("advantages", []) or []
     if "strength_of_the_earth" in advantages:
         flat += FREE_RAISE_VALUE
         bonus_sources.append("+5 from Strength of the Earth")
+        flat_bonuses.append({"label": "Strength of the Earth", "amount": FREE_RAISE_VALUE})
 
     # Bayushi Bushi 5th Dan: halve light wounds for serious wound calculation
     bayushi_5th_dan_half_lw = school_id == "bayushi_bushi" and dan >= 5
@@ -1525,6 +1534,7 @@ def build_wound_check_formula(
     if overflow_flat:
         flat += overflow_flat
         bonus_sources.append(f"+{overflow_flat} from extra dice above 10k10")
+        flat_bonuses.append({"label": "extra dice above 10k10", "amount": overflow_flat})
 
     return {
         "label": f"Wound Check ({wc_ring_name})" if swapped_from_ring else "Wound Check",
@@ -1536,7 +1546,7 @@ def build_wound_check_formula(
         "is_wound_check": True,
         "bonus_sources": bonus_sources,
         "alternatives": [],
-        "bonuses": [],
+        "bonuses": flat_bonuses,
         "adventure_raises_max_per_roll": 0,
         "bayushi_5th_dan_half_lw": bayushi_5th_dan_half_lw,
         "doji_5th_dan_wc": doji_5th_dan_wc,

@@ -51,11 +51,11 @@ def kakita_5th_formula(character: Any, formulas: Dict[str, Any], choices: Dict[s
             bonuses.append({"label": label, "amount": amount})
 
     if not choices.get("opponent_has_iaijutsu", True):
-        add("opponent has no iaijutsu", 5)
+        add("5th Dan (opponent has no iaijutsu)", 5)
     x = int(data.get("attack", 1) or 0) if school_dan(data) >= 3 else 0
     add("Kakita 3rd Dan (phase 0)", x * _int(choices, "defender_phase", 11, 0, 11))
     own = int((character.knacks or {}).get("iaijutsu") or 0)
-    add("contested skill", 5 * max(0, own - _int(choices, "opponent_skill_rank", 4, 0, 10)))
+    add("contested-roll skill gap", 5 * max(0, own - _int(choices, "opponent_skill_rank", 4, 0, 10)))
     f["bonuses"] = bonuses
     f["label"] = "Kakita 5th Dan Contest"
     # A contested roll, not an attack against a TN.
@@ -63,24 +63,48 @@ def kakita_5th_formula(character: Any, formulas: Dict[str, Any], choices: Dict[s
     return f
 
 
-def duel_damage_pool(formula: Dict[str, Any], weapon: tuple, extra_dice: int) -> Dict[str, int]:
+def _damage_parts(formula: Dict[str, Any], weapon: tuple, ring_val: int, capped: Dict[str, int],
+                  last: str) -> list:
+    """How a duel damage pool was assembled, as the card's lines: the weapon,
+    the ring, the school's dice, ``last`` (the excess / the contest), and each
+    flat bonus by name (Kakita 4th Dan's +5 used to go unlisted)."""
+    from app.services.combat_math import damage_flat_parts
+
+    parts = [f"{weapon[0]}k{weapon[1]} weapon"]
+    if ring_val:
+        parts.append(f"+{ring_val}k0 from {formula.get('damage_ring_name') or 'Fire'}")
+    extra_r, extra_k = formula.get("damage_extra_rolled") or 0, formula.get("damage_extra_kept") or 0
+    if extra_r or extra_k:
+        parts.append(f"+{extra_r}k{extra_k} from school")
+    parts.append(last)
+    parts.extend(damage_flat_parts(formula, formula.get("damage_flat_bonus") or 0))
+    if capped["overflow_flat"]:
+        parts.append(f"+{capped['overflow_flat']} from rolling above 10k10")
+    return parts
+
+
+def duel_damage_pool(formula: Dict[str, Any], weapon: tuple, extra_dice: int) -> Dict[str, Any]:
     """The duel strike's damage: weapon + ring + school dice + a die per point
     of the strike's excess."""
-    rolled = weapon[0] + (formula.get("damage_ring_val") or 2) + (formula.get("damage_extra_rolled") or 0) \
-        + max(0, extra_dice)
+    ring_val = formula.get("damage_ring_val") or 2
+    rolled = weapon[0] + ring_val + (formula.get("damage_extra_rolled") or 0) + max(0, extra_dice)
     kept = weapon[1] + (formula.get("damage_extra_kept") or 0)
-    return apply_dice_cap(rolled, kept, formula.get("damage_flat_bonus") or 0)
+    capped = apply_dice_cap(rolled, kept, formula.get("damage_flat_bonus") or 0)
+    capped["parts"] = _damage_parts(formula, weapon, ring_val, capped,
+                                    f"+{max(0, extra_dice)}k0 from the strike's excess")
+    return capped
 
 
-def kakita_5th_damage_pool(formula: Dict[str, Any], weapon: tuple, diff: int) -> Dict[str, int]:
+def kakita_5th_damage_pool(formula: Dict[str, Any], weapon: tuple, diff: int) -> Dict[str, Any]:
     """Kakita 5th Dan's damage: +/- a rolled die per 5 the contest was won or
     lost by."""
     adjust = diff // 5 if diff >= 0 else -((-diff) // 5)
-    rolled = max(0, weapon[0] + (formula.get("damage_extra_rolled") or 0)
-                 + (formula.get("damage_ring_val") or 0) + adjust)
+    ring_val = formula.get("damage_ring_val") or 0
+    rolled = max(0, weapon[0] + (formula.get("damage_extra_rolled") or 0) + ring_val + adjust)
     kept = max(0, weapon[1] + (formula.get("damage_extra_kept") or 0))
     capped = apply_dice_cap(rolled, kept, formula.get("damage_flat_bonus") or 0)
     capped["adjust"] = adjust
+    capped["parts"] = _damage_parts(formula, weapon, ring_val, capped, f"{adjust:+d}k0 from the contest")
     return capped
 
 

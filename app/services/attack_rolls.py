@@ -64,9 +64,22 @@ def offensive_count(state: Dict[str, Any]) -> int:
     return sum(1 for p in state.get("mantis_posture_history") or [] if p == "offensive")
 
 
-def _bonus(formula: Dict[str, Any], label: str, amount: int) -> None:
+def _bonus(formula: Dict[str, Any], label: str, amount: int, testid: str = "") -> None:
+    """Add ``amount`` to the flat AND name it in ``bonuses``. Every flat an
+    attack gains goes through here: the result panel, the exported card and
+    the history row all list ``bonuses``, so a bare ``flat +=`` is a bonus
+    the total includes that nobody can see (tests/test_roll_card_bonuses.py).
+    ``testid`` lets the result panel keep a stable hook on the row."""
     formula["flat"] = (formula.get("flat") or 0) + amount
-    formula["bonuses"] = list(formula.get("bonuses") or []) + [{"label": label, "amount": amount}]
+    row: Dict[str, Any] = {"label": label, "amount": amount}
+    if testid:
+        row["testid"] = testid
+    formula["bonuses"] = list(formula.get("bonuses") or []) + [row]
+
+
+def _spec_alternative_label(text: str) -> str:
+    # The conditional row dice.py offers for an attack specialization.
+    return f"if related to Specialization ({text or 'your specialization'})"
 
 
 def _int(choices: Dict[str, Any], key: str, low: int = 0, high: int = 999) -> Optional[int]:
@@ -108,12 +121,13 @@ def build_attack(character: Any, formula: Dict[str, Any], choices: Dict[str, Any
     if f.get("doji_5th_dan_always"):
         doji = max(0, (tn - 10) // 5)
         if doji:
-            f["flat"] = (f.get("flat") or 0) + doji
+            _bonus(f, f"Doji 5th Dan (TN {tn})", doji)
             f["doji_5th_dan_bonus"] = doji
     # Doji Artisan 4th Dan: the phase, against a target who has not attacked.
     phase = _int(choices, "doji_phase", 0, 10)
     if f.get("doji_4th_dan_untouched_target") and phase:
-        f["flat"] = (f.get("flat") or 0) + phase
+        _bonus(f, f"Doji 4th Dan (phase {phase}, target's first attack against you this round)",
+               phase, "doji-4th-dan-breakdown")
         f["doji_4th_dan_bonus"] = phase
         f["doji_4th_dan_phase"] = phase
     # Attack specializations: +10 per box ticked.
@@ -123,16 +137,28 @@ def build_attack(character: Any, formula: Dict[str, Any], choices: Dict[str, Any
             raise ValueError("no such attack specialization")
         picked.append(i)
     if picked:
-        f["flat"] = (f.get("flat") or 0) + 10 * len(picked)
+        texts = [specs[i].get("text") or "unspecified" for i in picked]
+        _bonus(f, f"Specialization ({', '.join(texts)})", 10 * len(picked), "attack-spec-breakdown")
         f["attack_spec_bonus"] = 10 * len(picked)
-        f["attack_spec_applied_texts"] = [specs[i].get("text") or "unspecified" for i in picked]
+        f["attack_spec_applied_texts"] = texts
+        # An applied specialization is no longer conditional: drop its "if
+        # related to" alternative row, or the card offers the +10 twice.
+        alts = list(f.get("alternatives") or [])
+        for i in picked:
+            label = _spec_alternative_label(specs[i].get("text") or "")
+            for j, alt in enumerate(alts):
+                if alt.get("label") == label:
+                    del alts[j]
+                    break
+        f["alternatives"] = alts
     die = _int(choices, "die_value", 0, 10)
     # Shinjo Special: +2 per phase the action die was held.
     shinjo_phase = _int(choices, "shinjo_phase", 0, 10)
     if f.get("shinjo_phase_bonus_attack") and flags["shinjo_phase_bonus"] and die is not None and shinjo_phase:
         bonus = 2 * max(0, shinjo_phase - die)
         if bonus:
-            f["flat"] = (f.get("flat") or 0) + bonus
+            _bonus(f, f"Shinjo Bushi (die {die} held to phase {shinjo_phase})", bonus,
+                   "shinjo-phase-bonus-breakdown")
             f.update(shinjo_phase_bonus=bonus, shinjo_phase_bonus_phase=shinjo_phase,
                      shinjo_phase_bonus_die_value=die)
     # Kakita 3rd Dan: X per phase before the defender acts.
@@ -143,14 +169,15 @@ def build_attack(character: Any, formula: Dict[str, Any], choices: Dict[str, Any
     if f.get("kakita_3rd_dan_defender_phase_bonus") and x and attacker is not None and defender is not None:
         bonus = x * max(0, defender - attacker)
         if bonus:
-            f["flat"] = (f.get("flat") or 0) + bonus
+            _bonus(f, f"Kakita 3rd Dan (die {attacker}, defender phase {defender}, X = {x})", bonus,
+                   "kakita-3rd-dan-breakdown")
             f.update(kakita_3rd_dan_bonus=bonus, kakita_3rd_dan_attacker_phase=attacker,
                      kakita_3rd_dan_defender_phase=defender, kakita_3rd_dan_x=x)
     # The banks an attack spends by being made.
     consumes = []
     hiruma = int(state.get("hiruma_banked_attack_bonus") or 0)
     if hiruma:
-        f["flat"] = (f.get("flat") or 0) + hiruma
+        _bonus(f, "Hiruma 3rd Dan (after a parry)", hiruma)
         f["hiruma_parry_bonus"] = hiruma
         consumes.append("hiruma_banked_attack_bonus")
     ide = int(state.get("ide_banked_tn_reduce") or 0)

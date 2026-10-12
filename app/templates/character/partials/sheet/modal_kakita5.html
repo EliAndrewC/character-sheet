@@ -141,6 +141,14 @@
                             opponent <span x-text="k5OpponentSkillRank"></span>)
                         </div>
                     </div>
+                    {# The iaijutsu roll's own bonuses (2nd Dan's free raise, ...):
+                       the server's rows less the three named above. #}
+                    <template x-for="b in (k5FormulaBonuses || []).filter(b => !['5th Dan (opponent has no iaijutsu)', 'Kakita 3rd Dan (phase 0)', 'contested-roll skill gap'].includes(b.label))" :key="b.label">
+                        <div class="text-xs text-ink/70" data-testid="kakita-5th-formula-bonus">
+                            &bull; <span x-text="(b.amount >= 0 ? '+' : '') + b.amount"></span>
+                            from <span x-text="b.label"></span>
+                        </div>
+                    </template>
 
                     <div class="flex items-center gap-2">
                         <label class="text-sm">Opponent's iaijutsu/attack roll:</label>
@@ -202,9 +210,15 @@
                         <span x-show="k5DamageDice.length === 0" class="text-ink/40 italic">no dice rolled</span>
                     </div>
                     <div class="bg-ink/5 rounded p-3">
-                        <div class="font-bold text-2xl text-accent"
-                             data-testid="kakita-5th-damage-total"
-                             x-text="k5DamageTotal + ' damage'"></div>
+                        <div class="flex items-center justify-between gap-3">
+                            <div class="font-bold text-2xl text-accent"
+                                 data-testid="kakita-5th-damage-total"
+                                 x-text="k5DamageTotal + ' damage'"></div>
+                            {% include 'character/partials/copy_roll_image_button.html' %}
+                        </div>
+                        <template x-for="part in (k5DamageParts || [])" :key="part">
+                            <div class="text-xs text-ink/70 mt-0.5">&bull; <span x-text="part"></span></div>
+                        </template>
                     </div>
                     <button type="button" @click="closeKakita5thDanModal()"
                             class="btn-secondary px-4 py-2 rounded text-sm font-medium">

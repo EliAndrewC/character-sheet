@@ -476,16 +476,17 @@
                         <div x-show="formula?.void_overflow_bonus > 0" x-cloak class="text-xs text-ink/70 mt-0.5">
                             &bull; +<span x-text="formula?.void_overflow_bonus"></span> from rolling above 10k10
                         </div>
+                        {# Every situational bonus the server stacked (Hiruma 3rd Dan,
+                           a ticked Specialization, Doji, Shinjo, Kakita 3rd Dan, ...)
+                           is a labeled row here - the same rows the exported card
+                           lists. ``testid`` keeps the old per-technique hooks. #}
                         <template x-for="b in (formula?.bonuses || [])" :key="b.label">
-                            <div class="text-xs text-ink/70 mt-0.5">
+                            <div class="text-xs text-ink/70 mt-0.5" :data-testid="b.testid || null">
                                 &bull; <span x-text="(b.amount >= 0 ? '+' : '') + b.amount"></span> from <span x-text="b.label"></span>
                             </div>
                         </template>
                         <div x-show="formula?.isawa_tn_trade" x-cloak class="text-xs text-ink/70 mt-0.5">
                             &bull; +<span x-text="schoolAbilities.isawa_tn_trade_bonus || 0"></span> from Isawa 3rd Dan TN trade
-                        </div>
-                        <div x-show="formula?.hiruma_parry_bonus > 0" x-cloak class="text-xs text-ink/70 mt-0.5">
-                            &bull; +<span x-text="formula?.hiruma_parry_bonus"></span> from Hiruma post-parry bonus
                         </div>
                         <div x-show="akodoSpentThisRoll > 0" x-cloak class="text-xs text-ink/70 mt-0.5">
                             &bull; +<span x-text="akodoSpentThisRoll"></span> from Akodo 3rd Dan banked bonus
@@ -496,30 +497,6 @@
                         <div x-show="mirumotoPointsSpentThisRoll > 0" x-cloak class="text-xs text-ink/70 mt-0.5">
                             &bull; +<span x-text="mirumotoPointsSpentThisRoll * 2"></span>
                             from <span x-text="mirumotoPointsSpentThisRoll"></span> 3rd Dan point<span x-show="mirumotoPointsSpentThisRoll > 1">s</span>
-                        </div>
-                        <div x-show="formula?.doji_5th_dan_bonus > 0" x-cloak class="text-xs text-ink/70 mt-0.5">
-                            &bull; +<span x-text="formula?.doji_5th_dan_bonus"></span> from Doji 5th Dan (TN <span x-text="atkTN"></span>)
-                        </div>
-                        <div x-show="formula?.doji_4th_dan_bonus > 0" x-cloak class="text-xs text-ink/70 mt-0.5"
-                             data-testid="doji-4th-dan-breakdown">
-                            &bull; +<span x-text="formula?.doji_4th_dan_bonus"></span> from Doji 4th Dan (phase <span x-text="formula?.doji_4th_dan_phase"></span>, target's first attack against you this round)
-                        </div>
-                        <div x-show="formula?.attack_spec_bonus > 0" x-cloak class="text-xs text-ink/70 mt-0.5"
-                             data-testid="attack-spec-breakdown">
-                            &bull; +<span x-text="formula?.attack_spec_bonus"></span> from Specialization (<span x-text="(formula?.attack_spec_applied_texts || []).join(', ')"></span>)
-                        </div>
-                        <div x-show="formula?.shinjo_phase_bonus > 0" x-cloak class="text-xs text-ink/70 mt-0.5"
-                             data-testid="shinjo-phase-bonus-breakdown">
-                            &bull; +<span x-text="formula?.shinjo_phase_bonus"></span> from Shinjo Bushi (die
-                            <span x-text="formula?.shinjo_phase_bonus_die_value"></span>
-                            held to phase <span x-text="formula?.shinjo_phase_bonus_phase"></span>)
-                        </div>
-                        <div x-show="formula?.kakita_3rd_dan_bonus > 0" x-cloak class="text-xs text-ink/70 mt-0.5"
-                             data-testid="kakita-3rd-dan-breakdown">
-                            &bull; +<span x-text="formula?.kakita_3rd_dan_bonus"></span> from Kakita 3rd Dan (die
-                            <span x-text="formula?.kakita_3rd_dan_attacker_phase"></span>,
-                            defender phase <span x-text="formula?.kakita_3rd_dan_defender_phase"></span>,
-                            X = <span x-text="formula?.kakita_3rd_dan_x"></span>)
                         </div>
                         <div x-show="shosuroLowest3Bonus > 0" x-cloak class="text-xs text-ink/70 mt-0.5">
                             &bull; +<span x-text="shosuroLowest3Bonus"></span> from Shosuro 5th Dan (lowest 3 dice added to result)
