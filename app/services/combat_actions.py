@@ -22,6 +22,7 @@ from sqlalchemy.orm import Session
 
 from app.models import Character, Encounter, RollHistory
 from app.services import fight_log, npcs
+from app.services.dice import dying_threshold
 from app.services.roll_engine import execute_initiative, impaired_now
 from app.services.tracking import start_combat_round
 
@@ -56,9 +57,10 @@ def _record(
 
 
 def _down_prompt(encounter: Encounter, npc: Character) -> bool:
-    """At 2 x Earth serious wounds the GM says unconscious or dead (D9)."""
+    """At the dying threshold (2 x Earth, adjusted for Permanent Wound /
+    Great Destiny) the GM says unconscious or dead (D9)."""
     link = npcs.link_for(encounter, npc.id)
-    down = (npc.current_serious_wounds or 0) >= 2 * (npc.ring_earth or 2)
+    down = (npc.current_serious_wounds or 0) >= dying_threshold(npc)
     return bool(down and link is not None and link.status == "fighting")
 
 

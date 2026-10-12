@@ -59,6 +59,24 @@ def test_group_page_links_to_combat_for_everyone(page, page_nonadmin, live_serve
     assert "LinkPC" in page_nonadmin.locator('[data-testid="pc-section"]').text_content()
 
 
+def test_pc_names_link_to_their_sheets_in_a_new_tab(page, page_anon, live_server_url):
+    gid = _group_with_pc(page, live_server_url, "SheetLinkPC")
+    pc_id = page.request.get(f"{live_server_url}/groups/{gid}/combat/state").json()["pcs"][0]["id"]
+    for viewer in (page, page_anon):
+        viewer.goto(f"{live_server_url}/groups/{gid}/combat")
+        link = viewer.locator(f'[data-testid="pc-name-{pc_id}"]')
+        assert link.text_content() == "SheetLinkPC"
+        assert link.get_attribute("href") == f"/characters/{pc_id}"
+        assert link.get_attribute("target") == "_blank"
+    with page.context.expect_page() as new_tab:
+        page.locator(f'[data-testid="pc-name-{pc_id}"]').click()
+    sheet = new_tab.value
+    sheet.wait_for_load_state()
+    assert sheet.url.endswith(f"/characters/{pc_id}")
+    assert "SheetLinkPC" in sheet.content()
+    sheet.close()
+
+
 def _roller(page):
     """The NPC roll overlay: the sheet's own menu and modals, in an iframe."""
     page.wait_for_selector('[data-testid="npc-roller-frame"]')
@@ -359,7 +377,7 @@ def test_player_view_puts_wounds_on_the_name_line(page, page_anon, live_server_u
     page_anon.goto(f"{live_server_url}/groups/{gid}/combat")
     page_anon.wait_for_selector(f'[data-testid="npc-public-stats-{npc_id}"]')
     assert _same_line(page_anon, f'[data-testid="npc-name-{npc_id}"]', f'[data-testid="npc-public-stats-{npc_id}"]')
-    pc_name = f'[data-testid="pc-card-{pc_id}"] span.font-semibold'
+    pc_name = f'[data-testid="pc-name-{pc_id}"]'
     assert _same_line(page_anon, pc_name, f'[data-testid="pc-public-stats-{pc_id}"]')
     text = " ".join(page_anon.locator(f'[data-testid="pc-public-stats-{pc_id}"]').inner_text().split())
     assert text == "LW 0 · SW 0"
@@ -423,6 +441,8 @@ def test_gm_card_keeps_npc_controls_in_a_kebab_menu(page, page_anon, live_server
     for gone in ("Took damage", "Roll initiative", "Adjust", "Rebuild", "Rename", "Leave fight"):
         assert gone not in card.inner_text(), gone
     page.locator(f'[data-testid="npc-menu-{npc_id}"]').click()
+    # Alpine shows the menu on its next tick; reading the text at once raced it.
+    page.locator(f'[data-testid="npc-sheet-{npc_id}"]').wait_for(state="visible")
     menu_text = card.inner_text()
     for item in ("Roll initiative", "Adjust", "Rebuild", "Rename", "Sheet", "Leave fight", "Fighting", "Down", "Dead"):
         assert item in menu_text, item

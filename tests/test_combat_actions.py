@@ -105,6 +105,29 @@ def test_tn_to_be_hit_is_public_once_the_npc_has_wounds(world):
 # Wounds
 # ---------------------------------------------------------------------------
 
+def test_dying_threshold_counts_permanent_wound_and_great_destiny(world):
+    s, g, enc, pc, npc = world["s"], world["g"], world["enc"], world["pc"], world["npc"]
+    pc.ring_earth = 3
+    pc.disadvantages = ["permanent_wound"]
+    s.flush()
+    (row,) = cv.gm_state(s, g)["pcs"]
+    assert row["max_serious_wounds"] == 5  # 2 x 3, less one
+    pc.disadvantages, pc.advantages = [], ["great_destiny"]
+    s.flush()
+    assert cv.gm_state(s, g)["pcs"][0]["max_serious_wounds"] == 7
+    pc.disadvantages = ["permanent_wound"]
+    s.flush()
+    assert cv.gm_state(s, g)["pcs"][0]["max_serious_wounds"] == 6  # they cancel out
+
+    # The NPC "down" prompt uses the same threshold.
+    npc.ring_earth = 2
+    npc.disadvantages = ["permanent_wound"]
+    assert ca.set_tracking(s, enc, npc, serious=3)["down_prompt"] is True
+    npc.disadvantages, npc.advantages = [], ["great_destiny"]
+    assert ca.set_tracking(s, enc, npc, serious=4)["down_prompt"] is False
+    assert ca.set_tracking(s, enc, npc, serious=5)["down_prompt"] is True
+
+
 def test_set_tracking(world):
     s, enc, npc = world["s"], world["enc"], world["npc"]
     with pytest.raises(ca.ActionError):

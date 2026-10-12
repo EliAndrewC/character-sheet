@@ -136,7 +136,9 @@
                                         title="Drag to change the order they stand in" aria-label="Drag to reorder"
                                         class="cursor-grab touch-none select-none text-ink/30 hover:text-ink leading-none">&#10303;</button>
                             </template>
-                            <span class="font-semibold text-ink truncate min-w-0" x-text="pc.name"></span>
+                            <a :href="'/characters/' + pc.id" target="_blank" rel="noopener" :data-testid="'pc-name-' + pc.id"
+                               title="Open the character sheet in a new tab"
+                               class="font-semibold text-ink truncate min-w-0 hover:underline" x-text="pc.name"></a>
                         </span>
                         <template x-if="gm && state.encounter">
                             <div class="relative ml-auto" x-data="{ open: false }" @click.outside="open = false">
@@ -460,7 +462,7 @@
 
                 <template x-if="dlg.kind === 'down'">
                     <div class="space-y-3" data-testid="down-prompt">
-                        <p class="text-sm" x-text="dlg.npc.name + ' has taken twice their Earth in serious wounds.'"></p>
+                        <p class="text-sm" x-text="dlg.npc.name + ' has reached their dying threshold in serious wounds.'"></p>
                         <div class="flex gap-2">
                             <button type="button" @click="setStatus(dlg.npc, 'unconscious', true)" data-testid="down-unconscious"
                                     class="btn-secondary px-3 py-1.5 rounded text-sm">Down</button>

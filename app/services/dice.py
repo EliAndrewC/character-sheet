@@ -345,6 +345,16 @@ def is_impaired(character_data: dict) -> bool:
     return character_data.get("current_serious_wounds", 0) >= earth
 
 
+def dying_threshold(character) -> int:
+    """Serious wounds that kill (or, for an NPC, put down): 2 x Earth, one
+    fewer with Permanent Wound, one more with Great Destiny. The sheet, the
+    roller and the combat page all read this."""
+    earth = character.ring_earth or 2
+    return (2 * earth
+            - (1 if "permanent_wound" in (character.disadvantages or []) else 0)
+            + (1 if "great_destiny" in (character.advantages or []) else 0))
+
+
 def apply_dice_caps(rolled: int, kept: int) -> Tuple[int, int, int]:
     """Apply L7R dice caps.
 

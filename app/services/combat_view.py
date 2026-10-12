@@ -25,7 +25,7 @@ from app.services import npc_generator as gen
 from app.services import npcs
 from app.services import fight_log
 from app.services.combat_actions import tn_to_be_hit
-from app.services.dice import is_impaired
+from app.services.dice import dying_threshold, is_impaired
 from app.services.per_adventure import per_adventure_abilities, remaining
 from app.services.void_spend import void_limits, void_pools
 
@@ -157,7 +157,7 @@ def _combatant(character: Character) -> Dict[str, Any]:
         "light_wounds": character.current_light_wounds or 0,
         "serious_wounds": character.current_serious_wounds or 0,
         "earth": character.ring_earth,
-        "max_serious_wounds": 2 * (character.ring_earth or 2),
+        "max_serious_wounds": dying_threshold(character),
         "impaired": is_impaired(data),
         "void": pools["regular"],
         "temp_void": pools["temp"],

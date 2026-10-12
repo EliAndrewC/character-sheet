@@ -47,7 +47,7 @@ from app.services.dark_secret import (
     strip_dark_secret,
 )
 from app.data import shosuro_lowest_3_avg
-from app.services.dice import build_all_roll_formulas, is_impaired
+from app.services.dice import build_all_roll_formulas, dying_threshold, is_impaired
 from app.services.roll_engine import apply_dice_cap
 from app.services.roll_sessions import server_rolled
 from app.services.attack_rolls import attack_flags
@@ -1387,9 +1387,7 @@ def sheet_context(request: Request, character: Character, db: Session) -> Option
     # (_dice_js.html _dyingThreshold), on the sheet and the combat page.
     ring_map = character.rings
     dying_base = ring_map["Earth"] * 2
-    dying_adj = (dying_base
-                 - (1 if "permanent_wound" in (character.disadvantages or []) else 0)
-                 + (1 if "great_destiny" in (character.advantages or []) else 0))
+    dying_adj = dying_threshold(character)
 
     return {
         "ring_map": ring_map,
