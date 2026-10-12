@@ -730,6 +730,53 @@ def _award_after_text(award: Dict[str, Any]) -> str:
     return ", ".join(parts)
 
 
+def _next_version_number(character: Character, db: Session) -> int:
+    latest = (
+        db.query(CharacterVersion)
+        .filter(CharacterVersion.character_id == character.id)
+        .order_by(CharacterVersion.version_number.desc())
+        .first()
+    )
+    return (latest.version_number + 1) if latest else 1
+
+
+def record_gm_xp_award(
+    character: Character,
+    db: Session,
+    amount: int,
+    label: str,
+    author_discord_id: str | None = None,
+) -> Optional[CharacterVersion]:
+    """Add ``amount`` earned XP, as the GM, to the live character AND to
+    its published snapshot, recorded as a version of its own.
+
+    Bumping only the row would leave every player with a "Draft changes"
+    they did not make; publishing the row would apply whatever draft
+    they have pending. So the new version is the OLD published snapshot
+    plus the XP, and any pending draft stays exactly as pending as it was
+    (its diff against the new snapshot is unchanged). Discard therefore
+    keeps the award. A character that was never published has no
+    snapshot to update, so it only gets the row bump.
+    """
+    character.earned_xp = (character.earned_xp or 0) + amount
+    if not character.is_published or character.published_state is None:
+        return None
+    old_state = character.published_state
+    # A new dict: an in-place change to a JSON column is not detected.
+    new_state = {**old_state, "earned_xp": (old_state.get("earned_xp") or 0) + amount}
+    character.published_state = new_state
+    version = CharacterVersion(
+        character_id=character.id,
+        version_number=_next_version_number(character, db),
+        state=new_state,
+        summary=f"GM awarded {amount} XP: {label}",
+        author_discord_id=author_discord_id,
+    )
+    db.add(version)
+    db.flush()
+    return version
+
+
 def publish_character(
     character: Character,
     db: Session,
@@ -759,19 +806,10 @@ def publish_character(
         else:
             summary = "Initial character creation"
 
-    # Determine version number
-    latest = (
-        db.query(CharacterVersion)
-        .filter(CharacterVersion.character_id == character.id)
-        .order_by(CharacterVersion.version_number.desc())
-        .first()
-    )
-    version_number = (latest.version_number + 1) if latest else 1
-
     # Create version record
     version = CharacterVersion(
         character_id=character.id,
-        version_number=version_number,
+        version_number=_next_version_number(character, db),
         state=current_state,
         summary=summary,
         author_discord_id=author_discord_id,

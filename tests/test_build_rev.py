@@ -126,7 +126,7 @@ def test_two_editor_tabs(client):
         "rings": {"Air": 2, "Fire": 2, "Earth": 2, "Water": 3, "Void": 2},
     })
     assert stale.status_code == 409
-    assert stale.json() == {"error": "stale", "build_rev": 1}
+    assert stale.json() == {"error": "stale", "build_rev": 1, "earned_xp": 0}
     session.refresh(char)
     assert char.ring_fire == 3            # A's raise survived
     assert char.honor == 1.0              # nothing of B's was half-applied

@@ -1,0 +1,197 @@
+{% extends "base.html" %}
+
+{% block title %}L7R - {{ group.name }} XP{% endblock %}
+
+{% block nav_center %}<a href="/groups/{{ group.id }}" class="pointer-events-auto hover:underline" data-testid="group-nav-link">{{ group.name }}</a> XP{% endblock %}
+
+{# This is a GM tool; the "New Character" control isn't a primary action here. #}
+{% block nav_new_character %}{% endblock %}
+
+{% block content %}
+<div x-data='groupXp({{ group.id }}, {{ cards | tojson }})'
+     class="space-y-6 max-w-3xl mx-auto">
+    <div class="flex items-center justify-between gap-3">
+        <h1 class="text-xl font-bold text-ink">XP Awards</h1>
+        <a href="/groups/{{ group.id }}" class="text-sm text-accent hover:underline">&larr; Back to {{ group.name }}</a>
+    </div>
+
+    {# Empty state #}
+    <template x-if="chars.length === 0">
+        <p class="text-ink/60 text-sm" data-testid="group-xp-empty">
+            No visible characters in this group yet.
+        </p>
+    </template>
+
+    {# Mass award: the same earned XP to every character below. #}
+    <template x-if="chars.length > 0">
+        <section class="bg-white rounded-lg shadow border border-ink/10 p-4 space-y-3"
+                 data-testid="mass-xp-award">
+            <h2 class="font-bold text-ink">Award to everyone</h2>
+            <p class="text-xs text-ink/60">
+                Adds the same earned XP to all
+                <span x-text="chars.length"></span> character<span x-show="chars.length !== 1">s</span> below.
+                Each one gets a new version in its history with this reason; nothing a player
+                has not applied yet is applied by it.
+            </p>
+            <p x-show="mismatched().length > 0" x-cloak data-testid="mass-xp-warning"
+               class="text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded px-3 py-2">
+                <span x-text="mismatched().map(c => c.name).join(', ')"></span>
+                <span x-text="mismatched().length === 1 ? 'has' : 'have'"></span>
+                an unapplied change to Earned XP. If that is this adventure's XP typed in by
+                the player, awarding it here counts it twice.
+            </p>
+            <div class="flex flex-wrap items-end gap-2">
+                <div class="flex-1 min-w-[12rem]">
+                    <label class="block text-xs font-medium mb-1">Reason</label>
+                    <input type="text" x-model="massLabel" maxlength="200"
+                           data-testid="mass-xp-label"
+                           placeholder="e.g. The Haunted Shrine"
+                           class="w-full border rounded px-2 py-1.5 text-sm">
+                </div>
+                <div class="w-24">
+                    <label class="block text-xs font-medium mb-1">XP</label>
+                    <input type="number" x-model.number="massAmount" min="1" step="1"
+                           data-testid="mass-xp-amount"
+                           class="w-full border rounded px-2 py-1.5 text-sm text-right">
+                </div>
+                <button type="button" @click="awardAll()" :disabled="massBusy"
+                        data-testid="mass-xp-award-btn"
+                        class="btn-primary px-4 py-2 rounded text-sm font-medium disabled:opacity-40">
+                    Award to all
+                </button>
+            </div>
+            <p x-show="massError" x-cloak class="text-sm text-red-700" data-testid="mass-xp-error" x-text="massError"></p>
+            <p x-show="massOk" x-cloak class="text-sm text-success" data-testid="mass-xp-ok" x-text="massOk"></p>
+        </section>
+    </template>
+
+    {# One card per visible character: its XP + an individual award. #}
+    <template x-for="c in chars" :key="c.id">
+        <section class="bg-white rounded-lg shadow border border-ink/10 p-4 space-y-3"
+                 data-group-xp-card :data-character-id="c.id">
+            <div class="flex items-baseline justify-between gap-3">
+                <div class="min-w-0">
+                    <a class="font-bold text-ink hover:underline truncate block" :href="'/characters/' + c.id" x-text="c.name"></a>
+                    <div class="text-xs text-ink/50">Player: <span x-text="c.owner_display_name"></span></div>
+                </div>
+                <div class="text-right shrink-0">
+                    <div class="text-xs text-ink/50">Earned XP</div>
+                    <div class="font-bold text-ink">
+                        <span data-testid="earned-xp" x-text="c.xp.earned_xp"></span>
+                        <span class="text-xs font-normal text-ink/50">(<span data-testid="total-xp" x-text="c.xp.total_xp"></span> total)</span>
+                    </div>
+                </div>
+            </div>
+            <p x-show="isMismatched(c)" x-cloak data-testid="xp-mismatch"
+               class="text-xs text-amber-800">
+                Applied: <span x-text="c.xp.published_earned_xp"></span> earned XP. The player's
+                unapplied draft says <span x-text="c.xp.earned_xp"></span>.
+            </p>
+
+            <div class="border-t border-ink/10 pt-2 flex flex-wrap items-end gap-2">
+                <div class="flex-1 min-w-[10rem]">
+                    <label class="block text-xs font-medium mb-1">Award reason</label>
+                    <input type="text" maxlength="200" x-model="rowLabel[c.id]"
+                           data-testid="row-xp-label"
+                           placeholder="e.g. Won the duel"
+                           class="w-full border rounded px-2 py-1.5 text-sm">
+                </div>
+                <div class="w-20">
+                    <label class="block text-xs font-medium mb-1">XP</label>
+                    <input type="number" min="1" step="1" x-model.number="rowAmount[c.id]"
+                           data-testid="row-xp-amount"
+                           class="w-full border rounded px-2 py-1.5 text-sm text-right">
+                </div>
+                <button type="button" @click="awardOne(c.id)" :disabled="rowBusy[c.id]"
+                        data-testid="row-xp-award-btn"
+                        class="btn-primary px-3 py-2 rounded text-sm font-medium disabled:opacity-40">
+                    Award
+                </button>
+                <p x-show="rowError[c.id]" x-cloak class="w-full text-sm text-red-700" x-text="rowError[c.id]"></p>
+                <p x-show="rowOk[c.id]" x-cloak class="w-full text-sm text-success" data-testid="row-xp-ok" x-text="rowOk[c.id]"></p>
+            </div>
+        </section>
+    </template>
+</div>
+
+<script>
+function groupXp(groupId, chars) {
+    return {
+        groupId: groupId,
+        chars: chars,
+        massLabel: '', massAmount: '', massError: '', massOk: '', massBusy: false,
+        rowLabel: {}, rowAmount: {}, rowError: {}, rowOk: {}, rowBusy: {},
+        // Seed every per-row key up front so :disabled / x-show bind to a
+        // defined falsy value (an undefined key leaves the button disabled).
+        init() {
+            for (const c of this.chars) {
+                this.rowLabel[c.id] = '';
+                this.rowAmount[c.id] = '';
+                this.rowError[c.id] = '';
+                this.rowOk[c.id] = '';
+                this.rowBusy[c.id] = false;
+            }
+        },
+        isMismatched(c) {
+            return c.xp.published_earned_xp !== null && c.xp.published_earned_xp !== c.xp.earned_xp;
+        },
+        mismatched() { return this.chars.filter(c => this.isMismatched(c)); },
+        _validAmount(n) { return Number.isInteger(n) && n > 0; },
+        async _award(body) {
+            const resp = await fetch('/groups/' + this.groupId + '/xp/award', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(body),
+            });
+            const data = await resp.json().catch(() => ({}));
+            if (!resp.ok) throw new Error(data.error || 'Could not award - please try again.');
+            const awards = data.awards || {};
+            for (const c of this.chars) {
+                const xp = awards[String(c.id)];
+                if (xp) c.xp = xp;
+            }
+            return awards;
+        },
+        async awardOne(charId) {
+            this.rowError[charId] = ''; this.rowOk[charId] = '';
+            const label = (this.rowLabel[charId] || '').trim();
+            const amount = this.rowAmount[charId];
+            if (!label) { this.rowError[charId] = 'Enter a reason.'; return; }
+            if (!this._validAmount(amount)) { this.rowError[charId] = 'Enter a whole number of XP above 0.'; return; }
+            this.rowBusy[charId] = true;
+            try {
+                await this._award({char_id: charId, label: label, amount: amount});
+                this.rowOk[charId] = 'Awarded ' + amount + ' XP.';
+                this.rowLabel[charId] = '';
+                this.rowAmount[charId] = '';
+            } catch (e) {
+                this.rowError[charId] = e.message;
+            } finally {
+                this.rowBusy[charId] = false;
+            }
+        },
+        async awardAll() {
+            this.massError = ''; this.massOk = '';
+            const label = (this.massLabel || '').trim();
+            const amount = this.massAmount;
+            if (!label) { this.massError = 'Enter a reason.'; return; }
+            if (!this._validAmount(amount)) { this.massError = 'Enter a whole number of XP above 0.'; return; }
+            const n = this.chars.length;
+            if (!window.confirm('Award ' + amount + ' XP to all ' + n + ' character' + (n === 1 ? '' : 's') + ' for "' + label + '"?')) return;
+            this.massBusy = true;
+            try {
+                const awards = await this._award({label: label, amount: amount});
+                this.massOk = 'Awarded ' + amount + ' XP to '
+                    + Object.keys(awards).length + ' character(s).';
+                this.massLabel = '';
+                this.massAmount = '';
+            } catch (e) {
+                this.massError = e.message;
+            } finally {
+                this.massBusy = false;
+            }
+        },
+    };
+}
+</script>
+{% endblock %}

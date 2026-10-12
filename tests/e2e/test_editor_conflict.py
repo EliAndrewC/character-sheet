@@ -185,3 +185,65 @@ def test_conflict_modal_fits_a_phone_screen(page, live_server_url):
         box = page.locator(f'[data-action="{action}"]').bounding_box()
         assert box and box["x"] >= 0 and box["x"] + box["width"] <= 375, action
         assert box["y"] + box["height"] <= 700, action
+
+
+def _put_draft_in_a_new_group(page, live_server_url):
+    """Create a group and move the open draft into it; returns its id."""
+    import uuid
+    edit_url = page.url
+    gname = "XpConflict-" + uuid.uuid4().hex[:8]
+    page.goto(f"{live_server_url}/admin/groups")
+    page.fill('input[name="name"][placeholder*="Friday"]', gname)
+    page.locator('form[action="/admin/groups/new"] button[type="submit"]').click()
+    page.wait_for_load_state("networkidle")
+    page.goto(edit_url)
+    page.wait_for_selector('select[name="gaming_group_id"]')
+    page.locator('select[name="gaming_group_id"]').select_option(label=gname)
+    page.wait_for_timeout(400)  # let setGroup() round-trip
+    # New drafts start hidden, and a group award skips hidden characters.
+    char_id = re.search(r"/characters/(\d+)", edit_url).group(1)
+    assert page.request.post(f"{live_server_url}/characters/{char_id}/show").status == 200
+    page.reload()
+    page.wait_for_selector(NAME)
+    return int(page.locator('select[name="gaming_group_id"]').input_value())
+
+
+def _gm_awards(page, live_server_url, group_id, amount):
+    resp = page.request.post(f"{live_server_url}/groups/{group_id}/xp/award",
+                             data={"label": "The Haunted Shrine", "amount": amount})
+    assert resp.status == 200
+
+
+def test_keep_my_version_keeps_a_gm_xp_award(page, live_server_url):
+    """The award moves the build, so this open tab is refused; keeping its
+    version must not take the award back."""
+    _new_draft(page, live_server_url)
+    gid = _put_draft_in_a_new_group(page, live_server_url)
+    _gm_awards(page, live_server_url, gid, 15)
+    _stale_edit(page)
+    note = page.locator('[data-testid="conflict-xp-note"]')
+    assert note.is_visible() and "is now 15" in note.inner_text()
+    assert page.input_value('input[name="earned_xp"]') == "15"
+    with page.expect_response(lambda r: r.url.endswith("/autosave")) as saved:
+        page.locator('[data-action="conflict-keep-mine"]').click()
+    assert saved.value.status == 200
+    assert _saved_name(page) == "Mine"
+    fresh = page.context.new_page()
+    fresh.goto(page.url)
+    fresh.wait_for_selector(NAME)
+    assert fresh.input_value('input[name="earned_xp"]') == "15"
+    fresh.close()
+
+
+def test_a_tab_that_changed_earned_xp_keeps_its_own_value(page, live_server_url):
+    """When the refused save IS this tab's own Earned XP edit, the user's
+    number stays and no note claims otherwise."""
+    _new_draft(page, live_server_url)
+    gid = _put_draft_in_a_new_group(page, live_server_url)
+    _gm_awards(page, live_server_url, gid, 15)
+    with page.expect_response(lambda r: r.url.endswith("/autosave")) as refused:
+        page.fill('input[name="earned_xp"]', "7")
+    assert refused.value.status == 409
+    page.wait_for_selector(MODAL, state="visible")
+    assert not page.locator('[data-testid="conflict-xp-note"]').is_visible()
+    assert page.input_value('input[name="earned_xp"]') == "7"

@@ -97,6 +97,8 @@
                 <li><strong>Load the latest version</strong> - reloads this page. The edits you made here since your last successful save are lost.</li>
                 <li><strong>Keep my version</strong> - saves this page as it is now, replacing whatever was changed elsewhere.</li>
             </ul>
+            <p x-show="xpConflictNote" x-cloak data-testid="conflict-xp-note"
+               class="text-sm text-ink/80 bg-parchment rounded px-3 py-2 mb-4" x-text="xpConflictNote"></p>
             <div class="flex flex-col sm:flex-row sm:justify-end gap-3">
                 <button type="button" @click="showConflictModal = false"
                         data-action="conflict-later"
@@ -2190,6 +2192,12 @@ function characterForm() {
         professionAbilities: {{ (character.profession_abilities or {}) | tojson }},
         startingXp: 150,
         earnedXp: {{ character.earned_xp }},
+        // The Earned XP the server last accepted from this tab. On a "changed
+        // elsewhere" conflict, a tab whose field still equals it never
+        // touched the field, so it adopts the server's value (a GM award)
+        // instead of "Keep my version" quietly taking the award back.
+        _savedEarnedXp: {{ character.earned_xp }},
+        xpConflictNote: '',
         // Player Character Points spent so far. Editable here only via Undo
         // (decrement) - spending happens on the View Sheet during rolls. A
         // decrement is a normal draft change (autosaved, discardable).
@@ -2551,9 +2559,17 @@ function characterForm() {
         showConflictModal: false,
         _serverBuildRev: null,
 
-        _onBuildConflict(serverRev) {
+        _onBuildConflict(serverRev, serverEarnedXp) {
             this.buildConflict = true;
             this._serverBuildRev = (typeof serverRev === 'number') ? serverRev : null;
+            if (typeof serverEarnedXp === 'number'
+                    && this.earnedXp === this._savedEarnedXp
+                    && serverEarnedXp !== this.earnedXp) {
+                this.earnedXp = serverEarnedXp;
+                this._savedEarnedXp = serverEarnedXp;
+                this.xpConflictNote = 'Earned XP was changed elsewhere (for example a GM award) and is now '
+                    + serverEarnedXp + '. This page has been updated to match, so keeping your version keeps it.';
+            }
             // What is on this page is NOT saved; keep the unload warning on.
             this._dirty = true;
             this._clearSaveRetry();
@@ -2586,6 +2602,7 @@ function characterForm() {
             // (4xx) that keeps coming back if we hammer the server.
             let retryable = false;
             try {
+                const sentEarnedXp = parseInt(document.querySelector('input[name="earned_xp"]')?.value || '0');
                 const body = {
                     build_rev: this._buildRev,
                     name: document.querySelector('input[name="name"]')?.value || this.school || 'New Character',
@@ -2615,7 +2632,7 @@ function characterForm() {
                     recognition: this.recognition,
                     recognition_halved: this.recognitionHalved,
                     rank_recognition_awards: this.rankRecognitionAwards,
-                    earned_xp: parseInt(document.querySelector('input[name="earned_xp"]')?.value || '0'),
+                    earned_xp: sentEarnedXp,
                     pcp_count: this.pcpCount,
                     sections: window._sectionsManager ? window._sectionsManager.serialize() : [],
                 };
@@ -2628,6 +2645,7 @@ function characterForm() {
 
                 if (resp.ok) {
                     this.saveStatus = 'Saved';
+                    this._savedEarnedXp = sentEarnedXp;
                     this._clearSaveRetry();
                     // The server tells us whether the post-save state
                     // differs from the published snapshot. Metadata-only
@@ -2650,7 +2668,7 @@ function characterForm() {
                     // written. Stop saving and ask the user.
                     let data = null;
                     try { data = await resp.json(); } catch (e) {}
-                    this._onBuildConflict(data && data.build_rev);
+                    this._onBuildConflict(data && data.build_rev, data && data.earned_xp);
                 } else if (resp.status >= 400 && resp.status < 500) {
                     // 4xx: validation failure, auth lost, etc. Retrying
                     // the same payload won't help - surface the status
@@ -2861,7 +2879,7 @@ function characterForm() {
                     const data = await resp.json().catch(() => null);
                     this.publishing = false;
                     this.showApplyModal = false;
-                    this._onBuildConflict(data && data.build_rev);
+                    this._onBuildConflict(data && data.build_rev, data && data.earned_xp);
                 } else if (resp.ok) {
                     const data = await resp.json();
                     this.publishMessage = 'Applied (v' + data.version_number + '). Redirecting...';

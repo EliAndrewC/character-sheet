@@ -995,6 +995,16 @@ The Suzume family of the Sparrow clan is drawn from Crane Doji Artisans and merc
 - [x] Admin can rename a group → `test_groups.py::test_admin_rename_group`
 - [x] Admin can delete a group; member characters become unassigned → `test_groups.py::test_admin_delete_group_unassigns_characters`
 
+## GM - Group XP Awards (group_xp.html)
+
+- [x] Group Summary's GM "XP" link opens the page; a mass award (after a confirm dialog) raises every character's Earned XP and total inline with no reload, and the sheet then shows the new earned XP with no Draft changes → `test_group_xp.py::test_mass_award_updates_every_character_inline`
+- [x] Dismissing the mass-award confirm dialog awards nothing → `test_group_xp.py::test_mass_award_cancelled_at_the_confirm_awards_nothing`
+- [x] Inline individual award updates only that character → `test_group_xp.py::test_individual_award_updates_only_that_character`
+- [x] Client-side validation refuses a blank reason and a fractional amount without posting → `test_group_xp.py::test_award_validation_refuses_without_posting`
+- [x] A character whose player has an unapplied Earned XP change shows the mismatch on its card and in a warning above "Award to all" → `test_group_xp.py::test_unapplied_earned_xp_change_is_flagged`
+- [x] The XP link is hidden from non-admins and the page rejects them (403) → `test_group_xp.py::test_xp_page_is_admin_only`
+- [x] No horizontal overflow at 375px, and "Award to all" stays visible → `test_group_xp.py::test_xp_page_has_no_horizontal_overflow_on_a_phone`
+
 ## GM — Group Money Awards (group_money.html)
 
 - [x] Nav title reads "<Group> Money" with the group name linking back to the Group Summary (group sub-page convention) → `test_group_money.py::test_money_page_nav_title_links_back_to_group`
@@ -1249,6 +1259,8 @@ The Suzume family of the Sparrow clan is drawn from Crane Doji Artisans and merc
 - [x] "Keep my version" saves this tab's build over the other, hides the modal and the Resolve button, and un-pauses autosave → `test_editor_conflict.py::test_keep_my_version`
 - [x] Apply Changes is refused (409, no redirect, conflict modal) when another editor saved after this tab's last save → `test_editor_conflict.py::test_apply_refuses_a_draft_this_tab_has_not_seen`
 - [x] Discard Changes is refused when another editor saved after the diff list was drawn: nothing is discarded, the stale notice shows, the list refreshes to include their change, and confirming again discards → `test_editor_conflict.py::test_discard_refuses_a_change_that_was_never_listed`
+- [x] A GM XP award while an editor tab is open: the tab's conflict modal says Earned XP changed, the field shows the awarded value, and "Keep my version" keeps the award → `test_editor_conflict.py::test_keep_my_version_keeps_a_gm_xp_award`
+- [x] A tab whose own Earned XP edit is the refused save keeps its own value and shows no XP note → `test_editor_conflict.py::test_a_tab_that_changed_earned_xp_keeps_its_own_value`
 - [x] The conflict modal's three buttons all fit a 375x700 viewport → `test_editor_conflict.py::test_conflict_modal_fits_a_phone_screen`
 
 ## Character Editor — Apply Changes Modal

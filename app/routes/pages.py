@@ -1,6 +1,6 @@
 """Page routes — serve full HTML pages via Jinja2 templates."""
 
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse, RedirectResponse
@@ -75,7 +75,7 @@ from app.services.status import (
     round_to_hundredth,
 )
 from app.services.tracking import conviction_refreshes_each_round
-from app.services.versions import compute_version_diff
+from app.services.versions import compute_version_diff, record_gm_xp_award
 from app.services.void_spend import (
     combat_vp_flat_bonus,
     spend_consequences,
@@ -502,6 +502,148 @@ async def group_money_award(
         awards[str(c.id)] = compute_money_state(effective.stipend, c.money_ledger)
 
     return JSONResponse({"ok": True, "awards": awards})
+
+
+def _visible_group_characters(db: Session, group_id: int) -> List[Character]:
+    """The characters a GM award page lists and awards: the group's PCs
+    that are not hidden drafts, by name."""
+    return sorted(
+        [c for c in db.query(Character)
+         .filter(Character.gaming_group_id == group_id).all()
+         if not c.is_hidden],
+        key=lambda c: (c.name or "").lower(),
+    )
+
+
+def _xp_state(c: Character) -> Dict[str, Any]:
+    """What the XP page shows for one character. ``published_earned_xp``
+    differs from ``earned_xp`` when the player has an unapplied change to
+    it (e.g. they typed in this adventure's XP themselves), which a group
+    award would count twice; it is None for a never-published character."""
+    published = None
+    if c.is_published and c.published_state is not None:
+        published = c.published_state.get("earned_xp") or 0
+    return {
+        "earned_xp": c.earned_xp or 0,
+        "published_earned_xp": published,
+        "total_xp": (c.starting_xp or 0) + (c.earned_xp or 0),
+    }
+
+
+#: Upper bound on a single XP award - a typo guard, far above any real one.
+MAX_XP_AWARD = 1000
+
+
+@router.get("/groups/{group_id}/xp", response_class=HTMLResponse)
+def group_xp(request: Request, group_id: int, db: Session = Depends(get_db)):
+    """GM XP-awards page for one gaming group. Admin-only.
+
+    An adventure's XP goes to everyone in the group alike, so the GM
+    awards it once here instead of each player editing their own sheet.
+    Also awards one character. Driven by ``POST /groups/{id}/xp/award``.
+    """
+    deny = _require_admin(request)
+    if deny is not None:
+        return deny
+    group = db.query(GamingGroup).filter(GamingGroup.id == group_id).first()
+    if not group:
+        return HTMLResponse("Group not found", status_code=404)
+
+    chars = _visible_group_characters(db, group_id)
+    owner_ids = {c.owner_discord_id for c in chars if c.owner_discord_id}
+    owners = (
+        db.query(UserModel).filter(UserModel.discord_id.in_(owner_ids)).all()
+        if owner_ids else []
+    )
+    owner_names = {u.discord_id: u.display_name or u.discord_name for u in owners}
+    cards = [
+        {
+            "id": c.id,
+            "name": c.name,
+            "owner_display_name": owner_names.get(c.owner_discord_id, c.player_name),
+            "xp": _xp_state(c),
+        }
+        for c in chars
+    ]
+    return _templates().TemplateResponse(
+        request=request,
+        name="group_xp.html",
+        context={"group": group, "cards": cards},
+    )
+
+
+@router.post("/groups/{group_id}/xp/award")
+async def group_xp_award(
+    request: Request, group_id: int, db: Session = Depends(get_db)
+):
+    """Award earned XP to characters in a gaming group. Admin-only.
+
+    Body: ``{"char_id": int|null, "label": str, "amount": int}``. With
+    ``char_id`` set the award goes to that one character (in the group and
+    visible); without it, the same award goes to every visible character.
+    Each award is its own version ("GM awarded 15 XP: <label>") - see
+    ``versions.record_gm_xp_award`` for why it publishes nothing else.
+
+    Returns ``{"ok": true, "awards": {"<char_id>": <xp state>, ...}}``.
+    """
+    user = getattr(request.state, "user", None)
+    if not user:
+        return JSONResponse({"error": "Not authenticated"}, status_code=401)
+    if not is_admin(user["discord_id"]):
+        return JSONResponse({"error": "Admin access required"}, status_code=403)
+
+    group = db.query(GamingGroup).filter(GamingGroup.id == group_id).first()
+    if not group:
+        return JSONResponse({"error": "Group not found"}, status_code=404)
+
+    try:
+        body = await request.json()
+    except Exception:
+        return JSONResponse({"error": "Invalid JSON"}, status_code=400)
+    if not isinstance(body, dict):
+        return JSONResponse({"error": "Invalid payload"}, status_code=400)
+
+    label_raw = body.get("label")
+    label = label_raw.strip()[:200] if isinstance(label_raw, str) else ""
+    if not label:
+        return JSONResponse({"error": "label is required"}, status_code=400)
+    # Whole XP only; a number input may send 15 as 15.0. Bools are ints
+    # in Python, so they are refused by name.
+    raw_amount = body.get("amount")
+    if (isinstance(raw_amount, bool) or not isinstance(raw_amount, (int, float))
+            or raw_amount != int(raw_amount)):
+        return JSONResponse(
+            {"error": "amount must be a whole number"}, status_code=400)
+    amount = int(raw_amount)
+    if not 0 < amount <= MAX_XP_AWARD:
+        return JSONResponse(
+            {"error": f"amount must be between 1 and {MAX_XP_AWARD}"},
+            status_code=400,
+        )
+
+    group_chars = _visible_group_characters(db, group_id)
+    char_id = body.get("char_id")
+    if char_id is not None:
+        if isinstance(char_id, bool) or not isinstance(char_id, int):
+            return JSONResponse(
+                {"error": "char_id must be an integer"}, status_code=400
+            )
+        targets = [c for c in group_chars if c.id == char_id]
+        if not targets:
+            return JSONResponse(
+                {"error": "Character not in this group"}, status_code=404
+            )
+    else:
+        targets = group_chars
+
+    for c in targets:
+        record_gm_xp_award(c, db, amount, label, author_discord_id=user["discord_id"])
+    db.commit()
+
+    return JSONResponse({
+        "ok": True,
+        "awards": {str(c.id): _xp_state(c) for c in targets},
+    })
 
 
 @router.get("/characters/{char_id}", response_class=HTMLResponse)

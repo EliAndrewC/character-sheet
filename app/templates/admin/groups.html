@@ -41,6 +41,10 @@
                        class="btn-secondary px-3 py-2 rounded text-sm font-medium whitespace-nowrap transition-colors">
                         Money
                     </a>
+                    <a href="/groups/{{ g.id }}/xp"
+                       class="btn-secondary px-3 py-2 rounded text-sm font-medium whitespace-nowrap transition-colors">
+                        XP
+                    </a>
                     <form method="POST" action="/admin/groups/{{ g.id }}/delete"
                           onsubmit="return confirm('Delete &quot;{{ g.name }}&quot;? Its characters will become unassigned.');">
                         <button type="submit"

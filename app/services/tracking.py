@@ -115,8 +115,17 @@ def stale_build_response_body(character: Character) -> Dict[str, Any]:
     """What a refused build write is told. Unlike a sheet tab, an editor is
     NOT handed the state to adopt: it may be holding text the user is in the
     middle of typing, so what happens next is the user's decision (reload,
-    or knowingly save over it), not something to do silently."""
-    return {"error": "stale", "build_rev": character.build_rev or 0}
+    or knowingly save over it), not something to do silently.
+
+    ``earned_xp`` is the one exception: the GM awards XP from the group's
+    XP page, and an editor that kept its version would silently take the
+    award back. The editor adopts it if it had not changed the field
+    itself (see ``_onBuildConflict`` in edit.html)."""
+    return {
+        "error": "stale",
+        "build_rev": character.build_rev or 0,
+        "earned_xp": character.earned_xp or 0,
+    }
 
 
 def start_combat_round(

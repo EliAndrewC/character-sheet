@@ -685,6 +685,214 @@ class TestGroupMoneyAwards:
         assert resp.status_code == 400
 
 
+class TestGroupXpAwards:
+    """``GET /groups/{id}/xp`` (GM XP page) and ``POST /groups/{id}/xp/award``
+    (one character, or everyone in the group)."""
+
+    NONADMIN = {"X-Test-User": "test_user_1:NotGm"}
+
+    def _make_group_with(self, client, *characters, group_name="XP Group"):
+        from app.models import GamingGroup
+        from app.services.versions import publish_character
+        session = client._test_session_factory()
+        group = GamingGroup(name=group_name)
+        session.add(group); session.commit()
+        ids = []
+        for kwargs in characters:
+            kwargs = dict(kwargs)
+            publish = kwargs.pop("publish", True)
+            cid = _seed_character(
+                client, gaming_group_id=group.id, is_published=False,
+                published_state=None, **kwargs)
+            if publish:
+                c = session.query(Character).filter(Character.id == cid).first()
+                publish_character(c, session, summary="Initial")
+                session.commit()
+            ids.append(cid)
+        return group.id, ids
+
+    def _char(self, client, char_id):
+        session = client._test_session_factory()
+        return session.query(Character).filter(Character.id == char_id).first()
+
+    # ---- page ----
+
+    def test_page_requires_admin(self, client):
+        gid, _ = self._make_group_with(client, {"name": "PageGate"})
+        resp = client.get(f"/groups/{gid}/xp", headers=self.NONADMIN)
+        assert resp.status_code == 403
+
+    def test_page_404_when_group_missing(self, client):
+        assert client.get("/groups/99999/xp").status_code == 404
+
+    def test_page_lists_visible_characters_with_xp(self, client):
+        gid, _ = self._make_group_with(
+            client,
+            {"name": "Hotaru", "earned_xp": 42},
+            {"name": "HiddenPC", "is_hidden": True},
+        )
+        resp = client.get(f"/groups/{gid}/xp")
+        assert resp.status_code == 200
+        assert "Hotaru" in resp.text
+        assert '"earned_xp": 42' in resp.text
+        assert '"total_xp": 192' in resp.text
+        assert "HiddenPC" not in resp.text
+
+    def test_page_flags_an_unapplied_earned_xp_change(self, client):
+        """A player who typed their own XP into a draft would be counted
+        twice by a group award - the page says so before the GM clicks."""
+        gid, ids = self._make_group_with(client, {"name": "SelfMarked", "earned_xp": 30})
+        session = client._test_session_factory()
+        c = session.query(Character).filter(Character.id == ids[0]).first()
+        c.earned_xp = 45
+        session.commit()
+        resp = client.get(f"/groups/{gid}/xp")
+        assert '"earned_xp": 45' in resp.text
+        assert '"published_earned_xp": 30' in resp.text
+
+    def test_page_empty_group_renders_empty_state(self, client):
+        gid, _ = self._make_group_with(client, {"name": "OnlyHidden", "is_hidden": True})
+        resp = client.get(f"/groups/{gid}/xp")
+        assert resp.status_code == 200
+        assert "No visible characters" in resp.text
+
+    def test_group_summary_links_the_page_for_the_gm_only(self, client):
+        gid, _ = self._make_group_with(client, {"name": "Linked"})
+        assert f'href="/groups/{gid}/xp"' in client.get(f"/groups/{gid}").text
+        resp = client.get(f"/groups/{gid}", headers=self.NONADMIN)
+        assert f'href="/groups/{gid}/xp"' not in resp.text
+
+    # ---- award endpoint: auth ----
+
+    def test_award_anonymous_401(self, client):
+        gid, _ = self._make_group_with(client, {"name": "A"})
+        client.headers.pop("X-Test-User", None)
+        resp = client.post(f"/groups/{gid}/xp/award", json={"label": "x", "amount": 5})
+        assert resp.status_code == 401
+
+    def test_award_non_admin_403(self, client):
+        gid, ids = self._make_group_with(client, {"name": "A"})
+        resp = client.post(f"/groups/{gid}/xp/award",
+                           json={"label": "x", "amount": 5}, headers=self.NONADMIN)
+        assert resp.status_code == 403
+        assert self._char(client, ids[0]).earned_xp == 0
+
+    def test_award_group_missing_404(self, client):
+        resp = client.post("/groups/99999/xp/award", json={"label": "x", "amount": 5})
+        assert resp.status_code == 404
+
+    # ---- award endpoint: mass ----
+
+    def test_mass_award_hits_all_visible_excludes_hidden(self, client):
+        gid, ids = self._make_group_with(
+            client,
+            {"name": "PC1", "earned_xp": 10},
+            {"name": "PC2"},
+            {"name": "HiddenPC", "is_hidden": True},
+        )
+        resp = client.post(f"/groups/{gid}/xp/award",
+                           json={"label": "The Haunted Shrine", "amount": 15})
+        assert resp.status_code == 200
+        awards = resp.json()["awards"]
+        assert awards == {
+            str(ids[0]): {"earned_xp": 25, "published_earned_xp": 25, "total_xp": 175},
+            str(ids[1]): {"earned_xp": 15, "published_earned_xp": 15, "total_xp": 165},
+        }
+        for cid in ids[:2]:
+            c = self._char(client, cid)
+            assert c.publish_status == "published"
+            assert c.versions[-1].summary == "GM awarded 15 XP: The Haunted Shrine"
+            assert c.versions[-1].author_discord_id == "183026066498125825"
+        assert self._char(client, ids[2]).earned_xp == 0
+
+    def test_award_moves_build_rev(self, client):
+        """An open editor tab must find out (and is told the new XP)."""
+        gid, ids = self._make_group_with(client, {"name": "Rev"})
+        before = self._char(client, ids[0]).build_rev
+        client.post(f"/groups/{gid}/xp/award", json={"label": "x", "amount": 5})
+        assert self._char(client, ids[0]).build_rev > before
+
+    def test_unpublished_group_member_gets_the_xp_without_a_version(self, client):
+        gid, ids = self._make_group_with(client, {"name": "Draft", "publish": False})
+        resp = client.post(f"/groups/{gid}/xp/award", json={"label": "x", "amount": 5})
+        assert resp.json()["awards"][str(ids[0])] == {
+            "earned_xp": 5, "published_earned_xp": None, "total_xp": 155}
+        c = self._char(client, ids[0])
+        assert c.earned_xp == 5 and c.versions == []
+
+    # ---- award endpoint: individual ----
+
+    def test_individual_award_only_touches_that_character(self, client):
+        gid, ids = self._make_group_with(client, {"name": "Solo"}, {"name": "Other"})
+        resp = client.post(f"/groups/{gid}/xp/award",
+                           json={"char_id": ids[0], "label": "Duel won", "amount": 3})
+        assert resp.status_code == 200
+        assert set(resp.json()["awards"]) == {str(ids[0])}
+        assert self._char(client, ids[0]).earned_xp == 3
+        assert self._char(client, ids[1]).earned_xp == 0
+
+    def test_individual_award_char_not_in_group_404(self, client):
+        gid, _ = self._make_group_with(client, {"name": "InGroup"})
+        other = _seed_character(client, name="Outsider", is_published=True)
+        resp = client.post(f"/groups/{gid}/xp/award",
+                           json={"char_id": other, "label": "x", "amount": 5})
+        assert resp.status_code == 404
+
+    def test_individual_award_hidden_char_404(self, client):
+        gid, ids = self._make_group_with(client, {"name": "Hid", "is_hidden": True})
+        resp = client.post(f"/groups/{gid}/xp/award",
+                           json={"char_id": ids[0], "label": "x", "amount": 5})
+        assert resp.status_code == 404
+
+    def test_award_char_id_must_be_int(self, client):
+        gid, _ = self._make_group_with(client, {"name": "A"})
+        resp = client.post(f"/groups/{gid}/xp/award",
+                           json={"char_id": "5", "label": "x", "amount": 5})
+        assert resp.status_code == 400
+
+    # ---- award endpoint: validation ----
+
+    def test_award_requires_label(self, client):
+        gid, _ = self._make_group_with(client, {"name": "A"})
+        resp = client.post(f"/groups/{gid}/xp/award", json={"label": "  ", "amount": 5})
+        assert resp.status_code == 400
+
+    @pytest.mark.parametrize("amount", ["lots", True, 2.5, 0, -5, None])
+    def test_award_amount_must_be_a_positive_whole_number(self, client, amount):
+        gid, ids = self._make_group_with(client, {"name": "A"})
+        resp = client.post(f"/groups/{gid}/xp/award", json={"label": "x", "amount": amount})
+        assert resp.status_code == 400
+        assert self._char(client, ids[0]).earned_xp == 0
+
+    def test_award_whole_float_accepted(self, client):
+        """A number input can send 15.0; that is a whole number."""
+        gid, ids = self._make_group_with(client, {"name": "A"})
+        resp = client.post(f"/groups/{gid}/xp/award", json={"label": "x", "amount": 15.0})
+        assert resp.status_code == 200
+        assert self._char(client, ids[0]).earned_xp == 15
+
+    def test_award_too_large_rejected(self, client):
+        gid, _ = self._make_group_with(client, {"name": "A"})
+        resp = client.post(f"/groups/{gid}/xp/award", json={"label": "x", "amount": 1001})
+        assert resp.status_code == 400
+
+    def test_award_long_label_truncated(self, client):
+        gid, ids = self._make_group_with(client, {"name": "A"})
+        client.post(f"/groups/{gid}/xp/award", json={"label": "z" * 300, "amount": 5})
+        summary = self._char(client, ids[0]).versions[-1].summary
+        assert summary == "GM awarded 5 XP: " + "z" * 200
+
+    def test_award_invalid_json_400(self, client):
+        gid, _ = self._make_group_with(client, {"name": "A"})
+        resp = client.post(f"/groups/{gid}/xp/award", content=b"not json",
+                           headers={"Content-Type": "application/json"})
+        assert resp.status_code == 400
+
+    def test_award_non_dict_payload_400(self, client):
+        gid, _ = self._make_group_with(client, {"name": "A"})
+        assert client.post(f"/groups/{gid}/xp/award", json=[1, 2]).status_code == 400
+
+
 class TestCreateCharacter:
     def test_create_redirects_to_edit(self, client):
         resp = client.post("/characters", follow_redirects=False)

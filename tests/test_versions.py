@@ -3,7 +3,8 @@
 import pytest
 from app.models import Character, CharacterVersion
 from app.services.versions import (
-    compute_diff_summary, compute_version_diff, publish_character, revert_character,
+    compute_diff_summary, compute_version_diff, discard_draft_changes,
+    publish_character, record_gm_xp_award, revert_character,
     stringify_version_diff_entries,
 )
 
@@ -1321,3 +1322,90 @@ class TestComputeVersionDiff:
             new_idx = DIFF_CATEGORIES.index(cat)
             assert new_idx > idx, f"{cat} out of order in {seen}"
             idx = new_idx
+
+
+class TestRecordGmXpAward:
+    """A GM's XP award lands in the published character AND the draft, as
+    its own version, without publishing anything the player has pending."""
+
+    def _published(self, db, **kwargs):
+        c = Character(name="Awardee", school="akodo_bushi",
+                      school_ring_choice="Water", ring_water=3,
+                      knacks={"double_attack": 1, "feint": 1, "iaijutsu": 1},
+                      earned_xp=30, **kwargs)
+        db.add(c)
+        db.flush()
+        publish_character(c, db, summary="Initial")
+        db.commit()
+        return c
+
+    def _versions(self, db, c):
+        return (db.query(CharacterVersion)
+                .filter(CharacterVersion.character_id == c.id)
+                .order_by(CharacterVersion.version_number).all())
+
+    def test_clean_character_stays_published(self, db):
+        c = self._published(db)
+        record_gm_xp_award(c, db, 15, "The Haunted Shrine", author_discord_id="gm")
+        db.commit()
+        assert c.earned_xp == 45
+        assert c.published_state["earned_xp"] == 45
+        assert c.publish_status == "published"
+
+    def test_records_a_version_with_the_reason(self, db):
+        c = self._published(db)
+        record_gm_xp_award(c, db, 15, "The Haunted Shrine", author_discord_id="gm")
+        db.commit()
+        versions = self._versions(db, c)
+        assert [v.version_number for v in versions] == [1, 2]
+        v = versions[-1]
+        assert v.summary == "GM awarded 15 XP: The Haunted Shrine"
+        assert v.author_discord_id == "gm"
+        assert v.state["earned_xp"] == 45
+        # The version's diff against the previous one is the XP alone.
+        lines = compute_diff_summary(versions[0].state, v.state)
+        assert lines == ["Earned XP changed from 30 to 45"]
+
+    def test_pending_draft_is_not_published(self, db):
+        c = self._published(db)
+        c.ring_fire = 3          # the player's own, unapplied edit
+        db.commit()
+        before = compute_diff_summary(c.published_state, c.to_dict())
+        record_gm_xp_award(c, db, 10, "Session 4", author_discord_id="gm")
+        db.commit()
+        assert c.published_state["rings"]["Fire"] == 2
+        assert c.versions[-1].state["rings"]["Fire"] == 2
+        assert c.publish_status == "modified"
+        assert compute_diff_summary(c.published_state, c.to_dict()) == before
+
+    def test_discard_keeps_the_award(self, db):
+        c = self._published(db)
+        c.ring_fire = 3
+        db.commit()
+        record_gm_xp_award(c, db, 10, "Session 4")
+        db.commit()
+        discard_draft_changes(c, db)
+        db.commit()
+        assert c.ring_fire == 2
+        assert c.earned_xp == 40
+
+    def test_snapshot_without_earned_xp_counts_as_zero(self, db):
+        """Very old snapshots may predate the key."""
+        c = self._published(db)
+        c.published_state = {k: v for k, v in c.published_state.items()
+                             if k != "earned_xp"}
+        c.earned_xp = 0
+        db.commit()
+        record_gm_xp_award(c, db, 5, "x")
+        assert c.published_state["earned_xp"] == 5
+        assert c.earned_xp == 5
+
+    def test_never_published_character_gets_no_version(self, db):
+        c = Character(name="Fresh", earned_xp=0)
+        db.add(c)
+        db.commit()
+        record_gm_xp_award(c, db, 20, "Session 1")
+        db.commit()
+        assert c.earned_xp == 20
+        assert c.published_state is None
+        assert self._versions(db, c) == []
