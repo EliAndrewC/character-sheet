@@ -327,3 +327,36 @@ def test_wc_image_payload_uses_wc_formula_not_prior_roll(page, live_server_url):
     )
     # And specifically must NOT carry the prior roll's formula.
     assert payload["formula"] != skill_formula_text
+
+
+def test_wound_check_extra_bonus(page, live_server_url):
+    """The pre-roll "Extra bonus" (as on the attack modal): unchecked on
+    open, lifts the pass chance while checked, reaches the server's roll as
+    a labeled bonus, and is unchecked again on the next open."""
+    from tests.e2e.dice_control import force_dice
+    _create_character_with_wounds(page, live_server_url, "WCExtra", light_wounds=30)
+    page.locator('[data-action="roll-wound-check"]').click()
+    page.wait_for_selector('[data-modal="wound-check"]', state='visible', timeout=3000)
+    toggle = page.locator('[data-testid="wc-extra-bonus-toggle"]')
+    amount = page.locator('[data-testid="wc-extra-bonus-amount"]')
+    assert not toggle.is_checked() and not amount.is_visible()
+    before = page.evaluate("() => window._diceRoller.wcProbRow(0).passChance")
+    toggle.check()
+    assert amount.input_value() == "5"
+    amount.fill("20")
+    page.locator('[data-testid="wc-extra-bonus-label"]').fill("armor")
+    after = page.evaluate("() => window._diceRoller.wcProbRow(0).passChance")
+    assert after > before
+    force_dice(page, 5)
+    page.locator('[data-action="roll-wound-check-go"]').click()
+    page.wait_for_function(
+        "() => window._diceRoller && window._diceRoller.wcPhase === 'result'", timeout=10000)
+    row = page.locator('[data-modal="wound-check"] [data-testid="wc-situational-bonus"]')
+    assert row.filter(has_text="+20 from armor").is_visible()
+    kept = page.evaluate("() => window._diceRoller.keptSum")
+    total = page.evaluate("() => window._diceRoller.baseTotal")
+    assert total >= kept + 20
+    page.locator('[data-modal="wound-check"] button:text("×")').click()
+    page.locator('[data-action="roll-wound-check"]').click()
+    page.wait_for_selector('[data-modal="wound-check"]', state='visible', timeout=3000)
+    assert not toggle.is_checked()

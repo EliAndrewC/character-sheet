@@ -13,7 +13,7 @@ Matsu's near miss, the Wave Man's miss raises and the extra damage dice.
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 from app.services import combat_math as cm
 from app.services.void_spend import school_dan
@@ -92,6 +92,17 @@ def _int(choices: Dict[str, Any], key: str, low: int = 0, high: int = 999) -> Op
         raise ValueError(f"{key} must be a whole number") from None
 
 
+def extra_bonus(choices: Dict[str, Any]) -> Optional[Tuple[str, int]]:
+    """The modal's pre-roll "Extra bonus" (a GM's situational grant) as
+    ``(label, amount)``, or None when there is none. Shared by the attack and
+    the wound check. Raises ``ValueError`` for a non-numeric amount."""
+    amount = _int(choices, "extra_bonus", -999, 999)
+    if not amount:
+        return None
+    label = str(choices.get("extra_label") or "").strip()[:MAX_EXTRA_LABEL] or "extra bonus"
+    return label, amount
+
+
 def build_attack(character: Any, formula: Dict[str, Any], choices: Dict[str, Any],
                  specs: List[Dict[str, Any]]) -> Dict[str, Any]:
     """The attack formula with its situational bonuses, and what it takes
@@ -108,10 +119,9 @@ def build_attack(character: Any, formula: Dict[str, Any], choices: Dict[str, Any
     # Mantis Wave-Treader Special: +5 in an offensive posture.
     if current_posture(state) == "offensive":
         _bonus(f, "offensive posture", 5)
-    extra = _int(choices, "extra_bonus", -999, 999)
+    extra = extra_bonus(choices)
     if extra:
-        label = str(choices.get("extra_label") or "").strip()[:MAX_EXTRA_LABEL] or "extra bonus"
-        _bonus(f, label, extra)
+        _bonus(f, *extra)
     if flags["mantis_posture_accumulation"] and offensive_count(state):
         _bonus(f, "Mantis 5th Dan (offensive posture count)", offensive_count(state))
     accum = int(state.get("mantis_offensive_3rd_dan_accum") or 0)

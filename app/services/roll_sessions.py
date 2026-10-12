@@ -38,7 +38,7 @@ from app.services.party import party_member_data, visible_party_members
 from app.services.per_adventure import per_adventure_abilities
 from app.services import combat_math as cm
 from app.services.attack_rolls import (
-    attack_flags, attack_outcome, build_attack, current_posture, offensive_count,
+    attack_flags, attack_outcome, build_attack, current_posture, extra_bonus, offensive_count,
 )
 from app.services.combat_math import damage_flags
 from app.services.duels import (
@@ -1521,7 +1521,11 @@ def _start_wound_check(db, character, formula, choices, viewer, live, void, ow):
         daidoji = daidoji_counterattack(character, visible_party_members(db, character, viewer))
         if daidoji is None:
             raise RollRefused("no Daidoji counterattacked this hit")
-    built = build_wound_check(character, formula, lw, strike=strike, daidoji=daidoji)
+    try:
+        extra = extra_bonus(choices)
+    except ValueError as exc:
+        raise RollRefused(str(exc)) from None
+    built = build_wound_check(character, formula, lw, strike=strike, daidoji=daidoji, extra=extra)
     return built["formula"], built["consumes"]
 
 

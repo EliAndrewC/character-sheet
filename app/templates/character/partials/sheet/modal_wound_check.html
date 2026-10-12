@@ -127,6 +127,33 @@
                         </div>
                     </div>
 
+                    {# Pre-roll "Extra bonus": a GM's situational grant, as on
+                       the attack modal. Moves the table above while checked;
+                       the server adds it to the roll as a labeled bonus.
+                       Reset (unchecked, +5, no label) on every modal open. #}
+                    <div class="border-t border-ink/10 pt-2">
+                        <label class="flex items-center gap-2 text-sm cursor-pointer">
+                            <input type="checkbox"
+                                   x-model="wcExtraBonusEnabled"
+                                   data-testid="wc-extra-bonus-toggle"
+                                   class="rounded text-accent">
+                            <span class="font-medium">Extra bonus</span>
+                        </label>
+                        <div x-show="wcExtraBonusEnabled" x-cloak
+                             class="flex gap-2 ml-6 mt-1 items-center">
+                            <input type="number"
+                                   x-model.number="wcExtraBonusAmount"
+                                   data-testid="wc-extra-bonus-amount"
+                                   class="w-20 border rounded px-2 py-1 text-sm text-center">
+                            <input type="text"
+                                   x-model="wcExtraBonusLabel"
+                                   maxlength="60"
+                                   data-testid="wc-extra-bonus-label"
+                                   placeholder="extra bonus"
+                                   class="flex-1 min-w-0 border rounded px-2 py-1 text-sm">
+                        </div>
+                    </div>
+
                     {# Void selection #}
                     <div class="flex items-center gap-3">
                         <label class="text-sm font-medium">Void points to spend:</label>
@@ -199,7 +226,7 @@
                             {% include 'character/partials/copy_roll_image_button.html' %}
                         </div>
                         {# Show breakdown only when there are bonuses beyond the kept dice #}
-                        <template x-if="(formula?.flat || 0) > 0 || (formula?.void_spent || 0) > 0 || wcRaisesSpent > 0 || mirumotoPointsSpentThisRoll > 0 || wcDaidojiCounterattack || wcExcessSpentThisRoll > 0 || shosuroLowest3Bonus > 0 || convictionSpentThisRoll > 0 || pcpRaisesSpentThisRoll > 0">
+                        <template x-if="(formula?.flat || 0) > 0 || (formula?.bonuses || []).some(b => b.situational) || (formula?.void_spent || 0) > 0 || wcRaisesSpent > 0 || mirumotoPointsSpentThisRoll > 0 || wcDaidojiCounterattack || wcExcessSpentThisRoll > 0 || shosuroLowest3Bonus > 0 || convictionSpentThisRoll > 0 || pcpRaisesSpentThisRoll > 0">
                             <div>
                                 <div class="text-xs text-ink/70 mt-0.5">
                                     &bull; <span x-text="keptSum"></span> from the kept dice
@@ -207,6 +234,14 @@
                                 <template x-for="src in (formula?.bonus_sources || [])" :key="src">
                                     <div class="text-xs text-ink/70 mt-0.5">
                                         &bull; <span x-text="src"></span>
+                                    </div>
+                                </template>
+                                {# The server's situational rows (posture, Hida bank, Doji,
+                                   Daidoji, the Extra bonus); the formula builder's own
+                                   rows are the bonus_sources above. #}
+                                <template x-for="b in (formula?.bonuses || []).filter(b => b.situational)" :key="'wcs-' + b.label">
+                                    <div class="text-xs text-ink/70 mt-0.5" data-testid="wc-situational-bonus">
+                                        &bull; <span x-text="(b.amount >= 0 ? '+' : '') + b.amount"></span> from <span x-text="b.label"></span>
                                     </div>
                                 </template>
                                 <div x-show="formula?.void_spent > 0" x-cloak class="text-xs text-ink/70 mt-0.5">

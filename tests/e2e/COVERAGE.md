@@ -80,6 +80,7 @@ The three failures were:
 - [x] Take 1 Serious resets light wounds to 0 → `test_wound_check.py::test_wound_check_take_serious_resets_light`
 - [x] Iaijutsu strike wound check button present → `test_wound_check.py::test_iaijutsu_strike_wound_check_available`
 - [x] Regular roll also shows dice animation → `test_wound_check.py::test_regular_roll_shows_dice_animation`
+- [x] Pre-roll "Extra bonus" (amount + label, as on the attack modal): unchecked on open, lifts the pass chance, reaches the server's roll as a labeled breakdown row (with the other server-side situational bonuses), reset on the next open → `test_wound_check.py::test_wound_check_extra_bonus`
 - [x] Copy-as-image payload's formula subtitle reflects the wound check's own ``{rolled}k{kept}[+flat]``, not whatever the prior skill roll left in ``this.formulaText`` (regression: WC card used to show the previous roll's rolled/kept count) → `test_wound_check.py::test_wc_image_payload_uses_wc_formula_not_prior_roll`
 - [x] Accept Result button applies wound check failure -> `test_ui_interactions.py::test_wc_accept_result_applies_failure`
 - [x] Keep Light Wounds closes modal without changes -> `test_ui_interactions.py::test_wc_keep_light_wounds_closes`

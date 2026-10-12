@@ -167,3 +167,27 @@ def test_the_hida_bank_is_spent_and_lucky_rejudges(client, scripted):
     assert "hida_banked_wc_bonus" not in (_get(client, cid).adventure_state or {})
     up = _act(client, cid, data["session_id"], "lucky_reroll", headers=scripted("9")).json()
     assert up["wc"]["passed"] and _row(client, data["history_id"])["total"] == up["total"]
+
+
+def test_build_wound_check_extra_bonus():
+    c = Character(name="x", school="akodo_bushi", knacks={})
+    f = build_wound_check(c, {"flat": 2, "bonuses": [{"label": "2nd Dan", "amount": 2}]}, 20,
+                          strike=False, daidoji=None, extra=("armor", 7))["formula"]
+    assert f["flat"] == 9
+    assert f["bonuses"] == [{"label": "2nd Dan", "amount": 2},
+                            {"label": "armor", "amount": 7, "situational": True}]
+
+
+def test_a_wound_check_takes_the_modals_extra_bonus(client, scripted):
+    cid = _school(client, "akodo_bushi", current_light_wounds=30)
+    plain = _wc(client, cid, headers=scripted("9")).json()
+    data = _wc(client, cid, extra_bonus=12, extra_label="  shelter  ", headers=scripted("9")).json()
+    assert data["total"] == plain["total"] + 12
+    assert {"label": "shelter", "amount": 12, "situational": True} in data["formula"]["bonuses"]
+    assert data["wc"]["passed"] == (data["total"] >= 30)
+    assert {"label": "shelter", "amount": 12} in [
+        {"label": b["label"], "amount": b["amount"]} for b in _row(client, data["history_id"])["bonuses"]]
+    # No label falls back to "extra bonus"; an iaijutsu strike's check takes it too.
+    strike = _wc(client, cid, strike=True, extra_bonus=-4, headers=scripted("9")).json()
+    assert {"label": "extra bonus", "amount": -4, "situational": True} in strike["formula"]["bonuses"]
+    assert "whole number" in _wc(client, cid, extra_bonus="lots").json()["error"]

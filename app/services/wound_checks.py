@@ -9,7 +9,7 @@ spends, Doji 5th Dan, a Daidoji counterattack) to the rolled formula.
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 from app.services.attack_rolls import attack_flags, current_posture
 from app.services.void_spend import school_dan
@@ -59,18 +59,25 @@ def akodo_banked_bonus(margin: int, attack_skill: int) -> int:
 
 
 def _bonus(formula: Dict[str, Any], label: str, amount: int) -> None:
+    # ``situational`` marks a row added here rather than by the formula
+    # builder, whose rows the result panel already lists as bonus_sources.
     formula["flat"] = (formula.get("flat") or 0) + amount
-    formula["bonuses"] = list(formula.get("bonuses") or []) + [{"label": label, "amount": amount}]
+    formula["bonuses"] = list(formula.get("bonuses") or []) + [
+        {"label": label, "amount": amount, "situational": True}]
 
 
 def build_wound_check(character: Any, formula: Dict[str, Any], light_wounds: int, *,
-                      strike: bool, daidoji: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+                      strike: bool, daidoji: Optional[Dict[str, Any]],
+                      extra: Optional[Tuple[str, int]] = None) -> Dict[str, Any]:
     """``{"formula", "consumes"}``: the check against ``light_wounds`` with
-    its automatic bonuses. An iaijutsu strike's check never rerolls 10s."""
+    its automatic bonuses, plus the modal's ``extra`` ``(label, amount)``
+    (a GM's situational grant). An iaijutsu strike's check never rerolls 10s."""
     data = character.to_dict()
     flags = attack_flags(data)
     state = character.adventure_state or {}
     f = dict(formula, light_wounds=light_wounds)
+    if extra:
+        _bonus(f, *extra)
     if current_posture(state) == "defensive":
         _bonus(f, "defensive posture", 5)
     defensive = sum(1 for p in state.get("mantis_posture_history") or [] if p == "defensive")

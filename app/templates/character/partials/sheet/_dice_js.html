@@ -954,6 +954,10 @@
             wcExcessSpentThisRoll: 0, // Isawa 5th Dan banked excess spent on this WC
             wcBayushiHalfLw: false, // whether Bayushi 5th Dan half-LW was applied this check
             wcDaidojiCounterattack: false, // checkbox: this WC is for a counterattacked hit
+            // Pre-roll "Extra bonus" (a GM's situational grant), as on the attack modal.
+            wcExtraBonusEnabled: false,
+            wcExtraBonusAmount: 5,
+            wcExtraBonusLabel: '',
             daidojiCounterattackData: null, // {label, raises, bonus} for counterattack checkbox
             ideBankedTnReduce: 0,
             hidaBankedWcBonus: 0,
@@ -5708,6 +5712,9 @@
                 this.wcLightWounds = lw;
                 this.wcVoidSelected = 0;
                 this.wcDaidojiCounterattack = false;
+                this.wcExtraBonusEnabled = false;
+                this.wcExtraBonusAmount = 5;
+                this.wcExtraBonusLabel = '';
                 this.wcIsStrike = false;
                 this.wcPhase = 'pre';
                 // Reset the copy-as-image state so a previous roll's
@@ -5765,7 +5772,8 @@
                 // Mantis Wave-Treader: defensive posture (+5) plus 5th Dan
                 // defensive-posture-count accumulator (+N) feed the WC flat.
                 const postureFlat = this._mantisLiveWcFlat();
-                const flat = (p.flat || 0) + daidojiBonus + vpFlat + wcVpRaise + dojiBonus + shosuroFlat + postureFlat;
+                const flat = (p.flat || 0) + daidojiBonus + vpFlat + wcVpRaise + dojiBonus + shosuroFlat + postureFlat
+                    + this._wcExtraBonusFlat();
                 const lw = this.wcLightWounds;
                 const target = Math.max(0, lw - flat);
 
@@ -5804,6 +5812,13 @@
                 return { passChance, rows, expectedSW };
             },
 
+            _wcExtraBonusFlat() {
+                // Counts only while checked; non-numeric input is 0 while typing.
+                if (!this.wcExtraBonusEnabled) return 0;
+                const n = parseInt(this.wcExtraBonusAmount, 10);
+                return Number.isFinite(n) ? n : 0;
+            },
+
             async rollWoundCheck() {
                 // The SERVER makes the wound check (server-rolls-design
                 // Phase 8): it adds the bonuses it knows (Mantis defensive
@@ -5829,6 +5844,8 @@
                     kitsune_swap: !!(this.wcKitsuneSwap && f.kitsune_swap && !this.wcIsStrike),
                     strike: !!this.wcIsStrike,
                     daidoji: !!(this.wcDaidojiCounterattack && this.daidojiCounterattackData),
+                    extra_bonus: this._wcExtraBonusFlat(),
+                    extra_label: (this.wcExtraBonusLabel || '').trim(),
                     light_wounds: this.wcLightWounds,
                     request_id: this._newRequestId(),
                 };
