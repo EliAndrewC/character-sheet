@@ -22,9 +22,16 @@
                         <span class="text-ink/60">Light wounds:</span>
                         <span class="font-bold text-lg" x-text="wcLightWounds"></span>
                         <span class="text-ink/60 ml-2">TN:</span>
-                        <span class="font-bold" x-text="wcLightWounds"></span>
+                        <span class="font-bold" data-testid="wc-pre-tn" x-text="_wcLwAfterVoid(wcVoidSelected)"></span>
                         <span x-show="wcProbs.flat > 0" x-cloak class="text-success text-xs ml-1"
                               x-text="'(+' + wcProbs.flat + ' flat bonus)'"></span>
+                    </div>
+                    {# Yogo 3rd Dan: void points lower the light wounds as they are spent. #}
+                    <div x-show="schoolAbilities.yogo_vp_heal_amount > 0 && !wcIsStrike" x-cloak
+                         class="text-xs text-success" data-testid="wc-yogo-heal-note">
+                        Yogo 3rd Dan: each void point spent lowers your light wounds by
+                        <span x-text="schoolAbilities.yogo_vp_heal_amount"></span> before the check<span
+                        x-show="schoolAbilities.yogo_wc_vp_free_raise">, and is a free raise (4th Dan)</span>.
                     </div>
 
                     {# Bonus sources. Mantis defensive posture (+5) plus 5th Dan
@@ -225,6 +232,8 @@
                             </div>
                             {% include 'character/partials/copy_roll_image_button.html' %}
                         </div>
+                        <div x-show="wcYogoHeal" x-cloak class="text-xs text-success mb-1" data-testid="wc-yogo-heal"
+                             x-text="wcYogoHeal ? 'Yogo 3rd Dan: void points lowered light wounds by ' + wcYogoHeal.healed + ' (' + wcYogoHeal.before + ' to ' + wcLightWounds + ')' : ''"></div>
                         {# Show breakdown only when there are bonuses beyond the kept dice #}
                         <template x-if="(formula?.flat || 0) > 0 || (formula?.bonuses || []).some(b => b.situational) || (formula?.void_spent || 0) > 0 || wcRaisesSpent > 0 || mirumotoPointsSpentThisRoll > 0 || wcDaidojiCounterattack || wcExcessSpentThisRoll > 0 || shosuroLowest3Bonus > 0 || convictionSpentThisRoll > 0 || pcpRaisesSpentThisRoll > 0">
                             <div>

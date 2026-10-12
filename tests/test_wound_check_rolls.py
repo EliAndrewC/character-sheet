@@ -131,6 +131,12 @@ def test_4th_dan_void_raise_on_wound_checks(client, scripted):
     back = _act(client, cid, sid, "undo_wc_vp").json()
     assert back["tracking"]["current_void_points"] == 1
     assert "undo" in _act(client, cid, sid, "undo_wc_vp").json()["error"]
+    # Yogo 3rd Dan: that point also took 2 x attack (4) off the light wounds
+    # being checked, and taking it back puts them back.
+    assert up["wc"]["light_wounds"] == 36 and up["wc"]["yogo_lw_healed"] == 4
+    assert up["tracking"]["current_light_wounds"] == 36
+    assert back["wc"]["light_wounds"] == 40 and "yogo_lw_healed" not in back["wc"]
+    assert back["tracking"]["current_light_wounds"] == 40
     plain = _school(client, "akodo_bushi", current_light_wounds=10)
     psid = _wc(client, plain).json()["session_id"]
     assert "no 4th Dan" in _act(client, plain, psid, "wc_vp").json()["error"]
@@ -191,3 +197,49 @@ def test_a_wound_check_takes_the_modals_extra_bonus(client, scripted):
     strike = _wc(client, cid, strike=True, extra_bonus=-4, headers=scripted("9")).json()
     assert {"label": "extra bonus", "amount": -4, "situational": True} in strike["formula"]["bonuses"]
     assert "whole number" in _wc(client, cid, extra_bonus="lots").json()["error"]
+
+
+@pytest.mark.parametrize("dan, flat", [(3, 5), (4, 10)])
+def test_yogo_pre_roll_void_lowers_light_wounds_before_the_check(client, scripted, dan, flat):
+    """Tsuruchi Hidemasa: 47 light wounds, attack 4, spends 1 void point -
+    rolls against 39, with the 2nd Dan raise (and at 4th Dan, one more)."""
+    cid = _school(client, "yogo_warden", dan=dan, attack=4, current_light_wounds=47,
+                  current_void_points=2, current_temp_void_points=0)
+    data = _wc(client, cid, void=1, headers=scripted("5")).json()
+    assert data["formula"]["flat"] == flat
+    assert data["wc"]["light_wounds"] == 39
+    assert (data["wc"]["yogo_lw_before"], data["wc"]["yogo_lw_healed"]) == (47, 8)
+    assert data["tracking"]["current_light_wounds"] == 39
+    labels = [b["label"] for b in data["payload"]["bonuses"]]
+    assert ("Yogo 4th Dan (1 void point spent)" in labels) == (dan >= 4)
+
+
+def test_yogo_heal_stops_at_zero_and_applies_to_a_simulated_scenario(client, scripted):
+    cid = _school(client, "yogo_warden", dan=4, attack=4, current_light_wounds=10,
+                  current_void_points=3, current_temp_void_points=0)
+    data = _wc(client, cid, void=2, headers=scripted("5")).json()
+    assert data["wc"]["light_wounds"] == 0 and data["wc"]["yogo_lw_healed"] == 10
+    assert data["wc"]["passed"]
+    assert "Yogo 4th Dan (2 void points spent)" in [b["label"] for b in data["payload"]["bonuses"]]
+    # A test-drive (Read-only Roll Mode) heals the scenario amount, not the character.
+    sim = _school(client, "yogo_warden", dan=3, attack=4, current_void_points=2)
+    data = _wc(client, sim, headers={**OTHER, "X-Test-Dice": "5"}, light_wounds=47, void=1).json()
+    assert data["wc"]["light_wounds"] == 39
+    assert _get(client, sim).current_void_points == 2
+
+
+def test_a_yogo_post_roll_point_heals_no_more_than_is_left(client, scripted):
+    cid = _school(client, "yogo_warden", dan=4, attack=4, current_light_wounds=11,
+                  current_void_points=2, current_temp_void_points=0)
+    data = _wc(client, cid, void=1, headers=scripted("1")).json()
+    assert data["wc"]["light_wounds"] == 3
+    up = _act(client, cid, data["session_id"], "wc_vp").json()
+    assert up["wc"]["light_wounds"] == 0 and up["wc"]["yogo_lw_healed"] == 11
+    assert up["tracking"]["current_light_wounds"] == 0
+    back = _act(client, cid, data["session_id"], "undo_wc_vp").json()
+    assert back["wc"]["light_wounds"] == 3 and back["tracking"]["current_light_wounds"] == 3
+    # Simulated: the session heals, the character does not.
+    sim = _school(client, "yogo_warden", dan=4, attack=4, current_void_points=1)
+    s = _wc(client, sim, headers={**OTHER, "X-Test-Dice": "1"}, light_wounds=20).json()
+    up = _act(client, sim, s["session_id"], "wc_vp", headers=OTHER).json()
+    assert up["wc"]["light_wounds"] == 12 and not _get(client, sim).current_light_wounds

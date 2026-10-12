@@ -772,6 +772,7 @@
             wcVoidSelected: 0,
             wcIsStrike: false,
             wcLightWounds: 0,
+            wcYogoHeal: null,  // {before, healed}: Yogo 3rd Dan, from the server
             wcRollTotal: 0,
             wcPassed: false,
             wcSeriousWounds: 0,
@@ -2709,6 +2710,11 @@
                         : `${wcF.rolled}k${wcF.kept}`;
                 }
                 const extras = this._extraBonusBullets(this.formula);
+                if (this.wcYogoHeal) {
+                    const y = this.wcYogoHeal;
+                    extras.push('Yogo 3rd Dan: void points spent lowered light wounds by '
+                        + y.healed + ' (' + y.before + ' to ' + (this.wcLightWounds || 0) + ') before the check');
+                }
                 // Append the post-roll outcome bullet once the player has
                 // chosen (Keep LW / Take 1 SW on pass, or auto/manual apply
                 // on fail). Captured here so the readonly Roll History
@@ -5710,6 +5716,7 @@
                 } catch (e) { this.wcProbs = {}; }
                 const formula = this.formulas['wound_check'];
                 this.wcLightWounds = lw;
+                this.wcYogoHeal = null;
                 this.wcVoidSelected = 0;
                 this.wcDaidojiCounterattack = false;
                 this.wcExtraBonusEnabled = false;
@@ -5763,9 +5770,13 @@
                 const daidojiBonus = this.wcDaidojiCounterattack && this.daidojiCounterattackData
                     ? this.daidojiCounterattackData.bonus : 0;
                 const vpFlat = voidCount * (this.voidSpendConfig.combat_vp_flat_bonus || 0);
-                const wcVpRaise = this.voidSpendConfig.wc_vp_free_raise ? voidCount * 5 : 0;
+                // Yogo 4th Dan: a pre-roll void point is a free raise too
+                // (Akodo's 4th Dan raise is post-roll only). Yogo 3rd Dan:
+                // each one lowers the light wounds before the check.
+                const wcVpRaise = this.schoolAbilities?.yogo_wc_vp_free_raise ? voidCount * 5 : 0;
+                const lw = this._wcLwAfterVoid(voidCount);
                 const dojiBonus = this.formulas['wound_check']?.doji_5th_dan_wc
-                    ? window.L7RRollMath.bonusPer5Over10(this.wcLightWounds) : 0;
+                    ? window.L7RRollMath.bonusPer5Over10(lw) : 0;
                 const shosuroFlat = this.wcIsStrike
                     ? (p.shosuro_flats_no_reroll?.[key] || 0)
                     : (p.shosuro_flats?.[key] || 0);
@@ -5774,7 +5785,6 @@
                 const postureFlat = this._mantisLiveWcFlat();
                 const flat = (p.flat || 0) + daidojiBonus + vpFlat + wcVpRaise + dojiBonus + shosuroFlat + postureFlat
                     + this._wcExtraBonusFlat();
-                const lw = this.wcLightWounds;
                 const target = Math.max(0, lw - flat);
 
                 // Pass chance is always based on actual LW
@@ -5810,6 +5820,13 @@
                 for (const r of rows) expectedSW += r.sw * r.chance;
 
                 return { passChance, rows, expectedSW };
+            },
+
+            // Yogo 3rd Dan: light wounds left once ``voidCount`` pre-roll
+            // void points have each taken 2 x attack off them.
+            _wcLwAfterVoid(voidCount) {
+                const heal = (this.schoolAbilities?.yogo_vp_heal_amount || 0) * (voidCount || 0);
+                return Math.max(0, (this.wcLightWounds || 0) - (this.wcIsStrike ? 0 : heal));
             },
 
             _wcExtraBonusFlat() {
@@ -5911,6 +5928,10 @@
             // The server's judgement of the wound check at its current total.
             _adoptWcOutcome(o) {
                 if (!o) return;
+                // The server's target: a Yogo's void points (3rd Dan) lower it.
+                if (typeof o.light_wounds === 'number') this.wcLightWounds = o.light_wounds;
+                this.wcYogoHeal = o.yogo_lw_healed
+                    ? {before: o.yogo_lw_before, healed: o.yogo_lw_healed} : null;
                 this.wcPassed = o.passed;
                 this.wcMargin = o.margin;
                 this.wcSeriousWounds = o.serious_wounds;

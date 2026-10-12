@@ -12,7 +12,7 @@ from __future__ import annotations
 from typing import Any, Dict, List, Optional, Tuple
 
 from app.services.attack_rolls import attack_flags, current_posture
-from app.services.void_spend import school_dan
+from app.services.void_spend import school_dan, spend_consequences
 
 
 def wound_check_flags(character_data: Dict[str, Any]) -> Dict[str, Any]:
@@ -22,6 +22,12 @@ def wound_check_flags(character_data: Dict[str, Any]) -> Dict[str, Any]:
     return {
         # Akodo / Yogo 4th Dan: a void point after a wound check is +5.
         "wc_vp_free_raise": (school == "akodo_bushi" and dan >= 4) or (school == "yogo_warden" and dan >= 4),
+        # Yogo 4th Dan: EVERY void point spent on a wound check is a free
+        # raise, the pre-roll +1k1 ones too (Akodo's 4th Dan is post-roll only).
+        "yogo_wc_vp_free_raise": school == "yogo_warden" and dan >= 4,
+        # Yogo 3rd Dan: each void point spent lowers light wounds by 2 x attack,
+        # at once - so the check is made against what is left.
+        "yogo_vp_heal_amount": spend_consequences(character_data)["yogo_vp_heal_amount"],
         # Yogo Warden Special: a temp void point per serious wound taken.
         "yogo_temp_vp_on_sw": school == "yogo_warden",
         # Isawa 5th Dan: a passed check's margin is banked for a later one.
@@ -68,14 +74,23 @@ def _bonus(formula: Dict[str, Any], label: str, amount: int) -> None:
 
 def build_wound_check(character: Any, formula: Dict[str, Any], light_wounds: int, *,
                       strike: bool, daidoji: Optional[Dict[str, Any]],
-                      extra: Optional[Tuple[str, int]] = None) -> Dict[str, Any]:
+                      extra: Optional[Tuple[str, int]] = None, void: int = 0) -> Dict[str, Any]:
     """``{"formula", "consumes"}``: the check against ``light_wounds`` with
     its automatic bonuses, plus the modal's ``extra`` ``(label, amount)``
-    (a GM's situational grant). An iaijutsu strike's check never rerolls 10s."""
+    (a GM's situational grant). An iaijutsu strike's check never rerolls 10s.
+    ``void``: the pre-roll void points, for the Yogo 3rd / 4th Dan."""
     data = character.to_dict()
     flags = attack_flags(data)
+    wc = wound_check_flags(data)
     state = character.adventure_state or {}
-    f = dict(formula, light_wounds=light_wounds)
+    healed = min(light_wounds, void * wc["yogo_vp_heal_amount"])
+    f = dict(formula, light_wounds=light_wounds - healed)
+    if healed:
+        f["yogo_lw_before"] = light_wounds
+        f["yogo_lw_healed"] = healed
+    if void and wc["yogo_wc_vp_free_raise"]:
+        _bonus(f, f"Yogo 4th Dan ({void} void point{'s' if void > 1 else ''} spent)", 5 * void)
+    light_wounds = f["light_wounds"]
     if extra:
         _bonus(f, *extra)
     if current_posture(state) == "defensive":

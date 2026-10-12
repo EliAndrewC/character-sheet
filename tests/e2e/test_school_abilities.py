@@ -7034,9 +7034,9 @@ def test_yogo_4th_dan_wc_prob_chart_includes_raise(page, live_server_url):
         for (const el of els) {
             const d = window.Alpine && window.Alpine.$data(el);
             if (d && d.wcProbRow && d.voidSpendConfig) {
-                d.voidSpendConfig.wc_vp_free_raise = false;
+                d.schoolAbilities.yogo_wc_vp_free_raise = false;
                 const r1 = d.wcProbRow(1);
-                d.voidSpendConfig.wc_vp_free_raise = true;
+                d.schoolAbilities.yogo_wc_vp_free_raise = true;
                 return r1?.passChance || 0;
             }
         }
@@ -7044,6 +7044,34 @@ def test_yogo_4th_dan_wc_prob_chart_includes_raise(page, live_server_url):
     }""")
     assert pass_1 > pass_1_no_raise, \
         f"4th Dan +5 should boost pass chance: with={pass_1}, without={pass_1_no_raise}"
+
+
+def test_yogo_pre_roll_void_lowers_light_wounds_before_the_wound_check(page, live_server_url):
+    """Yogo 3rd Dan: a void point spent on the wound check takes 2 x attack
+    off the light wounds BEFORE the check; at 4th Dan it is also a free
+    raise. The modal, the sheet and the copy-as-image card all show it."""
+    _create_char(page, live_server_url, "Yogo4PreVP", "yogo_warden",
+                 knack_overrides={"double_attack": 4, "iaijutsu": 4, "feint": 4})
+    heal = page.evaluate("window._diceRoller.schoolAbilities.yogo_vp_heal_amount")
+    assert heal >= 2
+    save_tracking(page, voidPoints=2, tempVoidPoints=0, lightWounds=30)
+    page.locator('[data-action="roll-wound-check"]').click()
+    modal = page.locator('[data-modal="wound-check"]')
+    modal.wait_for(state="visible", timeout=10000)
+    assert modal.locator('[data-testid="wc-yogo-heal-note"]').is_visible()
+    assert modal.locator('[data-testid="wc-pre-tn"]').text_content() == "30"
+    modal.locator('button.btn-pip:has-text("+")').first.click()
+    assert modal.locator('[data-testid="wc-pre-tn"]').text_content() == str(30 - heal)
+    modal.locator('[data-action="roll-wound-check-go"]').click()
+    page.wait_for_function("window._diceRoller.wcPhase === 'result'", timeout=10000)
+    page.locator('[data-testid="wc-yogo-heal"]').wait_for(state="visible")
+    assert f"30 to {30 - heal}" in page.locator('[data-testid="wc-yogo-heal"]').text_content()
+    assert page.evaluate("window._diceRoller.wcLightWounds") == 30 - heal
+    assert page.evaluate("window._trackingBridge.lightWounds") == 30 - heal
+    card = page.evaluate("window._diceRoller._buildWoundCheckImagePayload()")
+    assert any("Yogo 3rd Dan" in e and f"30 to {30 - heal}" in e for e in card["extras"]), card["extras"]
+    assert any(b["label"].startswith("Yogo 4th Dan") and b["amount"] == 5 for b in card["bonuses"]), card["bonuses"]
+    assert card["footer"].startswith(f"vs TN {30 - heal} ")
 
 
 def test_yogo_3rd_dan_wc_prob_chart_no_raise(page, live_server_url):

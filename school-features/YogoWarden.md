@@ -59,9 +59,11 @@
 
 > Whenever you spend a void point, reduce your current light wound total by 2X, where X is your attack skill.
 
-**Status:** Fully implemented.
-- Server: `app/routes/pages.py` passes `yogo_vp_heals_lw: true` and `yogo_vp_heal_amount: 2*attack_skill` in school_abilities.
-- Client: `app/templates/character/sheet.html` hooks into `deductVoidPoints()` to automatically reduce light wounds by 2*attack_skill per VP spent.
+**Status:** Fully implemented (server-side).
+- `void_spend.spend_consequences()` defines `yogo_vp_heal_amount` (2 x attack); `apply_void_spend()` takes it off the character for every void point spent, on any roll.
+- **Wound checks: the heal comes off BEFORE the check** (fixed 2026-10-12; the check used to be judged against the light wounds from before the spend). `wound_checks.build_wound_check(void=...)` lowers the check's `light_wounds` for pre-roll void and stamps `yogo_lw_before` / `yogo_lw_healed`; a post-roll `wc_vp` point records its `healed` amount on the session action, `_wc_state` subtracts it, and undo puts it back on the character. A simulated (read-only) roll heals the scenario amount, never the character.
+- Sheet: the wound check modal's TN follows the selected void (`_wcLwAfterVoid`), the result adopts the server's `light_wounds`, and a "Yogo 3rd Dan: void points lowered light wounds by N (A to B)" line appears in the result and on the copy-as-image card.
+- Tests: `tests/test_wound_check_rolls.py::test_yogo_*`, `test_4th_dan_void_raise_on_wound_checks`; clicktest `test_school_abilities.py::test_yogo_pre_roll_void_lowers_light_wounds_before_the_wound_check`.
 
 **Questions (ANSWERED):**
 - X is the attack skill rank (as with all bushi 3rd Dan techniques).
@@ -76,9 +78,9 @@
 
 **Status:** Fully implemented.
 - Ring raise (+1 Earth, cost discount, max increase to 7) is fully implemented via `enforceFourthDanRing()` in the editor and `calculate_ring_xp()` server-side.
-- VP for extra free raise on wound checks:
-  - Server: `app/routes/pages.py` passes `wc_vp_free_raise: true` in void_spend_config when yogo_warden and dan >= 4 (same pattern as Akodo 4th Dan).
-  - Client: `app/templates/character/sheet.html` applies +5 per VP flat bonus on wound check VP spending path.
+- VP for extra free raise on wound checks - EVERY void point, pre-roll and post-roll:
+  - Pre-roll: `wound_check_flags()["yogo_wc_vp_free_raise"]`; `build_wound_check` adds a "Yogo 4th Dan (N void points spent)" +5 each bonus row (fixed 2026-10-12: only the probability preview used to include it). Deliberately separate from `wc_vp_free_raise`, which Akodo 4th Dan shares and which is post-roll only ("after making any combat roll").
+  - Post-roll: the `wc_vp` session action (+5 each), shared with Akodo 4th Dan.
 
 ---
 

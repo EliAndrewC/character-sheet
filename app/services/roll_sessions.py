@@ -61,7 +61,8 @@ from app.services.roll_engine import (
 from app.services.rolls_history import skill_rank_for_roll
 from app.services.tracking import start_combat_round, tracking_snapshot
 from app.services.void_spend import (
-    VoidSpendRefused, apply_void_spend, plan_void_spend, school_dan, void_limits,
+    VoidSpendRefused, apply_void_spend, plan_void_spend, school_dan, spend_consequences,
+    void_limits,
 )
 
 SESSION_TTL = timedelta(hours=6)
@@ -1525,15 +1526,29 @@ def _start_wound_check(db, character, formula, choices, viewer, live, void, ow):
         extra = extra_bonus(choices)
     except ValueError as exc:
         raise RollRefused(str(exc)) from None
-    built = build_wound_check(character, formula, lw, strike=strike, daidoji=daidoji, extra=extra)
+    # The Yogo 3rd Dan heal comes off before the check (build_wound_check);
+    # live, apply_void_spend takes the same amount off the character.
+    built = build_wound_check(character, formula, lw, strike=strike, daidoji=daidoji, extra=extra,
+                              void=void)
     return built["formula"], built["consumes"]
+
+
+def _wc_light_wounds(session: RollSession) -> int:
+    """What the check is against: the roll's light wounds less what a Yogo's
+    void points spent after the roll healed (3rd Dan)."""
+    lw = int((session.formula or {}).get("light_wounds") or 0)
+    return max(0, lw - sum(a.get("healed", 0) for a in session.actions or []))
 
 
 def _wc_state(session: RollSession) -> Dict[str, Any]:
     f = session.formula or {}
-    out = cm.wound_check_result(_session_total(session), int(f.get("light_wounds") or 0),
-                                bool(f.get("bayushi_5th_dan_half_lw")))
-    out["light_wounds"] = int(f.get("light_wounds") or 0)
+    lw = _wc_light_wounds(session)
+    out = cm.wound_check_result(_session_total(session), lw, bool(f.get("bayushi_5th_dan_half_lw")))
+    out["light_wounds"] = lw
+    healed = int(f.get("yogo_lw_healed") or 0) + sum(a.get("healed", 0) for a in session.actions or [])
+    if healed:
+        out["yogo_lw_before"] = lw + healed
+        out["yogo_lw_healed"] = healed
     session.choices = dict(session.choices or {}, wc=out)
     return out
 
@@ -1555,6 +1570,9 @@ def _void_raise(session, character, undo, kind, what):
         entry = actions.pop(mine[-1])
         session.actions = actions
         if live:
+            if entry.get("healed"):
+                # Undo the Yogo 3rd Dan heal that point bought, too.
+                character.current_light_wounds = (character.current_light_wounds or 0) + entry["healed"]
             if entry["source"] == "temp":
                 character.current_temp_void_points = (character.current_temp_void_points or 0) + 1
             elif entry["source"] == "regular":
@@ -1564,10 +1582,17 @@ def _void_raise(session, character, undo, kind, what):
                 state["worldliness_used"] = max(0, int(state.get("worldliness_used") or 0) - 1)
                 character.adventure_state = state
         return {}
+    heal = spend_consequences(character.to_dict())["yogo_vp_heal_amount"]
+    healed = 0
+    if heal and session.roll_key == "wound_check":
+        # Yogo 3rd Dan: the point lowers the light wounds being checked.
+        healed = min(heal, _wc_light_wounds(session))
     try:
         if live:
             plan = plan_void_spend(character, 0, activation_cost=1, roll_label=what)
+            before = character.current_light_wounds or 0
             apply_void_spend(character, plan)
+            healed = min(healed, before - (character.current_light_wounds or 0)) if heal else 0
             a = plan.activation
             source = "temp" if a.from_temp else ("regular" if a.from_regular else "worldliness")
         else:
@@ -1577,7 +1602,10 @@ def _void_raise(session, character, undo, kind, what):
             source = "simulated"
     except VoidSpendRefused as exc:
         raise RollRefused(str(exc)) from None
-    session.actions = list(session.actions or []) + [{"kind": kind, "amount": 5, "source": source}]
+    entry = {"kind": kind, "amount": 5, "source": source}
+    if healed:
+        entry["healed"] = healed
+    session.actions = list(session.actions or []) + [entry]
     return {}
 
 

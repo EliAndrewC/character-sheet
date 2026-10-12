@@ -796,6 +796,7 @@ The Suzume family of the Sparrow clan is drawn from Crane Doji Artisans and merc
 - [x] 3rd Dan VP spending reduces light wounds -> `test_school_abilities.py::test_yogo_3rd_dan_vp_heals_lw_behavioral`
 - [x] 4th Dan post-roll VP gives enhanced bonus -> `test_school_abilities.py::test_yogo_4th_dan_post_roll_vp_behavioral`
 - [x] 4th Dan +5/VP reflected in wound check probability chart -> `test_school_abilities.py::test_yogo_4th_dan_wc_prob_chart_includes_raise`
+- [x] 3rd Dan: a pre-roll VP on a wound check lowers the light wounds (TN) before the check, shown pre-roll, in the result and on the copy-as-image card; 4th Dan adds a free raise per pre-roll VP -> `test_school_abilities.py::test_yogo_pre_roll_void_lowers_light_wounds_before_the_wound_check`
 - [x] 3rd Dan probability chart does NOT include +5/VP -> `test_school_abilities.py::test_yogo_3rd_dan_wc_prob_chart_no_raise`
 - [x] Serious wound grants temp VP -> `test_school_abilities.py::test_yogo_serious_wound_temp_vp_behavioral`
 
