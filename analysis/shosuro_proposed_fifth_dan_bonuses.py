@@ -1,0 +1,313 @@
+"""Analysis: marginal value of an extra rolled die for a Shosuro Actor
+5th Dan character, under the PROPOSED 5th Dan technique.
+
+Companion to ``shosuro_fifth_dan_bonuses.py``, which models the
+current technique ("add your lowest three dice"). This script does
+exactly the same thing for the proposed replacement: "add your
+second-highest die to non-initiative rolls". The second-highest die
+is always one of the kept dice when kept >= 2, so it is counted twice.
+
+Reads the precomputed Monte Carlo table ``probabilities.prob`` (mean
+of ``XkY`` rolls) from ``app/data/``. There is no precomputed table
+for the second-highest die, so its mean is computed EXACTLY from the
+order statistics of a single die's distribution (see
+``die_value_probs`` / ``second_highest_avg``) - deterministic, no
+RNG. A 10 that rerolls counts as one die worth the chain's total
+(a 10 rerolled into a 7 is 17), the same way the app scores the
+current technique.
+
+Three regimes are produced, in this order:
+
+  skill_roll  - base = XkY unskilled (no reroll); +1k0 = (X+1)kY
+                skilled (with reroll). Models the L7R rule that
+                a player without the skill never rerolls 10s.
+                Most game-relevant: covers the "is the first rank
+                of this skill worth buying?" decision.
+  reroll_on   - both base and +1k0 use reroll-10s. Already-skilled
+                unimpaired rolls.
+  reroll_off  - neither uses reroll. Initiative, iaijutsu strike,
+                impaired.
+
+Run from the repo root:
+
+    PYTHONPATH=. python3 analysis/shosuro_proposed_fifth_dan_bonuses.py
+
+Writes three files next to the script:
+
+  * ``ShosuroProposedFifthDan.csv``  - machine-readable, 4-decimal
+                                       precision. ``regime`` column
+                                       identifies the row.
+  * ``ShosuroProposedFifthDan.md``   - GitHub-renderable Markdown tables.
+  * stdout                           - same as the Markdown file.
+"""
+
+import csv
+import functools
+import pathlib
+
+from app.data.probabilities import prob
+
+
+# In-game cap: the L7R rule converts overflow rolled dice into kept
+# dice ("rolled > 10 -> kept += rolled - 10; rolled = 10"), so we
+# never actually roll more than ten. The "+1 rolled" columns are
+# blank for the rolled=10 row because adding another rolled die
+# isn't a thing the game lets you do.
+ROLLED_CAP = 10
+
+# Kept range: 2..10 covers every interesting pool. Kept=1 is rare
+# enough in L7R to omit; it's available in the prob table if needed.
+KEPT_RANGE = range(2, 11)
+
+# Chains of rerolled 10s are truncated after this many 10s in a row.
+# The probability mass dropped is 10^-MAX_CHAIN, far below the 4
+# decimals the outputs carry.
+MAX_CHAIN = 15
+
+# Output paths (next to this script).
+HERE = pathlib.Path(__file__).resolve().parent
+CSV_PATH = HERE / "ShosuroProposedFifthDan.csv"
+MD_PATH = HERE / "ShosuroProposedFifthDan.md"
+
+MD_INTRO = """\
+# Shosuro Actor proposed 5th Dan: marginal value of an extra rolled die
+
+The proposed technique: **add your second-highest die to
+non-initiative rolls** (it is also kept, so it counts twice). This
+file is the exact counterpart of `ShosuroFifthDan.md`, which models
+the current technique ("add your lowest three dice"); the roll
+columns are identical, only the bonus columns differ.
+
+Each table covers a different L7R regime. The first is the one that
+matters for the "should I buy a rank of this skill?" decision;
+the other two cover the other reroll/no-reroll situations.
+
+- **Unimpaired skill rolls (skill 0 -> 1)** - leading table.
+  Base = `XkY` *unskilled* (no reroll-10s, because you don't
+  have the skill yet). `+1k0` = `(X+1)kY` *skilled* (with
+  reroll-10s, because the rank you just bought turns it on).
+  This is the table to consult for "is buying the first rank
+  worth it on a Shosuro 5th Dan character?"
+- **Rerolling 10s** - both base and `+1k0` use reroll-10s.
+  Applies to skill 1 -> 2 -> 3 -> ... transitions (you were
+  already skilled, the extra die just adds more dice to the
+  same reroll regime). Also covers any other "skilled, not
+  impaired" roll.
+- **NOT rerolling 10s** - neither uses reroll. Covers
+  initiative, iaijutsu strikes, impaired rolls, etc. (The
+  technique does not apply to initiative; the regime is shown
+  for the other rolls in it.)
+
+For each `(rolled, kept)` cell the columns are:
+
+- **avg roll** - mean of the base `XkY` roll under the regime.
+- **Shosuro avg bonus** - mean value of the second-highest
+  rolled die. A 10 that rerolls counts as one die worth the
+  whole chain (a 10 rerolled into a 7 is 17), as the app scores
+  the current technique.
+- **gain from +1k0** - how much the average roll goes up from
+  the `+1k0` transition (which, in the skill_roll regime, also
+  turns reroll-10s on).
+- **Shosuro change per +1 rolled** - signed delta on the
+  Shosuro bonus from the same transition. Unlike the current
+  technique, an extra die can only raise the second-highest
+  die, so this is never negative.
+- **net +1k0** - sum of the previous two columns.
+
+The `rolled = 10` rows have no `+1k0` columns: the L7R overflow
+rule (`rolled > 10 -> kept += overflow`) prevents an 11th rolled
+die. See `analysis/ShosuroProposedFifthDanBonusesByPercentile.md`
+for the conditional-on-roll-percentile view of these same
+quantities.
+
+Generated by `analysis/shosuro_proposed_fifth_dan_bonuses.py` from
+the precomputed Monte Carlo tables in `app/data/` (roll columns)
+and an exact order-statistics calculation (bonus columns).
+"""
+
+REGIMES = ("skill_roll", "reroll_on", "reroll_off")
+REGIME_TITLES = {
+    "skill_roll":  "Unimpaired skill rolls (skill 0 -> 1: unskilled "
+                   "base, skilled +1k0)",
+    "reroll_on":   "Rerolling 10s (skilled, unimpaired - both base "
+                   "and +1k0 use reroll-10s)",
+    "reroll_off":  "NOT rerolling 10s (initiative, iaijutsu strike, "
+                   "impaired - neither uses reroll-10s)",
+}
+
+
+def regime_rerolls(regime):
+    """Return (base_reroll, extra_reroll) for ``regime``."""
+    if regime == "skill_roll":
+        return False, True
+    if regime == "reroll_on":
+        return True, True
+    if regime == "reroll_off":
+        return False, False
+    raise ValueError(regime)
+
+
+def avg_roll(reroll, rolled, kept):
+    """Mean of an ``XkY`` roll. Returns ``None`` if the pair isn't in
+    the precomputed table."""
+    return prob[reroll].get((rolled, kept))
+
+
+def die_value_probs(reroll):
+    """``{value: probability}`` for one die. Without reroll, 1..10
+    each at 0.1. With reroll, a die showing ``m`` tens and then
+    ``r`` (1..9) is worth ``10m + r`` with probability
+    ``0.1 ** (m + 1)``; chains past ``MAX_CHAIN`` tens are dropped."""
+    if not reroll:
+        return {v: 0.1 for v in range(1, 11)}
+    return {
+        10 * m + r: 0.1 ** (m + 1)
+        for m in range(MAX_CHAIN + 1)
+        for r in range(1, 10)
+    }
+
+
+@functools.lru_cache(maxsize=None)
+def second_highest_avg(reroll, rolled):
+    """Mean of the second-highest of ``rolled`` dice, exactly.
+
+    With ``F`` the single-die CDF, the second-highest is <= x when
+    at most one die exceeds x:
+    ``P(2nd <= x) = F(x)^n + n (1 - F(x)) F(x)^(n-1)``. The mean is
+    the sum over the die's support of ``value * P(2nd == value)``.
+    Returns ``None`` for ``rolled < 2`` (there is no second die).
+    """
+    if rolled < 2:
+        return None
+    n = rolled
+    mean = 0.0
+    cdf = 0.0
+    prev = 0.0
+    for value, p in sorted(die_value_probs(reroll).items()):
+        cdf += p
+        at_most = cdf ** n + n * (1 - cdf) * cdf ** (n - 1)
+        mean += value * (at_most - prev)
+        prev = at_most
+    return mean
+
+
+def shosuro_bonus(reroll, rolled):
+    """Mean proposed Shosuro 5th Dan bonus (the second-highest rolled
+    die) for a pool of ``rolled`` dice."""
+    return second_highest_avg(reroll, rolled)
+
+
+def build_rows():
+    """One row per (regime, rolled, kept) cell with the four
+    derived metrics. The ``+1 rolled`` deltas are ``None`` on the
+    rolled=10 row (no in-game way to add an 11th rolled die).
+
+    The ``skill_roll`` regime applies different reroll rules to
+    the base (no reroll, unskilled) and the +1k0 (with reroll,
+    skilled). The other two regimes apply the same reroll rules
+    to both halves of the comparison.
+    """
+    rows = []
+    for regime in REGIMES:
+        base_reroll, extra_reroll = regime_rerolls(regime)
+        for kept in KEPT_RANGE:
+            for rolled in range(kept, ROLLED_CAP + 1):
+                ar = avg_roll(base_reroll, rolled, kept)
+                sh = shosuro_bonus(base_reroll, rolled)
+                if rolled < ROLLED_CAP:
+                    ar_next = avg_roll(extra_reroll, rolled + 1, kept)
+                    sh_next = shosuro_bonus(extra_reroll, rolled + 1)
+                    gain = (ar_next - ar) if ar_next is not None else None
+                    sh_change = (
+                        (sh_next - sh)
+                        if (sh is not None and sh_next is not None)
+                        else None
+                    )
+                    net = (
+                        (gain + sh_change)
+                        if (gain is not None and sh_change is not None)
+                        else None
+                    )
+                else:
+                    gain = sh_change = net = None
+                rows.append({
+                    "regime": regime,
+                    "rolled": rolled,
+                    "kept": kept,
+                    "avg_roll": ar,
+                    "shosuro_bonus": sh,
+                    "gain_from_plus_1k0": gain,
+                    "shosuro_change": sh_change,
+                    "net_plus_1k0": net,
+                })
+    return rows
+
+
+def write_csv(rows, path):
+    def fmt(v):
+        return "" if v is None else f"{v:.4f}"
+    with path.open("w", newline="") as f:
+        w = csv.writer(f)
+        w.writerow([
+            "regime", "rolled", "kept",
+            "avg_roll", "shosuro_avg_bonus",
+            "gain_from_plus_1k0", "shosuro_change_per_plus_1_rolled",
+            "net_plus_1k0",
+        ])
+        for r in rows:
+            w.writerow([
+                r["regime"], r["rolled"], r["kept"],
+                fmt(r["avg_roll"]), fmt(r["shosuro_bonus"]),
+                fmt(r["gain_from_plus_1k0"]), fmt(r["shosuro_change"]),
+                fmt(r["net_plus_1k0"]),
+            ])
+
+
+def format_markdown(rows):
+    """Return the full Markdown document - intro + one table per
+    regime - as a single string. Used for both the file write
+    and stdout, so they stay in lockstep."""
+    out = [MD_INTRO]
+    for regime in REGIMES:
+        out.append(f"\n## {REGIME_TITLES[regime]}\n")
+        out.append(
+            "| rolled | kept | avg roll | Shosuro avg bonus | "
+            "gain from +1k0 | Shosuro change per +1 rolled | net +1k0 |"
+        )
+        out.append(
+            "|-------:|-----:|---------:|------------------:|"
+            "---------------:|-----------------------------:|---------:|"
+        )
+        for r in rows:
+            if r["regime"] != regime:
+                continue
+            def f2(v, signed=False):
+                if v is None:
+                    return "—"
+                return f"{v:+.2f}" if signed else f"{v:.2f}"
+            out.append(
+                f"| {r['rolled']} | {r['kept']} | "
+                f"{f2(r['avg_roll'])} | {f2(r['shosuro_bonus'])} | "
+                f"{f2(r['gain_from_plus_1k0'], signed=True)} | "
+                f"{f2(r['shosuro_change'], signed=True)} | "
+                f"{f2(r['net_plus_1k0'], signed=True)} |"
+            )
+    return "\n".join(out) + "\n"
+
+
+def write_markdown(rows, path):
+    path.write_text(format_markdown(rows))
+
+
+def main():
+    rows = build_rows()
+    write_csv(rows, CSV_PATH)
+    write_markdown(rows, MD_PATH)
+    print(f"wrote {CSV_PATH}")
+    print(f"wrote {MD_PATH}")
+    print(f"({len(rows)} data rows)")
+    print(format_markdown(rows))
+
+
+if __name__ == "__main__":
+    main()
