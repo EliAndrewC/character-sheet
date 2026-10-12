@@ -5234,19 +5234,27 @@ class TestSchoolCoverageBackfill:
         assert formulas["skill:interrogation"]["kept"] == 4  # Water, not Air(2)
         assert "(Water)" in formulas["skill:interrogation"]["label"]
 
-    def test_brotherhood_1st_dan_unarmed_damage_plus_1k1(self):
-        """Brotherhood of Shinsei 1st Dan: +1k1 unarmed damage. This is the
-        ONLY branch that sets damage_extra_kept, and it had no unit assertion
-        (e2e-only). Asserted through build_all_roll_formulas."""
+    def test_brotherhood_1st_dan_damage_is_one_rolled_die_only(self):
+        """Brotherhood of Shinsei 1st Dan: +1 ROLLED damage die, no kept die.
+        The special ability (+1k1 on unarmed damage) lives in the attack
+        modal's 1k3 default weapon; this block used to add +1k1 again, so an
+        unarmed monk rolled 1k3 + Fire + 1k1 (kept 4) instead of kept 3."""
+        from app.services.combat_math import damage_pool
         bro = make_character_data(
             school="brotherhood_of_shinsei_monk",
             knacks={"conviction": 1, "otherworldliness": 1, "worldliness": 1},
-            attack=2,
+            attack=2, rings={"Air": 2, "Fire": 3, "Earth": 2, "Water": 2, "Void": 2},
         )
         atk = build_all_roll_formulas(bro)["attack"]
         assert atk["damage_extra_rolled"] == 1
-        assert atk["damage_extra_kept"] == 1
-        assert any("unarmed" in s for s in atk["damage_bonus_sources"])
+        assert atk["damage_extra_kept"] == 0
+        assert atk["damage_bonus_sources"] == ["+1 rolled die from 1st Dan"]
+        # Unarmed with the special ability (1k3) + Fire 3 + 1st Dan die.
+        pool = damage_pool(atk, weapon_dice=(1, 3))
+        assert (pool["rolled"], pool["kept"]) == (5, 3)
+        # A katana gets the 1st Dan die but not the unarmed special.
+        pool = damage_pool(atk, weapon_dice=(4, 2))
+        assert (pool["rolled"], pool["kept"]) == (8, 2)
 
     def test_brotherhood_no_unarmed_damage_below_1st_dan(self):
         """Dan-gated: a Brotherhood monk with rank-0 school knacks (Dan 0)

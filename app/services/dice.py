@@ -1742,8 +1742,13 @@ def build_all_roll_formulas(
         damage_flat_bonus += air_val
         damage_bonus_sources.append(f"+{air_val} from Courtier (Air)")
 
-    # Yogo Warden / Kuni Witch Hunter: +1 rolled die on damage (1st Dan)
-    if school_id in ("yogo_warden", "kuni_witch_hunter") and dan >= 1:
+    # Fixed 1st Dan +1 rolled die on damage (Yogo Warden, Kuni Witch Hunter,
+    # Brotherhood of Shinsei). Rolled only: the Brotherhood's special ability
+    # (+1k1 on UNARMED damage) is already in its 1k3 default weapon in the
+    # attack modal, and adding a kept die here counted it twice.
+    if dan >= 1 and "damage" in (
+        SCHOOL_TECHNIQUE_BONUSES.get(school_id, {}).get("first_dan_extra_die") or []
+    ):
         damage_extra_rolled += 1
         damage_bonus_sources.append("+1 rolled die from 1st Dan")
 
@@ -1760,12 +1765,6 @@ def build_all_roll_formulas(
     ):
         damage_extra_rolled += 1
         damage_bonus_sources.append("+1 rolled die from 1st Dan")
-
-    # Brotherhood of Shinsei: +1 rolled +1 kept on unarmed damage (1st Dan)
-    if school_id == "brotherhood_of_shinsei_monk" and dan >= 1:
-        damage_extra_rolled += 1
-        damage_extra_kept += 1
-        damage_bonus_sources.append("+1k1 from 1st Dan (unarmed)")
 
     # Mantis Wave-Treader 2nd Dan: flexible free raise can target damage.
     if (

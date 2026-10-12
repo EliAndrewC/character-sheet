@@ -12,10 +12,8 @@
 > You roll and keep one extra die for damage rolls from unarmed attacks.
 
 **Status:** Fully implemented.
-- `dice.py` adds +1 rolled and +1 kept to damage when `school_id == "brotherhood_of_shinsei_monk"` and `dan >= 1`.
-- Damage bonus sources include "+1k1 from 1st Dan (unarmed)".
-
-**Implementation:** `app/services/dice.py` (damage_extra_rolled/kept), bonus labeled "+1k1 from 1st Dan (unarmed)".
+- The attack modal's default base weapon for a Brotherhood monk is **1k3** (unarmed 0k2 + the special's 1k1), set in `_dice_js.html` (`atkWeaponRolled` / `atkWeaponKept`, and the duel / Kakita 5th Dan defaults), with the hint "Default 1k3 (unarmed - Brotherhood special ability)" in `modal_attack.html`. Picking a real weapon (e.g. 4k2) correctly drops it.
+- **Do not also add it in `dice.py`.** `dice.py` used to add "+1k1 from 1st Dan (unarmed)" to `damage_extra_rolled/kept` on top of the 1k3 default, counting the special twice (and granting it with a katana). Fixed 2026-10-11; pinned by `test_brotherhood_1st_dan_damage_is_one_rolled_die_only`.
 
 ---
 
@@ -25,7 +23,7 @@
 
 **Status:** Fully implemented via `SCHOOL_TECHNIQUE_BONUSES`.
 - `first_dan_extra_die: ["attack", "damage", "wound_check"]`
-- Applied in `app/services/dice.py:_apply_school_technique_bonus()` and `build_wound_check_formula()`.
+- Applied in `app/services/dice.py:_apply_school_technique_bonus()` and `build_wound_check_formula()`; the damage die is the generic fixed-1st-Dan `"damage"` branch in `build_all_roll_formulas` (shared with Yogo Warden and Kuni Witch Hunter): +1 rolled, 0 kept, "+1 rolled die from 1st Dan".
 
 ---
 

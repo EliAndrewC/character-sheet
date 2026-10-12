@@ -3888,7 +3888,8 @@ def test_bayushi_below_5th_dan_prob_table_no_half_note(page, live_server_url):
 
 
 def test_brotherhood_unarmed_damage_behavioral(page, live_server_url):
-    """Brotherhood Special: attack damage shows +1k1 unarmed bonus in breakdown."""
+    """Brotherhood Special + 1st Dan: unarmed damage is the 1k3 default weapon
+    plus ONE rolled die from 1st Dan - the special's +1k1 is not added twice."""
     _create_char(page, live_server_url, "Brotherhood_UB", "brotherhood_of_shinsei_monk",
                  knack_overrides={"conviction": 2, "otherworldliness": 2, "worldliness": 2})
     _mock_dice_high(page)
@@ -3899,7 +3900,9 @@ def test_brotherhood_unarmed_damage_behavioral(page, live_server_url):
     modal.locator('[data-action="roll-attack"]').click()
     _wait_attack_result(page)
     dmg_text = _get_attack_result_text(page)
-    assert "unarmed" in dmg_text.lower() or "1k1" in dmg_text
+    assert "1k3 weapon" in dmg_text
+    assert "+1k0 from school" in dmg_text
+    assert "+1k1" not in dmg_text
 
 
 def test_courtier_air_attack_behavioral(page, live_server_url):

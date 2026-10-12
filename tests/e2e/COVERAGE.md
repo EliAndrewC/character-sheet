@@ -217,7 +217,7 @@ The three failures were:
 - [x] 1st Dan behavioral roll formulas and bonuses -> `test_school_abilities.py::test_brotherhood_1st_dan_behavioral`
 - [x] 2nd Dan behavioral attack bonus -> `test_school_abilities.py::test_brotherhood_2nd_dan_behavioral`
 - [x] 3rd Dan spend raise on precepts -> `test_school_abilities.py::test_brotherhood_3rd_dan_precepts_raises`
-- [x] Unarmed damage bonus behavioral -> `test_school_abilities.py::test_brotherhood_unarmed_damage_behavioral`
+- [x] Unarmed damage = 1k3 default + 1 rolled 1st Dan die, not +1k1 twice -> `test_school_abilities.py::test_brotherhood_unarmed_damage_behavioral`
 
 ### Courtier
 
