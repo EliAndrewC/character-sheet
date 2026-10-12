@@ -7060,6 +7060,23 @@ def test_yogo_pre_roll_void_lowers_light_wounds_before_the_wound_check(page, liv
     modal.wait_for(state="visible", timeout=10000)
     assert modal.locator('[data-testid="wc-yogo-heal-note"]').is_visible()
     assert modal.locator('[data-testid="wc-pre-tn"]').text_content() == "30"
+    # The probability chart: each void row is judged against the reduced
+    # light wounds. Turning the heal off must make every void row worse,
+    # and leave the no-void row alone.
+    chart = page.evaluate("""() => {
+        const d = window._diceRoller, row = v => d.wcProbRow(v);
+        const pick = r => [r.passChance, r.expectedSW];
+        const healed = [0, 1, 2].map(v => pick(row(v)));
+        const amount = d.schoolAbilities.yogo_vp_heal_amount;
+        d.schoolAbilities.yogo_vp_heal_amount = 0;
+        const plain = [0, 1, 2].map(v => pick(row(v)));
+        d.schoolAbilities.yogo_vp_heal_amount = amount;
+        return {healed, plain};
+    }""")
+    assert chart["healed"][0] == chart["plain"][0]
+    for v in (1, 2):
+        assert chart["healed"][v][0] > chart["plain"][v][0], chart
+        assert chart["healed"][v][1] < chart["plain"][v][1], chart
     modal.locator('button.btn-pip:has-text("+")').first.click()
     assert modal.locator('[data-testid="wc-pre-tn"]').text_content() == str(30 - heal)
     modal.locator('[data-action="roll-wound-check-go"]').click()
