@@ -34,7 +34,7 @@
                 has not applied yet is applied by it.
             </p>
             <p x-show="mismatched().length > 0" x-cloak data-testid="mass-xp-warning"
-               class="text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded px-3 py-2">
+               class="text-sm text-amber-800 bg-amber-50 border border-amber-300 rounded px-3 py-2">
                 <span x-text="mismatched().map(c => c.name).join(', ')"></span>
                 <span x-text="mismatched().length === 1 ? 'has' : 'have'"></span>
                 an unapplied change to Earned XP. If that is this adventure's XP typed in by
