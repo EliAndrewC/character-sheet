@@ -263,6 +263,7 @@ tests/shared/          - JSON case tables run by BOTH the pytest and the Node su
 discord-design/        - slash-command requirements (from gm-assistant) + the front-end / concurrency audit
 combat-design/         - the GM combat tracker + generated NPCs design, decisions D1-D34 and phase checklist
 probability-design/    - roll statistics (averages + probability charts) design, decisions P1-P11
+archery-design/        - archery attacks design (rules read-through, decisions A1-A11, GM questions, phase checklist)
 tests/e2e/             - E2E clicktests (Playwright)
 ```
 
