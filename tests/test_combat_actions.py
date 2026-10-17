@@ -520,6 +520,32 @@ def test_a_line_to_someone_who_left_is_not_drawn(client, lineup):
     assert cv.public_state(s, g)["reach"] == []
 
 
+@pytest.mark.parametrize("status", ["unconscious", "dead"])
+def test_going_down_clears_that_npcs_lines(client, lineup, status):
+    """Knocked out of the fight, an NPC strikes no one: its lines go, others
+    stay, and the GM can draw one back."""
+    w = lineup
+    s, g = w["s"], w["g"]
+    pc, pc2, npc, npc2 = w["pc"].id, w["pc2"].id, w["npc"].id, w["npc2"].id
+    for a, b in ((pc, npc), (pc2, npc), (pc, npc2)):
+        _reach(client, w, a, b)
+    assert client.post(_url(w, f"/npcs/{npc}/status"), json={"status": status}).status_code == 200
+    s.expire_all()
+    assert cv.gm_state(s, g)["reach"] == [[pc, npc2]]
+    assert _reach(client, w, pc, npc).status_code == 200
+    s.expire_all()
+    assert cv.gm_state(s, g)["reach"] == [[pc, npc2], [pc, npc]]
+
+
+def test_a_fighting_status_keeps_the_lines(client, lineup):
+    w = lineup
+    s, g = w["s"], w["g"]
+    _reach(client, w, w["pc"].id, w["npc"].id)
+    client.post(_url(w, f"/npcs/{w['npc'].id}/status"), json={"status": "fighting"})
+    s.expire_all()
+    assert cv.gm_state(s, g)["reach"] == [[w["pc"].id, w["npc"].id]]
+
+
 def test_a_line_joins_a_pc_and_an_npc_in_this_fight(client, lineup):
     w = lineup
     pc, pc2, npc = w["pc"].id, w["pc2"].id, w["npc"].id

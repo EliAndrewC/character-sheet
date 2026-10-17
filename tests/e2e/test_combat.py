@@ -570,6 +570,33 @@ def test_gm_draws_striking_lines_players_see_them_and_the_gm_can_hide_them(page,
     assert state["reach"] == []
 
 
+def test_an_npc_going_down_loses_its_striking_lines(page, page_anon, live_server_url):
+    gid = _group_with_pc(page, live_server_url, "DownLineA")
+    _start_fight_with_wave_men(page, live_server_url, gid, count=2)
+    page.set_viewport_size({"width": 1280, "height": 900})
+    pc, npcs = int(_names(page, "pcs")[0]), [int(i) for i in _names(page, "npcs")]
+    for npc in npcs:
+        r = page.request.post(f"{live_server_url}/groups/{gid}/combat/reach",
+                              data={"pc_id": pc, "npc_id": npc, "on": True})
+        assert r.ok
+    page.reload()
+    page.wait_for_selector(f'[data-testid="reach-line-{pc}-{npcs[0]}"]', state="attached")
+    page_anon.set_viewport_size({"width": 1280, "height": 900})
+    page_anon.goto(f"{live_server_url}/groups/{gid}/combat")
+    page_anon.wait_for_selector(f'[data-testid="reach-line-{pc}-{npcs[0]}"]', state="attached")
+
+    # Wounds to the dying threshold, then "Down" in the prompt.
+    _menu(page, npcs[0], "npc-adjust")
+    page.fill('[data-testid="adjust-sw"]', "20")
+    page.locator('[data-testid="adjust-save-btn"]').click()
+    page.wait_for_selector('[data-testid="down-prompt"]')
+    page.locator('[data-testid="down-unconscious"]').click()
+    page.wait_for_selector(f'[data-testid="reach-line-{pc}-{npcs[0]}"]', state="detached")
+    assert page.locator(f'[data-testid="reach-line-{pc}-{npcs[1]}"]').count() == 1  # the other NPC's stays
+    page_anon.wait_for_selector(f'[data-testid="reach-line-{pc}-{npcs[0]}"]', state="detached", timeout=15000)
+    assert page_anon.locator(f'[data-testid="reach-line-{pc}-{npcs[1]}"]').count() == 1
+
+
 def test_a_player_rolls_initiative_and_sets_a_die_on_their_own_pc(page, page_nonadmin, live_server_url):
     """From the combat page a player uses their own PC's action dice with the
     sheet's own initiative roll and die menu - "Set value" included, to match

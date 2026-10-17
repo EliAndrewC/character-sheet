@@ -299,6 +299,8 @@ def set_status(db: Session, encounter: Encounter, npc: Character, status: str) -
     if link is None:
         raise LookupError("that NPC is not in this fight")
     link.status = status
+    if status != "fighting":  # out of the fight, it strikes no one; the GM can redraw a line
+        encounter.reach = [p for p in (encounter.reach or []) if p[1] != npc.id]
     touch(encounter)
     db.flush()
     return link
