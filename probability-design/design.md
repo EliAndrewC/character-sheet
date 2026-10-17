@@ -40,6 +40,7 @@ Some players love the probability side of the game and some do not. A **per-play
 
 | P18 | **A bar's dice / bonus split shows only when an ability's share varies by bar** (Shosuro 5th Dan, the Hida and Merchant rerolls). Otherwise the dice are just the range less the flat bonuses, which tells the reader nothing (GM, 2026-10-17). |
 | P19 | **One kept die with 10s rerolled gets a footnote** explaining the dip: the dice never total exactly 10, 20, ..., so 10-14 has four ways to happen and 15-19 five. Only then: with two or more kept dice the gaps fill in. |
+| P20 | **The /probabilities chart modal has its own "Reroll 10s" box**, the same setting as the page's: toggling it redraws the roll in place (the old chart stays up until the new one arrives) and the table and URL behind follow (GM, 2026-10-17). |
 
 ### Not modelled (said so in the modal where it applies)
 

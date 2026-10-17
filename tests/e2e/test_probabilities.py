@@ -35,6 +35,31 @@ def test_average_table_toggles_reroll_and_opens_a_chart(page_anon, live_server_u
     expect(page.locator('[data-testid="pc-modal"]')).to_be_hidden()
 
 
+def test_modal_toggles_rerolling_tens_in_place(page_anon, live_server_url):
+    """The modal's own "Reroll 10s" box switches the chart without closing,
+    and the page's table behind it follows."""
+    page = page_anon
+    page.goto(f"{live_server_url}/probabilities")
+    _cell(page, "4k1").click()
+    title = page.locator('[data-testid="pc-modal-title"]')
+    expect(title).to_have_text("4k1, rerolling 10s")
+    box = page.locator('[data-testid="pc-modal-reroll"]')
+    assert box.is_checked()
+    mean = page.locator('[data-testid="roll-stats-mean"]')
+    with_tens = int(mean.text_content())
+    box.uncheck()
+    expect(title).to_have_text("4k1, not rerolling 10s")
+    expect(mean).not_to_have_text(str(with_tens))
+    assert int(mean.text_content()) < with_tens
+    assert not page.locator('[data-testid="pc-reroll"]').is_checked()
+    assert "reroll=0" in page.url
+    box.check()
+    expect(title).to_have_text("4k1, rerolling 10s")
+    page.keyboard.press("Escape")
+    assert page.locator('[data-testid="pc-reroll"]').is_checked()
+    expect(_cell(page, "1k1")).to_have_text("6")
+
+
 def test_one_kept_die_explains_the_dip(page_anon, live_server_url):
     """Only one kept die with 10s rerolled gets the footnote; no bar on this
     page gets a dice / bonus split, since there are no bonuses."""

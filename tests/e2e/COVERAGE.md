@@ -2278,3 +2278,4 @@ The numbers are pinned by `tests/test_roll_stats.py`; these clicktests cover the
 - [x] Phone width: no page overflow on either table - `test_probabilities.py::test_page_fits_a_phone`
 - [x] Links: every roll modal's menu (attack and parry before a roll, the result modal after) has "See probability chart" in a new tab; footer; statistics modal; roll history page - `test_probabilities.py::test_roll_modals_link_to_the_chart`
 - [x] One kept die rerolling 10s explains the dip in a footnote (not for 4k2, not without rerolls); no dice / bonus split on the generic page - `test_probabilities.py::test_one_kept_die_explains_the_dip`
+- [x] The chart modal's own "Reroll 10s" box switches the chart in place; the page's toggle, table and URL follow - `test_probabilities.py::test_modal_toggles_rerolling_tens_in_place`

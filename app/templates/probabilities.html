@@ -29,7 +29,7 @@ document.addEventListener('alpine:init', () => {
             chart: params.get('chart') === 'tn' ? 'tn' : 'dice',
             reroll: params.get('reroll') !== '0',
             // The chart modal
-            open: false, loading: false, error: '', data: null, better: false, selected: null,
+            open: false, loading: false, error: '', data: null, better: false, selected: null, dice: null,
             get set() { return this.reroll ? this.tables.reroll : this.tables.no_reroll; },
             sync() {
                 const q = new URLSearchParams();
@@ -38,7 +38,9 @@ document.addEventListener('alpine:init', () => {
                 history.replaceState(null, '', location.pathname + (q.toString() ? '?' + q : ''));
             },
             shade(p) { return 'background: rgb(var(--color-accent) / ' + (p * 0.32).toFixed(3) + ')'; },
-            async show(r, k) {
+            async show(r, k, keep = false) {
+                if (!keep) this.data = null;
+                this.dice = [r, k];
                 this.open = true; this.loading = true; this.error = ''; this.selected = null;
                 try {
                     const res = await fetch(`/probabilities/roll?rolled=${r}&kept=${k}&reroll=${this.reroll ? 1 : 0}`);
@@ -48,6 +50,12 @@ document.addEventListener('alpine:init', () => {
                     this.data = null; this.error = e.message || 'Could not load the chart';
                 }
                 this.loading = false;
+            },
+            // The modal's own "Reroll 10s" box is the page's: flipping it
+            // redraws this roll and leaves the table behind matching.
+            async toggleReroll() {
+                this.sync();
+                if (this.dice) await this.show(...this.dice, true);
             },
             get view() { return this.data ? (this.better ? this.data.better : this.data.normal) : null; },
             ...window.L7RRollChart.mixin(),
@@ -159,15 +167,22 @@ document.addEventListener('alpine:init', () => {
                 <button type="button" @click="open = false" aria-label="Close"
                         class="text-ink/50 hover:text-ink text-2xl leading-none">&times;</button>
             </div>
-            <p x-show="loading" class="text-sm text-ink/60 py-8 text-center">Loading...</p>
+            <p x-show="loading && !view" class="text-sm text-ink/60 py-8 text-center">Loading...</p>
             <p x-show="error" x-text="error" class="text-sm text-red-700 py-4"></p>
-            <template x-if="view && !loading">
+            <template x-if="view">
                 <div>
-                    <label class="flex items-center gap-2 text-sm cursor-pointer mb-4" :title="data.keep_better_text">
-                        <input type="checkbox" x-model="better" data-testid="roll-stats-better"
-                               class="rounded border-ink/30 accent-accent">
-                        <span>When keeping the better of two rolls</span>
-                    </label>
+                    <div class="flex flex-wrap items-center gap-x-6 gap-y-2 mb-4">
+                        <label class="flex items-center gap-2 text-sm cursor-pointer">
+                            <input type="checkbox" x-model="reroll" @change="toggleReroll()" data-testid="pc-modal-reroll"
+                                   class="rounded border-ink/30 accent-accent">
+                            <span>Reroll 10s</span>
+                        </label>
+                        <label class="flex items-center gap-2 text-sm cursor-pointer" :title="data.keep_better_text">
+                            <input type="checkbox" x-model="better" data-testid="roll-stats-better"
+                                   class="rounded border-ink/30 accent-accent">
+                            <span>When keeping the better of two rolls</span>
+                        </label>
+                    </div>
                     {% include '_roll_chart.html' %}
                     <p x-show="better" class="mt-2 text-xs text-ink/50" x-text="data.keep_better_text"></p>
                 </div>
