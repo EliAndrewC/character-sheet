@@ -109,11 +109,7 @@
                          x-text="k5FormulaText"></div>
                     <div class="text-sm">
                         <span class="text-ink/60">Dice:</span>
-                        <template x-for="(d, i) in k5RollDice" :key="i">
-                            <span class="mx-1 font-mono"
-                                  :class="d.kept ? 'font-bold text-ink' : 'text-ink/40 line-through'"
-                                  x-text="d.value"></span>
-                        </template>
+                        {% with dice='k5RollDice', dice_key='k5RollDice' %}{% include 'character/partials/sheet/_dice_line.html' %}{% endwith %}
                     </div>
                     <div class="bg-ink/5 rounded p-3 text-lg font-bold">
                         <div class="flex items-center justify-between gap-3">
@@ -206,11 +202,7 @@
                     </div>
                     <div class="text-sm">
                         <span class="text-ink/60">Damage dice:</span>
-                        <template x-for="(d, i) in k5DamageDice" :key="i">
-                            <span class="mx-1 font-mono"
-                                  :class="d.kept ? 'font-bold text-ink' : 'text-ink/40 line-through'"
-                                  x-text="d.value"></span>
-                        </template>
+                        {% with dice='k5DamageDice', dice_key='k5DamageDice' %}{% include 'character/partials/sheet/_dice_line.html' %}{% endwith %}
                         <span x-show="k5DamageDice.length === 0" class="text-ink/40 italic">no dice rolled</span>
                     </div>
                     <div class="bg-ink/5 rounded p-3">

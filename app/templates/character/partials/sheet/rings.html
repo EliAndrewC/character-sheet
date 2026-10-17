@@ -255,11 +255,7 @@
                     <div class="text-base font-mono font-bold text-ink/80" x-text="ffFormulaText"></div>
                     <div class="text-sm">
                         <span class="text-ink/60">Dice:</span>
-                        <template x-for="(d, i) in ffFinalDice" :key="i">
-                            <span class="mx-1 font-mono"
-                                  :class="d.kept ? 'font-bold text-ink' : 'text-ink/40 line-through'"
-                                  x-text="d.value"></span>
-                        </template>
+                        {% with dice='ffFinalDice', dice_key='ffFinalDice' %}{% include 'character/partials/sheet/_dice_line.html' %}{% endwith %}
                     </div>
                     <div class="bg-ink/5 rounded p-3">
                         <div class="flex items-center justify-between gap-3">

@@ -880,7 +880,7 @@ The Suzume family of the Sparrow clan is drawn from Crane Doji Artisans and merc
 - [x] Copy-as-image prerender overlaps the roll: the /roll-image POST fires while phase is still 'rolling' (kicked off from onDiceReady during the animation, not after the result settles) → `test_rolls.py::test_roll_image_prerender_overlaps_animation`
 - [x] Copy-as-image on the wound-check result panel → `test_wound_check.py::test_wound_check_result_has_copy_as_image_button`
 - [x] Copy-as-image on the attack-roll result panel → `test_attack_modal.py::test_attack_result_has_copy_as_image_button`
-- [x] Copy-as-image on the attack damage-result panel (fresh card built from damage dice + damage total, not the attack snapshot; a rerolled 10 is its own die on the card) → `test_attack_modal.py::test_attack_damage_result_has_copy_as_image_button`
+- [x] Copy-as-image on the attack damage-result panel (fresh card built from damage dice + damage total, not the attack snapshot; a rerolled 10 is its own die on the card and in the Damage dice line) → `test_attack_modal.py::test_attack_damage_result_has_copy_as_image_button`
 - [x] Copy-as-image on the iaijutsu duel contested-result panel → `test_iaijutsu_duel.py::test_duel_contested_result_has_copy_as_image_button`
 - [x] Copy-as-image on the iaijutsu duel strike-result panel → `test_iaijutsu_duel.py::test_duel_strike_result_has_copy_as_image_button`
 - [x] Copy-as-image on the iaijutsu duel damage-result panel carries the damage dice and pool (it used to post an empty KEPT row) → `test_iaijutsu_duel.py::test_duel_damage_copy_image_carries_the_damage_dice`
@@ -956,7 +956,7 @@ The Suzume family of the Sparrow clan is drawn from Crane Doji Artisans and merc
 - [ ] Reroll 10s checkbox unchecked by default for impaired character → `test_rolls.py::test_freeform_reroll_default_false_when_impaired`
 - [ ] Reroll 10s checkbox can be toggled by the player either direction → `test_rolls.py::test_freeform_reroll_checkbox_togglable`
 - [ ] Clicking Roll produces a result with a Total → `test_rolls.py::test_freeform_roll_shows_result_with_total`
-- [x] The freeform card draws a rerolled 10 as its own die (10, then 7), like every other roll's card → `test_rolls.py::test_freeform_card_draws_a_rerolled_ten_as_its_own_die`
+- [x] The freeform card and result panel draw a rerolled 10 as its own die (10, then 7; the panel's shared `_dice_line.html` tooltips the sum), like every other roll → `test_rolls.py::test_freeform_card_draws_a_rerolled_ten_as_its_own_die`
 - [ ] Roll Again button returns to the pre-roll phase → `test_rolls.py::test_freeform_roll_again_returns_to_pre_phase`
 - [ ] × close button hides the freeform modal → `test_rolls.py::test_freeform_modal_close_button`
 - [ ] Freeform 1k1 with reroll off keeps total in [1,10] with no bonuses applied → `test_rolls.py::test_freeform_roll_applies_no_bonuses`

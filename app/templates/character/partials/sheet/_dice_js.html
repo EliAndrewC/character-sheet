@@ -3968,7 +3968,7 @@
                     sd.dice, true, this.prefs.dice_animation_enabled, playSound, 'dice-animation');
                 const sorted = [...shown].sort((a, b) => a.value - b.value);
                 this.subDamageDice = sorted.map((d, i) => ({
-                    value: d.value, kept: i >= sorted.length - Math.min(sd.kept, sorted.length),
+                    value: d.value, parts: d.parts, kept: i >= sorted.length - Math.min(sd.kept, sorted.length),
                 }));
                 this.subDamageLabel = sd.label;
                 this.subDamageTotal = sd.total;

@@ -1,0 +1,14 @@
+{# A result panel's dice, sorted ascending: kept bold, dropped struck through.
+   A rerolled 10 shows every roll of its chain as its own die (the 10 in gold,
+   then the reroll), the way the animation and the card draw it. Set ``dice``
+   (an Alpine expression) and ``dice_key`` with {% with %} before including. #}
+<template x-for="(d, i) in {{ dice }}" :key="'{{ dice_key }}'+i">
+    <span class="mx-1 font-mono whitespace-nowrap" data-testid="result-die"
+          :class="d.kept ? 'font-bold text-ink' : 'text-ink/40 line-through'"
+          :title="d.parts?.length > 1 ? 'Rerolled 10s: ' + d.parts.join(' + ') + ' = ' + d.value : null">
+        <template x-for="(p, j) in (d.parts?.length ? d.parts : [d.value])" :key="j">
+            <span :class="(j > 0 ? 'ml-1 ' : '') + (d.kept && j < d.parts.length - 1 ? 'text-gold' : '')"
+                  x-text="p"></span>
+        </template>
+    </span>
+</template>

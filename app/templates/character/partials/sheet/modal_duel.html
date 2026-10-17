@@ -88,11 +88,7 @@
                 <div x-show="duelPhase === 'contested-result'" x-cloak class="space-y-3">
                     <div class="text-sm">
                         <span class="text-ink/60">Dice:</span>
-                        <template x-for="(d, i) in finalDice" :key="'dc'+i">
-                            <span class="mx-1 font-mono"
-                                  :class="d.kept ? 'font-bold text-ink' : 'text-ink/40 line-through'"
-                                  x-text="d.value"></span>
-                        </template>
+                        {% with dice='finalDice', dice_key='dc' %}{% include 'character/partials/sheet/_dice_line.html' %}{% endwith %}
                     </div>
                     <div class="bg-ink/5 rounded p-3">
                         <div class="flex items-center justify-between gap-3">
@@ -316,11 +312,7 @@
                 <div x-show="duelPhase === 'strike-result'" x-cloak class="space-y-3">
                     <div class="text-sm">
                         <span class="text-ink/60">Dice:</span>
-                        <template x-for="(d, i) in finalDice" :key="'ds'+i">
-                            <span class="mx-1 font-mono"
-                                  :class="d.kept ? 'font-bold text-ink' : 'text-ink/40 line-through'"
-                                  x-text="d.value"></span>
-                        </template>
+                        {% with dice='finalDice', dice_key='ds' %}{% include 'character/partials/sheet/_dice_line.html' %}{% endwith %}
                     </div>
                     <div class="bg-ink/5 rounded p-3 text-sm">
                         <div class="flex items-center justify-between gap-3">
@@ -430,11 +422,7 @@
                 <div x-show="duelPhase === 'damage-result'" x-cloak class="space-y-3">
                     <div class="text-sm">
                         <span class="text-ink/60">Damage dice:</span>
-                        <template x-for="(d, i) in finalDice" :key="'dd'+i">
-                            <span class="mx-1 font-mono"
-                                  :class="d.kept ? 'font-bold text-ink' : 'text-ink/40 line-through'"
-                                  x-text="d.value"></span>
-                        </template>
+                        {% with dice='finalDice', dice_key='dd' %}{% include 'character/partials/sheet/_dice_line.html' %}{% endwith %}
                     </div>
                     <div class="bg-ink/5 rounded p-3">
                         <div class="flex items-center justify-between gap-3">

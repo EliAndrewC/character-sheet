@@ -217,11 +217,7 @@
                     {# Roll summary #}
                     <div class="text-sm">
                         <span class="text-ink/60">Dice:</span>
-                        <template x-for="(d, i) in finalDice" :key="'wc'+i">
-                            <span class="mx-1 font-mono"
-                                  :class="d.kept ? 'font-bold text-ink' : 'text-ink/40 line-through'"
-                                  x-text="d.value"></span>
-                        </template>
+                        {% with dice='finalDice', dice_key='wc' %}{% include 'character/partials/sheet/_dice_line.html' %}{% endwith %}
                     </div>
 
                     <div class="bg-ink/5 rounded p-3 text-sm">

@@ -1336,6 +1336,10 @@ def test_freeform_card_draws_a_rerolled_ten_as_its_own_die(page, live_server_url
     assert card["kept"] == [{"parts": [10, 7]}]
     assert card["dropped"] == [{"parts": [3]}]
     assert card["total"] == 17
+    # The result panel's Dice line too: the chain is one die showing 10 then 7.
+    dice = page.locator('[data-modal="freeform-roll"] [data-testid="result-die"]')
+    assert [d.locator("span").all_text_contents() for d in dice.all()] == [["3"], ["10", "7"]]
+    assert "10 + 7 = 17" in dice.nth(1).get_attribute("title")
 
 
 def test_freeform_roll_again_returns_to_pre_phase(page, live_server_url):

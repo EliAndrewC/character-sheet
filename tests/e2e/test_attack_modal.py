@@ -741,6 +741,9 @@ def test_attack_damage_result_has_copy_as_image_button(page, live_server_url):
     # A rerolled 10 is its own die on the card (10, then 7), not one 17.
     card = page.evaluate("() => window._diceRoller._buildAttackDamageImagePayload()")
     assert {"parts": [10, 7]} in card["kept"] + card["dropped"], card
+    shown = [d.locator("span").all_text_contents()
+             for d in page.locator('[data-modal="attack"] [data-testid="result-die"]:visible').all()]
+    assert ["10", "7"] in shown, shown
 
 
 @pytest.mark.parametrize("tn, parry", [("30", "5"), ("25", "4")])
