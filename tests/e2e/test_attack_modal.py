@@ -728,9 +728,15 @@ def test_attack_damage_result_has_copy_as_image_button(page, live_server_url):
         "() => window._diceRoller && window._diceRoller.atkHit === true",
         timeout=2000,
     )
+    from tests.e2e.dice_control import force_dice, restore_dice
+    force_dice(page, [10, 7, 3])
     page.locator('[data-modal="attack"] button:has-text("Make Damage Roll")').click()
     page.wait_for_function(
         "() => window._diceRoller && window._diceRoller.atkPhase === 'damage-result'",
         timeout=5000,
     )
+    restore_dice(page)
     _wait_atk_copy_ready(page)
+    # A rerolled 10 is its own die on the card (10, then 7), not one 17.
+    card = page.evaluate("() => window._diceRoller._buildAttackDamageImagePayload()")
+    assert {"parts": [10, 7]} in card["kept"] + card["dropped"], card

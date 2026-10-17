@@ -879,14 +879,14 @@ The Suzume family of the Sparrow clan is drawn from Crane Doji Artisans and merc
 - [x] Copy-as-image prerender overlaps the roll: the /roll-image POST fires while phase is still 'rolling' (kicked off from onDiceReady during the animation, not after the result settles) → `test_rolls.py::test_roll_image_prerender_overlaps_animation`
 - [x] Copy-as-image on the wound-check result panel → `test_wound_check.py::test_wound_check_result_has_copy_as_image_button`
 - [x] Copy-as-image on the attack-roll result panel → `test_attack_modal.py::test_attack_result_has_copy_as_image_button`
-- [x] Copy-as-image on the attack damage-result panel (fresh card built from damage dice + damage total, not the attack snapshot) → `test_attack_modal.py::test_attack_damage_result_has_copy_as_image_button`
+- [x] Copy-as-image on the attack damage-result panel (fresh card built from damage dice + damage total, not the attack snapshot; a rerolled 10 is its own die on the card) → `test_attack_modal.py::test_attack_damage_result_has_copy_as_image_button`
 - [x] Copy-as-image on the iaijutsu duel contested-result panel → `test_iaijutsu_duel.py::test_duel_contested_result_has_copy_as_image_button`
 - [x] Copy-as-image on the iaijutsu duel strike-result panel → `test_iaijutsu_duel.py::test_duel_strike_result_has_copy_as_image_button`
 - [x] Copy-as-image on the iaijutsu duel damage-result panel carries the damage dice and pool (it used to post an empty KEPT row) → `test_iaijutsu_duel.py::test_duel_damage_copy_image_carries_the_damage_dice`
 - [x] Spending a 3rd Dan free raise on a settled skill roll re-prerenders the Copy-as-image card with the bumped total → `test_rolls.py::test_spend_3rd_dan_raise_reprerenders_copy_image`
 - [x] Copy-as-image card lists Hiruma 3rd Dan's post-parry bonus as a BONUSES row (and the attack panel shows it once), and the card adds up to its total → `test_roll_card_bonuses.py::test_card_lists_hiruma_3rd_dan_on_attack`
 - [x] Copy-as-image card lists Bayushi 4th Dan's banked raise applied after the roll (post-roll spends come from the server's session rows) → `test_roll_card_bonuses.py::test_card_lists_bayushi_4th_dan_raise_applied_after_the_roll`
-- [x] Kakita 5th Dan contest card lists the 2nd Dan free raise (also on the panel), the damage result has its own Copy-as-image button, its card names 4th Dan's +5, and the damage gets its own history row → `test_roll_card_bonuses.py::test_kakita_5th_dan_cards_list_2nd_and_4th_dan_and_damage_has_copy`
+- [x] Kakita 5th Dan contest card lists the 2nd Dan free raise (also on the panel), the damage result has its own Copy-as-image button, its card names 4th Dan's +5, and the damage gets its own history row; both cards draw a rerolled 10 as its own die → `test_roll_card_bonuses.py::test_kakita_5th_dan_cards_list_2nd_and_4th_dan_and_damage_has_copy`
 - [x] Iaijutsu duel contested card lists Kakita 2nd Dan's free raise (duel cards used to send no bonuses) → `test_roll_card_bonuses.py::test_duel_contested_card_lists_kakita_2nd_dan`
 - [x] Attack card lists ticked Specializations as a bonus and drops their "if related to Specialization" alternative rows → `test_advantage_details.py::test_attack_specialization_checkboxes_on_attack_modal`
 - [x] Undoing a free raise re-prerenders the card back to the original total → `test_rolls.py::test_undo_raise_reprerenders_back_to_original_total`
@@ -955,6 +955,7 @@ The Suzume family of the Sparrow clan is drawn from Crane Doji Artisans and merc
 - [ ] Reroll 10s checkbox unchecked by default for impaired character → `test_rolls.py::test_freeform_reroll_default_false_when_impaired`
 - [ ] Reroll 10s checkbox can be toggled by the player either direction → `test_rolls.py::test_freeform_reroll_checkbox_togglable`
 - [ ] Clicking Roll produces a result with a Total → `test_rolls.py::test_freeform_roll_shows_result_with_total`
+- [x] The freeform card draws a rerolled 10 as its own die (10, then 7), like every other roll's card → `test_rolls.py::test_freeform_card_draws_a_rerolled_ten_as_its_own_die`
 - [ ] Roll Again button returns to the pre-roll phase → `test_rolls.py::test_freeform_roll_again_returns_to_pre_phase`
 - [ ] × close button hides the freeform modal → `test_rolls.py::test_freeform_modal_close_button`
 - [ ] Freeform 1k1 with reroll off keeps total in [1,10] with no bonuses applied → `test_rolls.py::test_freeform_roll_applies_no_bonuses`

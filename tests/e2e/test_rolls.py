@@ -1319,6 +1319,25 @@ def test_freeform_roll_shows_result_with_total(page, live_server_url):
     assert total >= 2
 
 
+def test_freeform_card_draws_a_rerolled_ten_as_its_own_die(page, live_server_url):
+    """A 10 rerolled into a 7 is two dice on the card (10, then 7), the way
+    every other roll's card draws it - not one die reading 17."""
+    from tests.e2e.dice_control import force_dice, restore_dice
+    _create_roller(page, live_server_url, "FFChain")
+    page.locator('[data-action="open-freeform-roll"]').click()
+    page.wait_for_selector('[data-modal="freeform-roll"]', state='visible', timeout=3000)
+    page.locator('[data-freeform="rolled"]').select_option("2")
+    force_dice(page, [10, 7, 3])
+    page.locator('[data-action="freeform-roll"]').click()
+    page.wait_for_selector('[data-modal="freeform-roll"] [data-freeform="total"]',
+                           state='visible', timeout=10000)
+    restore_dice(page)
+    card = page.evaluate("() => window._freeformRoller._buildFreeformImagePayload()")
+    assert card["kept"] == [{"parts": [10, 7]}]
+    assert card["dropped"] == [{"parts": [3]}]
+    assert card["total"] == 17
+
+
 def test_freeform_roll_again_returns_to_pre_phase(page, live_server_url):
     """Roll Again resets the modal to the pre-roll phase."""
     _create_roller(page, live_server_url, "FFAgain")

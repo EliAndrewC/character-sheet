@@ -10,6 +10,8 @@ onto the card, and that Kakita 5th Dan's damage has a Copy button at all.
 
 import pytest
 
+from tests.e2e.dice_control import force_dice
+
 from tests.e2e.test_iaijutsu_duel import _open_duel_modal
 from tests.e2e.test_school_abilities import (
     _create_char, _make_kakita_dan_5, _mock_dice_high, _restore_dice, _wait_attack_result,
@@ -84,10 +86,11 @@ def test_kakita_5th_dan_cards_list_2nd_and_4th_dan_and_damage_has_copy(page, liv
     _make_kakita_dan_5(page, live_server_url, "KakitaCard")
     page.locator('[data-action="kakita-5th-dan-contest"]').click()
     page.wait_for_selector('[data-modal="kakita-5th-dan"]', state='visible', timeout=5000)
-    _mock_dice_high(page)
+    force_dice(page, [10, 7, 3])  # a rerolled 10 must reach the cards as two dice
     page.locator('[data-action="kakita-5th-roll"]').click()
     page.wait_for_function("() => window._diceRoller?.k5Phase === 'result'", timeout=10000)
     contest = _card(page, "_buildKakita5thImagePayload")
+    assert {"parts": [10, 7]} in contest["kept"] + contest["dropped"], contest
     assert {"label": "2nd Dan technique", "amount": 5} in contest["bonuses"]
     _adds_up(contest)
     assert page.locator('[data-testid="kakita-5th-formula-bonus"]').first.is_visible()
@@ -99,6 +102,7 @@ def test_kakita_5th_dan_cards_list_2nd_and_4th_dan_and_damage_has_copy(page, liv
     page.wait_for_function("() => window._diceRoller?.k5Phase === 'damage-result'", timeout=10000)
     _restore_dice(page)
     damage = _card(page, "_buildKakita5thDamageImagePayload")
+    assert {"parts": [10, 7]} in damage["kept"] + damage["dropped"], damage
     assert "+5 from 4th Dan (iaijutsu)" in damage["extras"]
     _adds_up(damage)
     copy = page.locator('[data-modal="kakita-5th-dan"] [data-action="copy-roll-image"]:visible')

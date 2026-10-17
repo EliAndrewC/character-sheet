@@ -219,6 +219,7 @@
                 const keptCount = Math.min(kept, sorted.length);
                 this.ffFinalDice = sorted.map((d, i) => ({
                     value: d.value,
+                    parts: d.parts,  // the card draws each reroll as its own die
                     kept: i >= sorted.length - keptCount,
                 }));
                 const keptDice = sorted.slice(sorted.length - keptCount);
@@ -2165,7 +2166,7 @@
                         ? sortedAsc.slice(0, keptCount).map(d => d.idx)
                         : sortedAsc.slice(sortedAsc.length - keptCount).map(d => d.idx)
                 );
-                this.finalDice = sortedAsc.map(d => ({ value: d.value, kept: keptIdx.has(d.idx) }));
+                this.finalDice = sortedAsc.map(d => ({ value: d.value, parts: d.parts, kept: keptIdx.has(d.idx) }));
                 this.keptDice = sortedAsc.filter(d => keptIdx.has(d.idx));
                 this.unkeptDice = sortedAsc.filter(d => !keptIdx.has(d.idx));
                 this.keptSum = this.keptDice.reduce((s, d) => s + d.value, 0);
@@ -3415,8 +3416,8 @@
                 const cell = c => ({ value: c.parts.reduce((a, b) => a + b, 0), parts: c.parts });
                 this.keptDice = (p.kept || []).map(cell);
                 this.unkeptDice = (p.dropped || []).map(cell);
-                this.finalDice = this.unkeptDice.map(d => ({ value: d.value, kept: false }))
-                    .concat(this.keptDice.map(d => ({ value: d.value, kept: true })));
+                this.finalDice = this.unkeptDice.map(d => ({ ...d, kept: false }))
+                    .concat(this.keptDice.map(d => ({ ...d, kept: true })));
                 this.keptSum = p.kept_sum || 0;
                 const all = this.finalDice.map(d => d.value).sort((a, b) => a - b);
                 this.shosuroLowest3Bonus = ((this.schoolAbilities.shosuro_add_lowest_3 || this.formula.shosuro_5th_dan)
@@ -4749,10 +4750,7 @@
                 // generic _extraBonusBullets would describe the last roll.
                 this.k5Extras = data.payload.extras || [];
                 this._adoptPostRollBonuses(data.payload);
-                const kept = data.payload.kept.map(c => c.parts.reduce((a, b) => a + b, 0));
-                const dropped = data.payload.dropped.map(c => c.parts.reduce((a, b) => a + b, 0));
-                this.k5RollDice = dropped.map(v => ({value: v, kept: false}))
-                    .concat(kept.map(v => ({value: v, kept: true})));
+                this.k5RollDice = this._k5Dice(data.payload);
                 this.k5RollTotal = data.total;
                 const f = data.formula;
                 this.k5FormulaText = f.flat > 0 ? `${f.rolled}k${f.kept} + ${f.flat}` : `${f.rolled}k${f.kept}`;
@@ -4763,6 +4761,13 @@
                 this._rollHistoryPendingPayload = null;
                 this._lastRollHistorySig = this._rollHistoryId
                     ? JSON.stringify(this._currentRollHistoryPayload().payload) : '';
+            },
+
+            // A payload's cells as display dice, dropped first. Each keeps its
+            // reroll chain so the card draws a rerolled 10 as its own die.
+            _k5Dice(payload) {
+                const die = (kept) => c => ({value: c.parts.reduce((a, b) => a + b, 0), parts: c.parts, kept});
+                return payload.dropped.map(die(false)).concat(payload.kept.map(die(true)));
             },
 
             async rollKakita5thDanDamage() {
@@ -4783,10 +4788,7 @@
                 if (dmg.dice.length) {
                     await this._kakita5thAnimate(dmg.dice, 'dice-animation-k5-damage');
                 }
-                const kept = dmg.payload.kept.map(c => c.parts.reduce((a, b) => a + b, 0));
-                const dropped = dmg.payload.dropped.map(c => c.parts.reduce((a, b) => a + b, 0));
-                this.k5DamageDice = dropped.map(v => ({value: v, kept: false}))
-                    .concat(kept.map(v => ({value: v, kept: true})));
+                this.k5DamageDice = this._k5Dice(dmg.payload);
                 this.k5DamageTotal = dmg.total;
                 // The card's DETAILS: how the pool was built, as the server
                 // scored it (weapon, ring, the contest, 4th Dan's +5, ...).
