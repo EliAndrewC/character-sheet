@@ -122,37 +122,44 @@
 </template>
 {% endmacro %}
 
-{# Player Character Point kebab menu (rules/10). PCPs are an extremely rare
-   resort, so rather than prominent buttons each roll-result panel hosts a
-   compact "⋮" menu in its action row. ``items`` is a list of dicts with
+{# The roll modals' "⋮" menu. Always present on a roll modal (``chart``),
+   with "See probability chart" (the generic /probabilities page, in a new
+   tab); below it the Player Character Point options (rules/10), each shown
+   on its own ``can`` - PCPs are an extremely rare resort, so they live here
+   rather than as prominent buttons. ``items`` is a list of dicts with
    ``label`` / ``can`` (JS bool expr) / ``click`` (JS expr) / ``action``
-   (data-action value). The kebab hides entirely when no option applies, and
-   each item hides on its own ``can``. Lives in the diceRoller() scope; the
-   menu open state (``pcpMenu``) is local to the kebab. #}
-{% macro pcp_kebab(items, compact=False) %}
+   (data-action value). Without ``chart`` (the Void Points row) the kebab
+   hides entirely when no PCP option applies. Lives in the diceRoller()
+   scope; the menu open state (``pcpMenu``) is local to the kebab. #}
+{% macro pcp_kebab(items, compact=False, chart=True) %}
+{% set any_pcp = (items | map(attribute='can') | join(' || ')) or 'false' %}
 <div class="relative inline-block text-left align-middle" x-data="{ pcpMenu: false, pcpPos: {top: 0, left: 0} }"
      @click.outside="pcpMenu = false"
-     x-show="{{ items | map(attribute='can') | join(' || ') }}" x-cloak>
+     {% if not chart %}x-show="{{ any_pcp }}" x-cloak{% endif %}>
     {# Open the menu and anchor it (position: fixed) just below the button's
-       right edge, opening down-and-left. Fixed positioning escapes the
-       scrollable modal's overflow clipping (the attack/WC/duel modals are
-       max-h + overflow-y-auto), which a plain absolute dropdown gets clipped
-       by. Mirrors the roll-menu / precepts-menu pattern. ``compact`` renders a
-       smaller button for inline use next to a label (e.g. the Void Points row). #}
-    {# ``compact`` kebabs sit on the LEFT (next to a label), so the menu opens
-       DOWN-and-RIGHT from the button's left edge; the header kebabs sit on the
-       RIGHT (next to the X), so they open DOWN-and-LEFT. Both are fixed so they
-       escape the scrollable-modal overflow clip. #}
+       edge. Fixed positioning escapes the scrollable modal's overflow
+       clipping (the attack/WC/duel modals are max-h + overflow-y-auto).
+       ``compact`` kebabs sit on the LEFT (next to a label), so the menu opens
+       DOWN-and-RIGHT; the header kebabs sit on the RIGHT (next to the X), so
+       they open DOWN-and-LEFT. #}
     <button type="button" data-action="pcp-menu"
             @click="pcpMenu = !pcpMenu; if (pcpMenu) { const r = $el.getBoundingClientRect(); pcpPos = {top: r.bottom, left: {{ 'r.left' if compact else 'r.right' }} }; }"
-            title="Player Character Point options" aria-label="Player Character Point options"
+            title="{{ 'More options' if chart else 'Player Character Point options' }}" aria-label="{{ 'More options' if chart else 'Player Character Point options' }}"
             class="btn-ghost rounded leading-none font-bold {{ 'px-1 text-base text-ink/40 hover:text-ink' if compact else 'px-2 py-1 text-2xl' }}">&#8942;</button>
     <div x-show="pcpMenu" x-cloak
          :style="'position: fixed; top: ' + pcpPos.top + 'px; left: ' + pcpPos.left + 'px; transform: translate({{ '0' if compact else '-100%' }}, 4px)'"
          class="z-[60] bg-white rounded-lg shadow-xl border border-ink/20 py-1 min-w-[230px]">
-        <div class="px-4 py-1.5 text-[10px] uppercase tracking-wide text-ink/40 border-b border-ink/10">
+        {% if chart %}
+        <a href="/probabilities" target="_blank" rel="noopener" data-action="probability-chart"
+           @click="pcpMenu = false"
+           class="block w-full text-left px-4 py-2 text-sm hover:bg-parchment transition-colors">See probability chart &#8599;</a>
+        {% endif %}
+        {% if items %}
+        <div x-show="{{ any_pcp }}" x-cloak
+             class="px-4 py-1.5 text-[10px] uppercase tracking-wide text-ink/40 border-b border-ink/10{{ ' border-t mt-1' if chart else '' }}">
             Spend a Player Character Point
         </div>
+        {% endif %}
         {% for it in items %}
         <button type="button" x-show="{{ it.can }}" x-cloak
                 data-action="{{ it.action }}"

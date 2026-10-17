@@ -1,3 +1,4 @@
+{% from "character/partials/sheet/_macros.html" import pcp_kebab %}
         {# ── Feint Modal ── #}
         {# Pre-roll odds for a feint. Like the parry modal it only collects
            the target's TN and the void pick; the roll runs through the shared
@@ -10,8 +11,11 @@
             <div class="bg-white rounded-lg shadow-xl px-6 py-5 max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
                 <div class="flex items-start justify-between mb-3">
                     <h3 class="text-xl font-bold text-accent">Feint</h3>
-                    <button type="button" @click="feintModalOpen = false"
-                            class="text-ink/60 hover:text-ink text-2xl leading-none px-2">&times;</button>
+                    <div class="flex items-center gap-1">
+                        {{ pcp_kebab([]) }}
+                        <button type="button" @click="feintModalOpen = false"
+                                class="text-ink/60 hover:text-ink text-2xl leading-none px-2">&times;</button>
+                    </div>
                 </div>
                 {% include 'character/partials/read_only_roll_banner.html' %}
 

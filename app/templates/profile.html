@@ -79,7 +79,8 @@
                            class="rounded border-ink/30 accent-accent">
                     <span class="font-medium">Play dice sound effects when rolling</span>
                 </label>
-                <label class="flex items-start gap-3 py-2 px-3 rounded hover:bg-parchment cursor-pointer">
+                {# /probabilities links here: #roll-statistics scrolls to it and highlights it #}
+                <label id="roll-statistics" class="flex items-start gap-3 py-2 px-3 rounded hover:bg-parchment cursor-pointer scroll-mt-24 target:ring-2 target:ring-accent target:bg-accent/10">
                     <input type="checkbox" name="roll_stats" data-testid="roll-stats-pref"
                            {% if user_obj.preferences.get('roll_stats_enabled', False) %}checked{% endif %}
                            class="rounded border-ink/30 accent-accent mt-1">

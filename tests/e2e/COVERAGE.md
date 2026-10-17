@@ -1615,7 +1615,7 @@ python3 -m pytest tests/e2e/ -m "skills or rings" --browser chromium
 | `permissions` | Edit/delete visibility, non-editor | `test_permissions.py` |
 | `banners` | Draft status banners | `test_banners.py` |
 | `keepalive` | Fly Keep-alive Pinger | `test_keepalive.py` |
-| `roll_stats` | Roll statistics (average badges, statistics modal) | `test_roll_stats.py` |
+| `roll_stats` | Roll statistics (average badges, statistics modal) and the /probabilities page | `test_roll_stats.py`, `test_probabilities.py` |
 | `telemetry` | Client diagnostics: error reports, dead-tab detection, memory samples, new-version banner | `test_telemetry.py` |
 | `combat` | GM combat tracker, generated NPCs, public combat page, combat rolls view | `test_combat.py` |
 | `server_rolls` | Rolls the server makes for the sheet: server dice, error + Retry, simulate mode | `test_server_rolls.py` |
@@ -2265,3 +2265,15 @@ The numbers are pinned by `tests/test_roll_stats.py`; these clicktests cover the
 - [x] Becoming Impaired re-fetches the averages and the skill badge drops - `test_roll_stats.py::test_averages_follow_impaired`
 - [x] Phone width: no horizontal overflow with the badges or the modal; ring badges hidden (the picker still offers the rings); tapping a bar shows its detail - `test_roll_stats.py::test_modal_fits_a_phone`
 - [x] No JS errors with the setting on, stepping the modal through every roll (Kitsune Warden, profession) - `test_roll_stats.py::test_no_javascript_errors_with_stats_on`
+- [x] Whole-number averages; in the skills list the badge comes before the dice - `test_roll_stats.py::test_badges_open_the_modal_with_void_and_keep_better`
+- [x] "When keeping the better of two rolls" label - `test_roll_stats.py::test_badges_open_the_modal_with_void_and_keep_better`
+- [x] Out of void points, the stepper still reaches the per-roll limit - `test_roll_stats.py::test_void_stepper_ignores_the_points_held`
+- [x] Isawa Ishi 3rd Dan "Spend 1 VP to add Xk1" has a badge; its modal shows the void row with the reason - `test_roll_stats.py::test_isawa_ishi_3rd_dan_xk1_has_an_average`
+
+## Probability Charts page (mark: `roll_stats`; probability-design; probabilities.html, GET /probabilities, /probabilities/roll)
+
+- [x] Public: averages table 1k1..10k10 with 3k7-style cells blank; "Reroll 10s" changes the numbers and the URL; a cell opens the chart modal (title, keep-better, bar hover, Escape) - `test_probabilities.py::test_average_table_toggles_reroll_and_opens_a_chart`
+- [x] TN table: chances per TN, the reroll toggle, a row click opens the chart, `?chart=tn` opens on it - `test_probabilities.py::test_tn_table_rows_open_the_chart`
+- [x] The settings tip links to `/profile#roll-statistics`, which targets the checkbox - `test_probabilities.py::test_settings_link_lands_on_the_checkbox`
+- [x] Phone width: no page overflow on either table - `test_probabilities.py::test_page_fits_a_phone`
+- [x] Links: every roll modal's menu (attack and parry before a roll, the result modal after) has "See probability chart" in a new tab; footer; statistics modal; roll history page - `test_probabilities.py::test_roll_modals_link_to_the_chart`

@@ -1,3 +1,4 @@
+{% from "character/partials/sheet/_macros.html" import pcp_kebab %}
         {# ── Parry Modal ── #}
         {# Pre-roll probability chart for parry rolls. Unlike the attack and
            wound-check modals, the parry roll itself still runs through the
@@ -14,8 +15,11 @@
                 <div class="flex items-start justify-between mb-3">
                     <h3 class="text-xl font-bold text-accent"
                         x-text="parryUseAthletics ? 'Athletics Parry' : 'Parry'"></h3>
-                    <button type="button" @click="parryModalOpen = false"
-                            class="text-ink/60 hover:text-ink text-2xl leading-none px-2">&times;</button>
+                    <div class="flex items-center gap-1">
+                        {{ pcp_kebab([]) }}
+                        <button type="button" @click="parryModalOpen = false"
+                                class="text-ink/60 hover:text-ink text-2xl leading-none px-2">&times;</button>
+                    </div>
                 </div>
                 {% include 'character/partials/read_only_roll_banner.html' %}
 

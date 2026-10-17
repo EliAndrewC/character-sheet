@@ -366,3 +366,59 @@ def test_the_setting_is_off_by_default_and_saved_from_the_profile(client):
 
     client.post("/profile", data={"display_name": "GM"})
     assert _prefs(client)["roll_stats_enabled"] is False
+
+
+# ---------------------------------------------------------------------------
+# The generic /probabilities page
+# ---------------------------------------------------------------------------
+
+
+def test_generic_stats():
+    g = rs.generic_stats(8, 3, True)
+    assert g["label"] == "8k3" and g["reroll"] is True
+    assert g["normal"]["mean"] == pytest.approx(prob[True][8, 3], abs=0.1)
+    assert g["better"]["mean"] > g["normal"]["mean"]
+    assert rs.generic_stats(8, 3, False)["normal"]["mean"] == pytest.approx(prob[False][8, 3], abs=0.1)
+    for bad in [(0, 0), (3, 4), (11, 2), (2, 0)]:
+        assert rs.generic_stats(*bad, True) is None
+
+
+def test_chance_text():
+    assert rs._chance_text(1.0, True) == "100%"
+    assert rs._chance_text(0.996, True) == ">99%"
+    assert rs._chance_text(0.5962, True) == "60%"
+    assert rs._chance_text(0.0123, True) == "1%"
+    assert rs._chance_text(0.003, True) == "0.3%"
+    assert rs._chance_text(0.0004, True) == "<0.1%"
+    # Rerolling 10s, nothing is impossible - only too rare for the table.
+    assert rs._chance_text(0, True) == "<0.1%"
+    assert rs._chance_text(0, False) == "0%"
+
+
+def test_probability_tables():
+    t = rs.probability_tables()
+    assert t["tns"][0] == 5 and t["tns"][-1] == 100 and len(t["tns"]) == 20
+    assert len(t["dice"]) == 55 and (3, 7) not in t["dice"]
+    assert t["reroll"]["averages"]["1,1"] == round(prob[True][1, 1])
+    # 1k1 reaches 10 one time in ten, with or without rerolling 10s.
+    assert t["reroll"]["chances"]["1,1"][1]["text"] == "10%"
+    assert t["no_reroll"]["chances"]["1,1"][2]["text"] == "0%"
+    assert t["reroll"]["chances"]["1,1"][2]["text"] == "6%"
+
+
+def test_probability_page_and_roll_route(client):
+    page = client.get("/probabilities")
+    assert page.status_code == 200
+    assert 'data-dice="8k3"' in page.text and 'data-row="10k10"' in page.text
+    assert 'data-dice="3k7"' not in page.text
+    assert 'href="/profile#roll-statistics"' in page.text
+    r = client.get("/probabilities/roll?rolled=8&kept=3&reroll=0")
+    assert r.status_code == 200 and r.json()["reroll"] is False
+    assert client.get("/probabilities/roll?rolled=3&kept=7").status_code == 400
+    assert client.get("/probabilities/roll").status_code == 400
+
+
+def test_probability_page_is_public(client):
+    client.headers.pop("X-Test-User", None)
+    assert client.get("/probabilities").status_code == 200
+    assert client.get("/probabilities/roll?rolled=2&kept=2").status_code == 200

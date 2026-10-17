@@ -1,11 +1,15 @@
+{% from "character/partials/sheet/_macros.html" import pcp_kebab %}
         <div x-show="k5Open" x-cloak
              class="fixed inset-0 z-50 flex items-center justify-center bg-ink/60"
              data-modal="kakita-5th-dan">
             <div class="bg-white rounded-lg shadow-xl px-6 py-5 max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
                 <div class="flex items-start justify-between mb-3">
                     <h3 class="text-xl font-bold text-accent">Kakita 5th Dan: Phase 0 Contest</h3>
-                    <button type="button" @click="closeKakita5thDanModal()"
-                            class="text-ink/60 hover:text-ink text-2xl leading-none px-2">&times;</button>
+                    <div class="flex items-center gap-1">
+                        {{ pcp_kebab([]) }}
+                        <button type="button" @click="closeKakita5thDanModal()"
+                                class="text-ink/60 hover:text-ink text-2xl leading-none px-2">&times;</button>
+                    </div>
                 </div>
                 <div class="text-xs text-gold bg-parchment rounded p-2 font-medium mb-3"
                      data-testid="kakita-5th-banner">

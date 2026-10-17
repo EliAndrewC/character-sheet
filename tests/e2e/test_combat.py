@@ -5,6 +5,7 @@ import re
 import uuid
 
 import pytest
+from playwright.sync_api import expect
 
 from tests.e2e.dice_control import force_dice, restore_dice
 from tests.e2e.helpers import create_and_apply
@@ -274,7 +275,8 @@ def test_rebuild_and_rename_an_npc(page, live_server_url):
     page.locator('[data-testid="rebuild-save-btn"]').click()
     page.wait_for_selector('[data-testid="combat-dialog"]', state="detached")
     card = page.locator(f'[data-testid="npc-card-{npc_id}"]')
-    assert "150 earned XP, 85% combat" in card.text_content()
+    # The card redraws after the rebuild, so wait for it rather than read it once.
+    expect(card).to_contain_text("150 earned XP (300 total), 85% combat")
     _menu(page, npc_id, "npc-rename")
     page.fill('[data-testid="rename-input"]', "Big Goro")
     page.locator('[data-testid="rename-save-btn"]').click()

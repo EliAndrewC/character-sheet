@@ -347,3 +347,61 @@ def averages(character_data: Dict[str, Any], formulas: Dict[str, dict]) -> Dict[
               "mean": level(character_data, formulas[key], 0)["mean"]}
         for key in stat_keys(formulas)
     }
+
+
+# ---------------------------------------------------------------------------
+# The generic /probabilities page: plain XkY rolls, no character
+# ---------------------------------------------------------------------------
+
+#: The TN columns of the "chance to reach a TN" table.
+TN_COLUMNS = list(range(5, 105, 5))
+
+
+def generic_stats(rolled: int, kept: int, reroll: bool) -> Optional[Dict[str, Any]]:
+    """One plain XkY roll's chart, with and without keeping the better of two
+    rolls. ``None`` unless 1 <= kept <= rolled <= 10."""
+    if not (1 <= kept <= rolled <= 10):
+        return None
+    formula = {"label": f"{rolled}k{kept}", "rolled": rolled, "kept": kept, "flat": 0,
+               "bonuses": [], "reroll_tens": bool(reroll)}
+    return {
+        "label": formula["label"],
+        "reroll": bool(reroll),
+        "normal": level({}, formula, 0),
+        "better": level({}, formula, 0, better=True),
+        "keep_better_text": KEEP_BETTER_ASSUMPTION,
+    }
+
+
+def _chance_text(p: float, reroll: bool) -> str:
+    """A table cell: whole percentages, tenths below 1%, the ends spelled
+    out. A 0 with 10s rerolling is only "too rare for the table" - a 10 can
+    always explode."""
+    if p >= 1:
+        return "100%"
+    if p >= 0.995:
+        return ">99%"
+    if p <= 0:
+        return "<0.1%" if reroll else "0%"
+    if p < 0.001:
+        return "<0.1%"
+    if p < 0.0095:
+        return f"{p * 100:.1f}%"
+    return f"{round(p * 100)}%"
+
+
+def probability_tables() -> Dict[str, Any]:
+    """Both of the page's tables, for both 10s rules: the average of every
+    XkY (rolled x kept) and every XkY's chance to reach each TN."""
+    out: Dict[str, Any] = {"tns": TN_COLUMNS, "dice": [(r, k) for r in range(1, 11) for k in range(1, r + 1)]}
+    for reroll in (True, False):
+        table = prob[reroll]
+        out["reroll" if reroll else "no_reroll"] = {
+            "averages": {f"{r},{k}": round(table[r, k]) for r, k in out["dice"]},
+            "chances": {
+                f"{r},{k}": [{"p": round(table[r, k, tn], 4), "text": _chance_text(table[r, k, tn], reroll)}
+                             for tn in TN_COLUMNS]
+                for r, k in out["dice"]
+            },
+        }
+    return out

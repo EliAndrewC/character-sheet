@@ -110,6 +110,27 @@ def terms(request: Request):
     return _templates().TemplateResponse(request=request, name="terms.html")
 
 
+@router.get("/probabilities", response_class=HTMLResponse)
+def probabilities(request: Request):
+    """Generic probability charts: every XkY's average and its chance to
+    reach each TN, with and without rerolling 10s. No character involved."""
+    from app.services.roll_stats import probability_tables
+    return _templates().TemplateResponse(
+        request=request, name="probabilities.html", context={"tables": probability_tables()})
+
+
+@router.get("/probabilities/roll")
+def probability_roll(rolled: int = 0, kept: int = 0, reroll: int = 1):
+    """One XkY's distribution for the page's chart modal."""
+    from fastapi.responses import JSONResponse
+    from app.services.roll_stats import generic_stats
+    stats = generic_stats(rolled, kept, bool(reroll))
+    if stats is None:
+        return JSONResponse({"error": "Roll between 1k1 and 10k10, keeping no more than you roll"},
+                            status_code=400)
+    return JSONResponse(stats)
+
+
 @router.get("/privacy", response_class=HTMLResponse)
 def privacy(request: Request):
     return _templates().TemplateResponse(request=request, name="privacy.html")

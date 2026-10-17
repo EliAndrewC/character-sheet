@@ -1,0 +1,178 @@
+{% extends "base.html" %}
+
+{% block title %}L7R - Probability Charts{% endblock %}
+
+{% block extra_head %}
+<style>
+    /* Probability charts (probability-design). The TN table is wide, so it
+       scrolls inside its own box with the dice column pinned. */
+    .pc-table { border-collapse: separate; border-spacing: 0; }
+    .pc-table th, .pc-table td { padding: 0.3rem 0.45rem; text-align: center; white-space: nowrap; }
+    .pc-table thead th { position: sticky; top: 0; z-index: 2; background: rgb(var(--color-parchment)); }
+    .pc-sticky { position: sticky; left: 0; z-index: 1; background: rgb(var(--color-parchment)); }
+    .pc-table thead .pc-sticky { z-index: 3; }
+    .pc-row { cursor: pointer; }
+    .pc-row:hover td, .pc-row:hover th, .pc-row:focus-visible td, .pc-row:focus-visible th {
+        box-shadow: inset 0 0 0 9999px rgb(var(--color-accent) / 0.14);
+    }
+    .pc-cell-btn { width: 100%; border-radius: 0.25rem; padding: 0.15rem 0.25rem; }
+    .pc-cell-btn:hover, .pc-cell-btn:focus-visible { outline: 2px solid rgb(var(--color-accent)); outline-offset: -2px; }
+</style>
+<script src="/static/js/roll_chart.js?v={{ static_v('js/roll_chart.js') }}"></script>
+<script type="application/json" id="pc-tables">{{ tables | tojson }}</script>
+<script>
+document.addEventListener('alpine:init', () => {
+    Alpine.data('probabilityCharts', () => {
+        const params = new URLSearchParams(location.search);
+        return {
+            tables: JSON.parse(document.getElementById('pc-tables').textContent),
+            chart: params.get('chart') === 'tn' ? 'tn' : 'dice',
+            reroll: params.get('reroll') !== '0',
+            // The chart modal
+            open: false, loading: false, error: '', data: null, better: false, selected: null,
+            get set() { return this.reroll ? this.tables.reroll : this.tables.no_reroll; },
+            sync() {
+                const q = new URLSearchParams();
+                if (this.chart === 'tn') q.set('chart', 'tn');
+                if (!this.reroll) q.set('reroll', '0');
+                history.replaceState(null, '', location.pathname + (q.toString() ? '?' + q : ''));
+            },
+            shade(p) { return 'background: rgb(var(--color-accent) / ' + (p * 0.32).toFixed(3) + ')'; },
+            async show(r, k) {
+                this.open = true; this.loading = true; this.error = ''; this.selected = null;
+                try {
+                    const res = await fetch(`/probabilities/roll?rolled=${r}&kept=${k}&reroll=${this.reroll ? 1 : 0}`);
+                    if (!res.ok) throw new Error((await res.json()).error || 'Could not load the chart');
+                    this.data = await res.json();
+                } catch (e) {
+                    this.data = null; this.error = e.message || 'Could not load the chart';
+                }
+                this.loading = false;
+            },
+            get view() { return this.data ? (this.better ? this.data.better : this.data.normal) : null; },
+            ...window.L7RRollChart.mixin(),
+        };
+    });
+});
+</script>
+{% endblock %}
+
+{% block content %}
+<div class="max-w-5xl mx-auto" x-data="probabilityCharts()" @keydown.escape.window="open = false">
+    <h1 class="text-3xl font-bold tracking-tight">Probability Charts</h1>
+    <p class="text-sm text-ink/60 mt-1">
+        Plain rolls, for any character: no school abilities, no flat bonuses. Click a roll for a chart of how often each total comes up.
+    </p>
+    <p class="text-sm mt-3 rounded bg-white border border-ink/10 px-3 py-2" data-testid="pc-settings-tip">
+        Want the average of every roll on your own character sheet, with your school abilities and void points counted?
+        Turn on <a href="/profile#roll-statistics" class="text-accent underline" data-testid="pc-settings-link">Show roll statistics</a> in your settings.
+    </p>
+
+    {# The four views: two tables x the 10s rule #}
+    <div class="flex flex-wrap items-center gap-x-6 gap-y-2 mt-5 mb-3">
+        <div class="inline-flex rounded border border-ink/20 overflow-hidden text-sm" role="tablist">
+            <button type="button" role="tab" data-testid="pc-tab-dice" :aria-selected="chart === 'dice'"
+                    @click="chart = 'dice'; sync()"
+                    :class="chart === 'dice' ? 'bg-accent text-white' : 'bg-white hover:bg-parchment'"
+                    class="px-3 py-1.5">Average by dice</button>
+            <button type="button" role="tab" data-testid="pc-tab-tn" :aria-selected="chart === 'tn'"
+                    @click="chart = 'tn'; sync()"
+                    :class="chart === 'tn' ? 'bg-accent text-white' : 'bg-white hover:bg-parchment'"
+                    class="px-3 py-1.5 border-l border-ink/20">Chance to reach a TN</button>
+        </div>
+        <label class="flex items-center gap-2 text-sm cursor-pointer">
+            <input type="checkbox" x-model="reroll" @change="sync()" data-testid="pc-reroll"
+                   class="rounded border-ink/30 accent-accent">
+            <span>Reroll 10s</span>
+        </label>
+    </div>
+
+    {# Average by dice: rolled down the side, kept across the top #}
+    <section x-show="chart === 'dice'" data-testid="pc-dice-table">
+        <p class="text-xs text-ink/50 mb-2">The average total of each roll. Rows are dice rolled, columns dice kept.</p>
+        <div class="overflow-x-auto rounded border border-ink/10 bg-white">
+            <table class="pc-table text-sm w-full">
+                <thead>
+                    <tr>
+                        <th class="pc-sticky text-xs text-ink/50 font-medium">rolled \ kept</th>
+                        {% for k in range(1, 11) %}<th class="text-xs text-ink/60 font-semibold">k{{ k }}</th>{% endfor %}
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for r in range(1, 11) %}
+                    <tr class="border-t border-ink/5">
+                        <th class="pc-sticky text-xs text-ink/60 font-semibold">{{ r }}k</th>
+                        {% for k in range(1, 11) %}
+                        <td>
+                            {% if k <= r %}
+                            <button type="button" class="pc-cell-btn tabular-nums" data-dice="{{ r }}k{{ k }}"
+                                    :title="'{{ r }}k{{ k }}: average ' + set.averages['{{ r }},{{ k }}']"
+                                    @click="show({{ r }}, {{ k }})"
+                                    x-text="set.averages['{{ r }},{{ k }}']">{{ tables.reroll.averages[r ~ ',' ~ k] }}</button>
+                            {% endif %}
+                        </td>
+                        {% endfor %}
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+    {# Chance to reach a TN: one row per roll, one column per TN #}
+    <section x-show="chart === 'tn'" x-cloak data-testid="pc-tn-table">
+        <p class="text-xs text-ink/50 mb-2">The chance of each roll reaching each TN. Click a row for its chart.</p>
+        <div class="overflow-auto max-h-[75vh] rounded border border-ink/10 bg-white">
+            <table class="pc-table text-xs tabular-nums">
+                <thead>
+                    <tr>
+                        <th class="pc-sticky text-ink/50 font-medium">roll \ TN</th>
+                        {% for tn in tables.tns %}<th class="text-ink/60 font-semibold">{{ tn }}</th>{% endfor %}
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for r, k in tables.dice %}
+                    <tr class="pc-row border-t border-ink/5" tabindex="0" data-row="{{ r }}k{{ k }}"
+                        @click="show({{ r }}, {{ k }})" @keydown.enter="show({{ r }}, {{ k }})">
+                        <th class="pc-sticky font-semibold text-ink/80{% if k == 1 and r > 1 %} border-t border-ink/20{% endif %}">{{ r }}k{{ k }}</th>
+                        {% for c in tables.reroll.chances[r ~ ',' ~ k] %}
+                        <td{% if k == 1 and r > 1 %} class="border-t border-ink/20"{% endif %}
+                            :style="shade(set.chances['{{ r }},{{ k }}'][{{ loop.index0 }}].p)"
+                            :class="set.chances['{{ r }},{{ k }}'][{{ loop.index0 }}].p < 0.01 ? 'text-ink/40' : ''"
+                            x-text="set.chances['{{ r }},{{ k }}'][{{ loop.index0 }}].text">{{ c.text }}</td>
+                        {% endfor %}
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+    {# One roll's chart #}
+    <div x-show="open" x-cloak class="fixed inset-0 z-50 bg-ink/60 flex items-center justify-center p-4"
+         @click.self="open = false" data-testid="pc-modal">
+        <div class="bg-white rounded-lg shadow-xl border border-ink/20 w-full max-w-2xl max-h-[90vh] overflow-y-auto p-4 sm:p-6"
+             role="dialog" aria-modal="true" aria-labelledby="pc-modal-title">
+            <div class="flex items-start justify-between gap-3 mb-3">
+                <h2 id="pc-modal-title" class="text-lg font-bold text-accent" data-testid="pc-modal-title"
+                    x-text="data ? data.label + (data.reroll ? ', rerolling 10s' : ', not rerolling 10s') : 'Roll'"></h2>
+                <button type="button" @click="open = false" aria-label="Close"
+                        class="text-ink/50 hover:text-ink text-2xl leading-none">&times;</button>
+            </div>
+            <p x-show="loading" class="text-sm text-ink/60 py-8 text-center">Loading...</p>
+            <p x-show="error" x-text="error" class="text-sm text-red-700 py-4"></p>
+            <template x-if="view && !loading">
+                <div>
+                    <label class="flex items-center gap-2 text-sm cursor-pointer mb-4" :title="data.keep_better_text">
+                        <input type="checkbox" x-model="better" data-testid="roll-stats-better"
+                               class="rounded border-ink/30 accent-accent">
+                        <span>When keeping the better of two rolls</span>
+                    </label>
+                    {% include '_roll_chart.html' %}
+                    <p x-show="better" class="mt-2 text-xs text-ink/50" x-text="data.keep_better_text"></p>
+                </div>
+            </template>
+        </div>
+    </div>
+</div>
+{% endblock %}

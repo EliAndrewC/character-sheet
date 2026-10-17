@@ -28,6 +28,16 @@ Some players love the probability side of the game and some do not. A **per-play
 
 | P12 | **The attack and wound-check modals keep their own hit / wound tables.** Those answer "against this TN, right now"; the statistics modal answers "what does this roll look like". They coexist. |
 
+### Round 2 (2026-10-17)
+
+| # | decision |
+|---|---|
+| P13 | **Whole numbers** for every average shown (badges and the modal); the server keeps tenths. |
+| P14 | **The void row always shows.** Where the rules allow no void it shows 0 and says why (Discordant, the iaijutsu strike, the Xk1 roll's price, an activation point that uses the whole limit). |
+| P15 | **The 3rd Dan Xk1 rolls** (Isawa Ishi add, Ide subtract) get a badge and statistics, from the formula their button rolls. |
+| P16 | **A generic `/probabilities` page**, public: "Average by dice" (rolled down the side, kept across) and "Chance to reach a TN" (one row per XkY, TNs 5-100), each with or without rerolling 10s, chosen in the URL (`?chart=tn&reroll=0`). Any cell or row opens the same chart as the sheet's modal (shared `_roll_chart.html` + `static/js/roll_chart.js`). Below 1% shows tenths and is dimmed. |
+| P17 | **Links to it**: every roll modal's "⋮" menu (now always present, PCP options below when they apply; the parry, feint and Kakita 5th Dan modals gained one), the roll history page, the statistics modal and the site footer, each opening a new tab except the footer. The page points to the profile checkbox (`/profile#roll-statistics`, highlighted when targeted). |
+
 ### Not modelled (said so in the modal where it applies)
 
 - **Wave Man W5** (one freed 10 while Impaired): the chart uses the no-reroll table. Rare (an Impaired Wave Man).
