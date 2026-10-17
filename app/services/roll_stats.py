@@ -82,7 +82,11 @@ def _ability(character_data: Dict[str, Any], formula: Dict[str, Any]) -> Tuple[O
         if is_impaired(character_data):
             n = -(-n // 2)
         if n > 0:
-            return "hida", n
+            # The table has the counts an attack skill of 1-5 produces; a
+            # larger one (an NPC, an import) takes the next count up, and
+            # rerolling more than 10 dice is rerolling all of them.
+            counts = _shapes()["meta"]["hida_counts"]
+            return "hida", next((c for c in counts if c >= n), counts[-1])
     return None, 0
 
 

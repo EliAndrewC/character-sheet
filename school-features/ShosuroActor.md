@@ -83,6 +83,7 @@
 > Add your lowest three dice to non-initiative rolls.  (Some dice may be counted twice.)
 
 **Status:** Fully implemented across all non-initiative rolls (skill, knack, attack, parry, wound check, damage).
+- Roll statistics (probability-design): the lowest-three bonus is part of every chart via the `shosuro` cells of `app/data/roll_shapes.json`, which also give each bar's dice vs 5th Dan split.
 
 **Server wiring:**
 - `app/services/roll_engine.py:execute_roll` (the Discord slash commands' roller) adds the lowest three dice and the card bullet itself, via `_adds_lowest_three`. Until 2026-09-20 it did not, so `/etiquette` for a 5th Dan Shosuro came out lower than the same roll on the sheet.

@@ -118,6 +118,10 @@ def test_ability_hida_counts_x_2x_and_halves_when_impaired():
     assert rs._ability(HIDA3, _formula()) == (None, 0)  # not an attack
     assert rs._ability(HIDA3, dict(attack, reroll_tens=False)) == (None, 0)
     assert rs._ability(dict(HIDA3, attack=0), attack) == (None, 0)
+    # Past the table's counts: the next count up, or all ten dice.
+    assert rs._ability(dict(HIDA3, attack=7), attack) == ("hida", 8)
+    assert rs._ability(dict(HIDA3, attack=7), counter) == ("hida", 10)
+    assert rs.level(dict(HIDA3, attack=7), counter, 0)["mean"] > 0
 
 
 # ---------------------------------------------------------------------------
