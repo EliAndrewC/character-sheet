@@ -38,6 +38,9 @@ Some players love the probability side of the game and some do not. A **per-play
 | P16 | **A generic `/probabilities` page**, public: "Average by dice" (rolled down the side, kept across) and "Chance to reach a TN" (one row per XkY, TNs 5-100), each with or without rerolling 10s, chosen in the URL (`?chart=tn&reroll=0`). Any cell or row opens the same chart as the sheet's modal (shared `_roll_chart.html` + `static/js/roll_chart.js`). Below 1% shows tenths and is dimmed. |
 | P17 | **Links to it**: every roll modal's "⋮" menu (now always present, PCP options below when they apply; the parry, feint and Kakita 5th Dan modals gained one), the roll history page, the statistics modal and the site footer, each opening a new tab except the footer. The page points to the profile checkbox (`/profile#roll-statistics`, highlighted when targeted). |
 
+| P18 | **A bar's dice / bonus split shows only when an ability's share varies by bar** (Shosuro 5th Dan, the Hida and Merchant rerolls). Otherwise the dice are just the range less the flat bonuses, which tells the reader nothing (GM, 2026-10-17). |
+| P19 | **One kept die with 10s rerolled gets a footnote** explaining the dip: the dice never total exactly 10, 20, ..., so 10-14 has four ways to happen and 15-19 five. Only then: with two or more kept dice the gaps fill in. |
+
 ### Not modelled (said so in the modal where it applies)
 
 - **Wave Man W5** (one freed 10 while Impaired): the chart uses the no-reroll table. Rare (an Impaired Wave Man).

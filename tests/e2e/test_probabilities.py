@@ -35,6 +35,28 @@ def test_average_table_toggles_reroll_and_opens_a_chart(page_anon, live_server_u
     expect(page.locator('[data-testid="pc-modal"]')).to_be_hidden()
 
 
+def test_one_kept_die_explains_the_dip(page_anon, live_server_url):
+    """Only one kept die with 10s rerolled gets the footnote; no bar on this
+    page gets a dice / bonus split, since there are no bonuses."""
+    page = page_anon
+    page.goto(f"{live_server_url}/probabilities")
+    note = page.locator('[data-testid="pc-modal"] [data-testid="roll-stats-one-die-note"]')
+    _cell(page, "4k1").click()
+    expect(note).to_be_visible()
+    expect(note).to_contain_text("never total exactly 10")
+    page.locator('[data-testid="roll-stats-chart"] [data-bin]').nth(1).hover()
+    assert not page.locator('[data-testid="pc-modal"] [data-testid="roll-stats-split"]').is_visible()
+    page.keyboard.press("Escape")
+    _cell(page, "4k2").click()
+    expect(page.locator('[data-testid="pc-modal-title"]')).to_have_text("4k2, rerolling 10s")
+    expect(note).to_be_hidden()
+    page.keyboard.press("Escape")
+    page.locator('[data-testid="pc-reroll"]').uncheck()
+    _cell(page, "4k1").click()
+    expect(page.locator('[data-testid="pc-modal-title"]')).to_have_text("4k1, not rerolling 10s")
+    expect(note).to_be_hidden()
+
+
 def test_tn_table_rows_open_the_chart(page_anon, live_server_url):
     """The TN table: 1k1 reaches 10 one time in ten; without rerolls it
     never reaches 15; a row opens its chart; ?chart=tn opens on this table."""

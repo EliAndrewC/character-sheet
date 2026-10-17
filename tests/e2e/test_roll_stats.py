@@ -98,7 +98,10 @@ def test_badges_open_the_modal_with_void_and_keep_better(page, live_server_url):
     bar = page.locator('[data-testid="roll-stats-chart"] [data-bin]').nth(3)
     bar.hover()
     detail = page.locator('[data-testid="roll-stats-detail"]').text_content()
-    assert "of rolls" in detail and "from the dice" in detail and "or more" in detail
+    assert "of rolls" in detail and "or more" in detail
+    # No ability whose share varies by bar, so no dice / bonus split.
+    assert not page.locator('[data-testid="roll-stats-split"]').is_visible()
+    assert not page.locator('[data-testid="roll-stats-one-die-note"]').is_visible()  # 5k3
     _shot(page, "attack-1-void-better-hover")
 
     # Escape closes it; reopening starts from no void.
@@ -139,7 +142,8 @@ def test_shosuro_5th_dan_breakdown(page, live_server_url):
     _open(page, "skill:bragging")
     assert "5th Dan (lowest three dice)" in page.locator('[data-testid="roll-stats-parts"]').text_content()
     page.locator('[data-testid="roll-stats-chart"] [data-bin]').nth(2).hover()
-    assert "lowest three dice" in page.locator('[data-testid="roll-stats-detail"]').text_content()
+    split = page.locator('[data-testid="roll-stats-split"]')
+    assert split.is_visible() and "lowest three dice" in split.text_content()
     _shot(page, "shosuro-bragging")
     _set_stats_pref(page, live_server_url, False)
 

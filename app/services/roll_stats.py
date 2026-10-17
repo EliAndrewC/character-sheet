@@ -50,8 +50,8 @@ ABILITY_ASSUMPTIONS = {
                  "within the 5 x (dice - 1) rule."),
 }
 KEEP_BETTER_ASSUMPTION = (
-    "Rolling twice and keeping the higher total, as Lucky, a PCP reroll or the "
-    "Merchant's business reroll allow - if you always used it.")
+    "Rolling twice and keeping the higher total, as Lucky, a PCP reroll, or the "
+    "Merchant's business reroll allow.")
 
 
 @lru_cache(maxsize=1)
@@ -276,6 +276,9 @@ def level(character_data: Dict[str, Any], formula: Dict[str, Any], void: int,
                  _flats(formula, overflow, void, combat_vp),
                  ABILITY_LABELS.get(family), int(f.get("max_total") or 0))
     view["dice_label"] = f"{f.get('rolled') or 0}k{f.get('kept') or 0}"
+    # One kept die with 10s rerolled never totals exactly 10 (or 20, 30...),
+    # which puts a dip in the chart just above each: the modal explains it.
+    view["one_die_exploding"] = (f.get("kept") or 0) == 1 and bool(f.get("reroll_tens"))
     return view
 
 

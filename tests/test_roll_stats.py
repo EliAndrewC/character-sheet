@@ -373,6 +373,16 @@ def test_the_setting_is_off_by_default_and_saved_from_the_profile(client):
 # ---------------------------------------------------------------------------
 
 
+def test_one_die_exploding_flag_and_keep_better_wording():
+    assert rs.generic_stats(4, 1, True)["normal"]["one_die_exploding"] is True
+    assert rs.generic_stats(4, 1, False)["normal"]["one_die_exploding"] is False
+    assert rs.generic_stats(4, 2, True)["normal"]["one_die_exploding"] is False
+    # A void point turns 3k1 into 4k2: the note goes away with it.
+    assert rs.level(make_character_data(), _formula(rolled=3, kept=1), 1)["one_die_exploding"] is False
+    assert rs.KEEP_BETTER_ASSUMPTION == ("Rolling twice and keeping the higher total, as Lucky, "
+                                         "a PCP reroll, or the Merchant's business reroll allow.")
+
+
 def test_generic_stats():
     g = rs.generic_stats(8, 3, True)
     assert g["label"] == "8k3" and g["reroll"] is True

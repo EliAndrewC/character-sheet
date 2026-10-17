@@ -58,12 +58,22 @@
                     <span x-text="pct(selectedBin().p)"></span> of rolls.
                     <span class="text-ink/70" x-text="pct(selectedBin().at_least) + ' reach ' + selectedBin().lo + ' or more.'"></span>
                 </div>
-                <div class="text-ink/70" x-show="selectedBin().dice !== undefined">
+                {# Only when an ability's share of the total varies from bar to bar
+                   (Shosuro 5th Dan, the Hida and Merchant rerolls). Otherwise the
+                   dice are just the range less the flat bonuses, which says
+                   nothing the bar's label does not. #}
+                <div class="text-ink/70" x-show="selectedBin().ability !== undefined" data-testid="roll-stats-split">
                     A total in this range is about
                     <span class="font-semibold" x-text="Math.round(selectedBin().dice)"></span> from the dice<template x-if="selectedBin().ability !== undefined"><span>, <span class="font-semibold" x-text="Math.round(selectedBin().ability)"></span> from <span x-text="view.ability_label"></span></span></template><template x-for="p in flatParts()" :key="'f' + p.label"><span>, <span x-text="fmt(p.value)"></span> <span x-text="p.label"></span></span></template>.
                 </div>
             </div>
         </template>
-        <p x-show="!selectedBin()" class="text-ink/50">Point at a bar (or tap it) to see how often it comes up and what it is made of.</p>
+        <p x-show="!selectedBin()" class="text-ink/50">Point at a bar (or tap it) to see how often it comes up<span x-show="view.ability_label"> and what it is made of</span>.</p>
     </div>
 
+{# Why the chart dips: one kept die, 10s rerolled. #}
+<p x-show="view.one_die_exploding" class="mt-3 text-xs text-ink/60" data-testid="roll-stats-one-die-note">
+    Why the dip: with one die kept and 10s rerolled, a 10 is always rolled again and added, so the dice never
+    total exactly 10 (or 20, 30, ...). They make 11-14 four ways (a 10, then a 1 to 4) but 15-19 five ways
+    (a 10, then a 5 to 9).
+</p>
