@@ -92,7 +92,7 @@ document.addEventListener('alpine:init', () => {
             return (this.view?.parts || []).filter(p => p.label !== 'Dice'
                 && p.label !== this.view.ability_label && !p.label.startsWith('Capped'));
         },
-        fmt(v) { return (v > 0 ? '+' : '') + (Number.isInteger(v) ? v : v.toFixed(1)); },
+        fmt(v) { v = Math.round(v); return (v > 0 ? '+' : '') + v; },
     }));
 });
 </script>
@@ -126,19 +126,21 @@ document.addEventListener('alpine:init', () => {
                 <div>
                     {# Controls: the void stepper and the keep-the-better toggle #}
                     <div class="flex flex-wrap items-center gap-x-6 gap-y-2 mb-4">
-                        <div class="flex items-center gap-2 text-sm" x-show="data.void_max > 0">
+                        <div class="flex items-center gap-2 text-sm">
                             <span class="text-ink/70">Void points</span>
                             <button type="button" class="btn-pip w-7 h-7 rounded" data-testid="roll-stats-void-minus"
                                     :disabled="vp <= 0" @click="vp--; selected = null">-</button>
                             <span class="w-5 text-center font-bold" data-testid="roll-stats-void" x-text="vp"></span>
                             <button type="button" class="btn-pip w-7 h-7 rounded" data-testid="roll-stats-void-plus"
                                     :disabled="vp >= data.void_max" @click="vp++; selected = null">+</button>
+                            <span x-show="data.void_reason" x-text="data.void_reason"
+                                  class="text-xs text-ink/50" data-testid="roll-stats-void-reason"></span>
                         </div>
                         <span class="text-sm text-ink/60" data-testid="roll-stats-dice" x-text="'Rolling ' + view.dice_label"></span>
                         <label class="flex items-center gap-2 text-sm cursor-pointer" :title="data.keep_better_text">
                             <input type="checkbox" x-model="better" data-testid="roll-stats-better"
                                    class="rounded border-ink/30 accent-accent">
-                            <span>Keep the better of two rolls</span>
+                            <span>When keeping the better of two rolls</span>
                         </label>
                     </div>
 
@@ -146,7 +148,7 @@ document.addEventListener('alpine:init', () => {
                     <div class="flex flex-wrap items-baseline gap-x-6 gap-y-1 mb-1">
                         <div>
                             <span class="text-sm text-ink/60">Average</span>
-                            <span class="text-3xl font-bold" data-testid="roll-stats-mean" x-text="view.mean"></span>
+                            <span class="text-3xl font-bold" data-testid="roll-stats-mean" x-text="Math.round(view.mean)"></span>
                         </div>
                         <div class="text-sm text-ink/70">Median <span class="font-semibold" x-text="view.median"></span></div>
                         <div class="text-sm text-ink/70">Middle 80%: <span class="font-semibold" x-text="view.p10 + ' to ' + view.p90"></span></div>
@@ -154,7 +156,7 @@ document.addEventListener('alpine:init', () => {
                     {# How the average breaks down #}
                     <p class="text-sm text-ink/70 mb-4" data-testid="roll-stats-parts" x-show="view.parts.length > 1">
                         <template x-for="(p, i) in view.parts" :key="p.label">
-                            <span><span x-show="i > 0" x-text="p.value < 0 ? ' - ' : ' + '"></span><span class="font-semibold" x-text="Math.abs(p.value) % 1 ? Math.abs(p.value).toFixed(1) : Math.abs(p.value)"></span> <span x-text="p.label.toLowerCase() === 'dice' ? 'from the dice' : p.label"></span></span>
+                            <span><span x-show="i > 0" x-text="p.value < 0 ? ' - ' : ' + '"></span><span class="font-semibold" x-text="Math.abs(Math.round(p.value))"></span> <span x-text="p.label.toLowerCase() === 'dice' ? 'from the dice' : p.label"></span></span>
                         </template>
                     </p>
 
@@ -200,7 +202,7 @@ document.addEventListener('alpine:init', () => {
                                 </div>
                                 <div class="text-ink/70" x-show="selectedBin().dice !== undefined">
                                     A total in this range is about
-                                    <span class="font-semibold" x-text="selectedBin().dice"></span> from the dice<template x-if="selectedBin().ability !== undefined"><span>, <span class="font-semibold" x-text="selectedBin().ability"></span> from <span x-text="view.ability_label"></span></span></template><template x-for="p in flatParts()" :key="'f' + p.label"><span>, <span x-text="fmt(p.value)"></span> <span x-text="p.label"></span></span></template>.
+                                    <span class="font-semibold" x-text="Math.round(selectedBin().dice)"></span> from the dice<template x-if="selectedBin().ability !== undefined"><span>, <span class="font-semibold" x-text="Math.round(selectedBin().ability)"></span> from <span x-text="view.ability_label"></span></span></template><template x-for="p in flatParts()" :key="'f' + p.label"><span>, <span x-text="fmt(p.value)"></span> <span x-text="p.label"></span></span></template>.
                                 </div>
                             </div>
                         </template>

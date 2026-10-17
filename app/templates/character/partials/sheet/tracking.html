@@ -1,3 +1,4 @@
+{% from 'character/partials/sheet/_roll_avg.html' import roll_avg with context %}
 {% from "character/partials/sheet/_macros.html" import pcp_kebab %}
     <section class="bg-white rounded-lg shadow p-6 border border-ink/10"
              x-data="trackingData()"
@@ -302,6 +303,7 @@
                             class="px-2 py-1 text-xs rounded bg-accent/10 hover:bg-accent/20 disabled:opacity-30 border border-accent/30">
                         Spend 1 VP to subtract <span>{{ school_abilities.get('ide_subtract_x', 0) }}</span>k1
                     </button>
+                    {{ roll_avg('spend_vp_xk1') }}
                 </div>
             </div>
             {% endif %}
@@ -315,6 +317,7 @@
                             class="px-2 py-1 text-xs rounded bg-accent/10 hover:bg-accent/20 disabled:opacity-30 border border-accent/30">
                         Spend 1 VP to add <span>{{ school_abilities.get('ishi_add_x', 0) }}</span>k1
                     </button>
+                    {{ roll_avg('spend_vp_xk1') }}
                 </div>
             </div>
             {% endif %}

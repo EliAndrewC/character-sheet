@@ -6,6 +6,6 @@
 <button type="button" x-data data-roll-avg="{{ key }}"
         class="roll-avg-badge inline-flex items-center whitespace-nowrap rounded-full border border-accent/30 bg-accent/5 px-1.5 text-[11px] leading-4 font-medium text-accent hover:bg-accent/15 {{ cls }}"
         title="Average roll - click for the chart"
-        @click.stop.prevent="$dispatch('open-roll-stats', { key: '{{ key }}' })">avg&nbsp;<span x-text="$store.rollStats.avg['{{ key }}']?.mean ?? ''">{{ roll_averages[key].mean }}</span></button>
+        @click.stop.prevent="$dispatch('open-roll-stats', { key: '{{ key }}' })">avg&nbsp;<span x-text="Math.round($store.rollStats.avg['{{ key }}']?.mean ?? 0)">{{ roll_averages[key].mean | round | int }}</span></button>
 {%- endif -%}
 {%- endmacro %}

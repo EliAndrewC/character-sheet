@@ -28,11 +28,11 @@
                     </div>
                     {% if roll %}
                     <span class="skill-row__roll text-xs text-accent font-medium">
+                        {{ roll_avg('skill:' ~ sid, 'mr-1') }}
                         {{ roll.display }}
                         {% if has_modifiers %}
                         ({{ roll.parenthetical }})
                         {% endif %}
-                        {{ roll_avg('skill:' ~ sid, 'ml-1') }}
                     </span>
                     {% endif %}
                     <div class="tooltip-content absolute left-0 top-full z-10 mt-1 p-3 bg-ink text-parchment text-xs rounded shadow-lg max-w-sm">

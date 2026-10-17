@@ -60,6 +60,22 @@ def _shapes() -> Dict[str, Any]:
         return json.load(f)
 
 
+#: The 3rd Dan "spend 1 VP to add / subtract Xk1" roll (Isawa Ishi, Ide
+#: Diplomat). Not in ``build_all_roll_formulas``: the sheet rolls it from its
+#: own button, as ``roll_sessions`` does, from ``special_rolls.xk1_formula``.
+XK1_KEY = "spend_vp_xk1"
+
+
+def with_special_rolls(character_data: Dict[str, Any], formulas: Dict[str, dict]) -> Dict[str, dict]:
+    """``formulas`` plus the rolls the sheet makes from their own buttons."""
+    from app.services.special_rolls import xk1_ability, xk1_formula
+    ability = xk1_ability(character_data)
+    if not ability or ability["x"] <= 0:
+        return formulas
+    return dict(formulas, **{XK1_KEY: dict(xk1_formula(ability), void_reason=(
+        "The void point is this roll's price; no more can be spent on it."))})
+
+
 def stat_keys(formulas: Dict[str, dict]) -> List[str]:
     """The roll keys that get statistics: everything with a single total.
     Initiative makes action dice, not a total."""
@@ -221,12 +237,30 @@ def _flats(formula: Dict[str, Any], overflow: int, void: int, combat_vp: int) ->
 
 def void_max(character_data: Dict[str, Any], formula: Dict[str, Any]) -> int:
     """How far the modal's void stepper goes: the per-roll cap less any
-    activation point; 0 where void cannot be spent on the roll. Hypothetical:
-    it ignores how many points the character holds right now."""
-    if formula.get("void_blocked") or formula.get("no_reroll_reason") == "iaijutsu_strike":
+    activation point; 0 where the rules allow no void on the roll.
+    Hypothetical: it ignores how many points the character holds right now
+    (GM, 2026-10-17: "even if they are completely out of void points")."""
+    if void_reason(character_data, formula):
         return 0
     activation = 1 if formula.get("requires_void_point") else 0
     return max(0, void_limits(character_data)["cap"] - activation)
+
+
+def void_reason(character_data: Dict[str, Any], formula: Dict[str, Any]) -> str:
+    """Why no void may be spent on this roll, or "" when some may. The
+    stepper always shows; this is the line it shows instead of a choice."""
+    if formula.get("void_reason"):
+        return formula["void_reason"]
+    if formula.get("void_blocked"):
+        return "Discordant: no void points on this roll."
+    if formula.get("no_reroll_reason") == "iaijutsu_strike":
+        return "No void points on an iaijutsu strike."
+    activation = 1 if formula.get("requires_void_point") else 0
+    if void_limits(character_data)["cap"] - activation <= 0:
+        if activation:
+            return "The void point that activates this roll is all you may spend on it."
+        return "Your per-roll void limit is 0."
+    return ""
 
 
 def level(character_data: Dict[str, Any], formula: Dict[str, Any], void: int,
@@ -283,6 +317,7 @@ def assumptions(character_data: Dict[str, Any], formula: Dict[str, Any]) -> List
 def roll_stats(character_data: Dict[str, Any], formulas: Dict[str, dict], key: str) -> Optional[Dict[str, Any]]:
     """Every void level of one roll, with and without keeping the better of
     two rolls. ``None`` for a key the character has no statistics for."""
+    formulas = with_special_rolls(character_data, formulas)
     formula = formulas.get(key)
     if not formula or key not in stat_keys(formulas):
         return None
@@ -291,6 +326,7 @@ def roll_stats(character_data: Dict[str, Any], formulas: Dict[str, dict], key: s
         "key": key,
         "label": formula.get("label") or key,
         "void_max": top,
+        "void_reason": void_reason(character_data, formula),
         "levels": [
             {"void": v,
              "normal": level(character_data, formula, v),
@@ -305,6 +341,7 @@ def roll_stats(character_data: Dict[str, Any], formulas: Dict[str, dict], key: s
 
 def averages(character_data: Dict[str, Any], formulas: Dict[str, dict]) -> Dict[str, Dict[str, Any]]:
     """``{key: {"label", "mean"}}`` with no void spent: the sheet's badges."""
+    formulas = with_special_rolls(character_data, formulas)
     return {
         key: {"label": formulas[key].get("label") or key,
               "mean": level(character_data, formulas[key], 0)["mean"]}

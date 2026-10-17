@@ -187,12 +187,27 @@ def test_level_keep_better_raises_the_average():
     assert better["mean"] > plain["mean"]
 
 
-def test_void_max():
+def test_void_max_and_the_reason_when_there_is_none():
     data = make_character_data()  # lowest ring 2
     assert rs.void_max(data, _formula()) == 2
+    assert rs.void_reason(data, _formula()) == ""
     assert rs.void_max(data, _formula(requires_void_point=True)) == 1
     assert rs.void_max(data, _formula(void_blocked=True)) == 0
+    assert rs.void_reason(data, _formula(void_blocked=True)).startswith("Discordant")
     assert rs.void_max(data, _formula(no_reroll_reason="iaijutsu_strike")) == 0
+    assert "iaijutsu strike" in rs.void_reason(data, _formula(no_reroll_reason="iaijutsu_strike"))
+    # A shugenja's cap is the lowest ring - 1: 1 here, all of it the activation.
+    ishi = _data("isawa_ishi", {"absorb_void": 1, "kharmic_spin": 1, "otherworldliness": 1})
+    assert rs.void_max(ishi, _formula(requires_void_point=True)) == 0
+    assert "activates" in rs.void_reason(ishi, _formula(requires_void_point=True))
+    low = dict(ishi, rings={"Air": 1, "Fire": 2, "Earth": 2, "Water": 2, "Void": 2})
+    assert rs.void_reason(low, _formula()) == "Your per-roll void limit is 0."
+
+
+def test_void_max_ignores_the_points_held_right_now():
+    """The modal is about what the character CAN do (GM, 2026-10-17)."""
+    broke = make_character_data(current_void_points=0, current_temp_void_points=0)
+    assert rs.void_max(broke, _formula()) == 2
 
 
 # ---------------------------------------------------------------------------
@@ -245,6 +260,25 @@ def test_roll_stats_and_averages_for_a_real_character():
     avgs = rs.averages(data, formulas)
     assert "initiative" not in avgs and "skill:etiquette" in avgs
     assert avgs["attack"]["mean"] == stats["levels"][0]["normal"]["mean"]
+
+
+ISHI3 = _data("isawa_ishi", {"absorb_void": 3, "kharmic_spin": 3, "otherworldliness": 3},
+              skills={"precepts": 4})
+
+
+def test_isawa_ishi_3rd_dan_xk1_roll_has_statistics():
+    formulas = build_all_roll_formulas(ISHI3)
+    avgs = rs.averages(ISHI3, formulas)
+    assert avgs[rs.XK1_KEY]["label"] == "Isawa Ishi 3rd Dan"
+    stats = rs.roll_stats(ISHI3, formulas, rs.XK1_KEY)
+    assert stats["void_max"] == 0 and "price" in stats["void_reason"]
+    assert stats["levels"][0]["normal"]["dice_label"] == "4k1"
+    assert stats["levels"][0]["normal"]["mean"] == pytest.approx(prob[True][4, 1], abs=0.1)
+    ide = _data("ide_diplomat", {"double_attack": 3, "feint": 3, "worldliness": 3}, skills={"tact": 2})
+    assert rs.averages(ide, build_all_roll_formulas(ide))[rs.XK1_KEY]["label"] == "Ide 3rd Dan"
+    # No precepts, no roll; below 3rd Dan, no roll.
+    assert rs.XK1_KEY not in rs.averages(dict(ISHI3, skills={}), formulas)
+    assert rs.XK1_KEY not in rs.averages(make_character_data(), build_all_roll_formulas(make_character_data()))
 
 
 # ---------------------------------------------------------------------------
@@ -323,6 +357,10 @@ def test_the_setting_is_off_by_default_and_saved_from_the_profile(client):
     page = client.get(f"/characters/{cid}").text
     assert 'data-roll-avg="skill:etiquette"' in page
     assert 'data-roll-avg="wound_check"' in page and 'data-roll-avg="ring:Fire"' in page
+    # Averages are shown as whole numbers.
+    import re
+    shown = re.search(r'data-roll-avg="attack".*?>avg&nbsp;<span[^>]*>([^<]*)<', page, re.S).group(1)
+    assert shown.isdigit()
     assert "roll-stats-modal" in page
     assert 'checked' in client.get("/profile").text.split('data-testid="roll-stats-pref"')[1][:200]
 

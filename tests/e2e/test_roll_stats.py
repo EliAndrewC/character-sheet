@@ -5,7 +5,9 @@ import os
 import pytest
 from playwright.sync_api import expect
 
-from tests.e2e.helpers import apply_changes, click_plus, select_profession, select_school, start_new_character
+from tests.e2e.helpers import (
+    apply_changes, click_plus, save_tracking, select_profession, select_school, start_new_character,
+)
 
 pytestmark = pytest.mark.roll_stats
 
@@ -67,7 +69,12 @@ def test_badges_open_the_modal_with_void_and_keep_better(page, live_server_url):
     _make(page, live_server_url, "StatsOn", "akodo_bushi", skills={"etiquette": 2})
     for key in ("attack", "parry", "wound_check", "ring:Fire", "skill:etiquette", "knack:feint"):
         assert page.locator(f'[data-roll-avg="{key}"]').count() == 1, key
-    badge_avg = float(page.locator('[data-roll-avg="attack"] span').text_content())
+    badge_text = page.locator('[data-roll-avg="attack"] span').text_content()
+    assert badge_text.isdigit()  # whole numbers
+    badge_avg = float(badge_text)
+    # In the skills list the average comes before the dice: "avg 17 4k2".
+    roll_text = page.locator('[data-roll-key="skill:etiquette"] .skill-row__roll').inner_text().strip()
+    assert roll_text.startswith("avg"), roll_text
 
     _open(page, "attack")
     # The roll menu did not open underneath.
@@ -82,6 +89,8 @@ def test_badges_open_the_modal_with_void_and_keep_better(page, live_server_url):
     assert page.locator('[data-testid="roll-stats-dice"]').text_content() != dice0
     one_void = _mean(page)
 
+    assert page.locator('label:has([data-testid="roll-stats-better"])').inner_text().strip() == (
+        "When keeping the better of two rolls")
     page.locator('[data-testid="roll-stats-better"]').check()
     assert _mean(page) > one_void
     assert "keeping the higher" in page.locator('[data-testid="roll-stats-assumptions"]').text_content()
@@ -210,4 +219,38 @@ def test_no_javascript_errors_with_stats_on(page, live_server_url, school):
             "() => !document.querySelector('[data-testid=\"roll-stats-modal\"]')._x_dataStack?.[0]?.loading")
         page.locator('[data-testid="roll-stats-chart"] [data-bin]').first.hover()
     assert errors == [], "\n".join(errors)
+    _set_stats_pref(page, live_server_url, False)
+
+
+def test_void_stepper_ignores_the_points_held(page, live_server_url):
+    """Out of void points, the stepper still goes to the per-roll limit:
+    the modal shows what the character can do, not this moment's pool."""
+    _set_stats_pref(page, live_server_url, True)
+    _make(page, live_server_url, "StatsBroke", "akodo_bushi")
+    save_tracking(page, voidPoints=0, tempVoidPoints=0)
+    page.reload()
+    page.wait_for_selector('[data-roll-avg="attack"]')
+    _open(page, "attack")
+    plus = page.locator('[data-testid="roll-stats-void-plus"]')
+    assert plus.is_visible() and plus.is_enabled()
+    plus.click()
+    plus.click()
+    assert page.locator('[data-testid="roll-stats-void"]').text_content() == "2"
+    assert plus.is_disabled()  # lowest ring 2
+    _set_stats_pref(page, live_server_url, False)
+
+
+def test_isawa_ishi_3rd_dan_xk1_has_an_average(page, live_server_url):
+    """The 'Spend 1 VP to add Xk1' button carries a badge; its modal shows
+    the void row with the reason no more void can go on it."""
+    _set_stats_pref(page, live_server_url, True)
+    _make(page, live_server_url, "StatsIshi", "isawa_ishi",
+          knacks={"absorb_void": 3, "kharmic_spin": 3, "otherworldliness": 3}, skills={"precepts": 3})
+    badge = page.locator('[data-roll-avg="spend_vp_xk1"]')
+    assert badge.is_visible()
+    _open(page, "spend_vp_xk1")
+    assert page.locator('[data-testid="roll-stats-dice"]').text_content() == "Rolling 3k1"
+    assert page.locator('[data-testid="roll-stats-void"]').is_visible()
+    assert page.locator('[data-testid="roll-stats-void-plus"]').is_disabled()
+    assert "price" in page.locator('[data-testid="roll-stats-void-reason"]').text_content()
     _set_stats_pref(page, live_server_url, False)
