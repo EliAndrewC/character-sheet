@@ -687,12 +687,13 @@
 
                         {# Failed parry checkbox #}
                         <label class="flex items-center gap-2 text-sm mt-2 cursor-pointer">
-                            <input type="checkbox" x-model="atkFailedParry" class="rounded text-accent">
+                            <input type="checkbox" x-model="atkFailedParry" data-testid="atk-failed-parry"
+                                   @change="if (atkFailedParry) atkDefaultParrySkill()" class="rounded text-accent">
                             Opponent made a failed parry
                         </label>
                         <div x-show="atkFailedParry" x-cloak class="ml-6 mt-1 flex items-center gap-2 text-sm">
                             <span class="text-ink/60">Parry skill:</span>
-                            <input type="number" x-model.number="atkParrySkill" min="1" max="5"
+                            <input type="number" x-model.number="atkParrySkill" min="1" max="5" data-testid="atk-parry-skill"
                                    class="w-16 border rounded px-2 py-1 text-sm text-center">
                         </div>
                         {# W9 (Wave Man): "you may roll 2 of the extra damage

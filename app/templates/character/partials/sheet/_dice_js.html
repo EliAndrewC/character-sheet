@@ -4401,10 +4401,18 @@
                 if (!validTNs.includes(this.atkTN)) {
                     this.atkTN = f.is_athletics_attack ? 25 : 20;
                 }
-                const tnStep = f.is_athletics_attack ? 10 : 5;
-                this.atkParrySkill = window.L7RRollMath.parrySkillFromTn(this.atkTN, tnStep);
+                this.atkDefaultParrySkill(f);
                 this.atkShowCustomTN = false;
                 this.atkModalOpen = true;
+            },
+
+            // The parry skill a failed parry defaults to, read off the TN the
+            // attack was rolled against (TN 30 -> 5, 25 -> 4). Re-run when the
+            // "failed parry" box is checked, since the TN can change after the
+            // modal opens; the player can still edit the number.
+            atkDefaultParrySkill(f) {
+                const step = (f || this.atkFormula || {}).is_athletics_attack ? 10 : 5;
+                this.atkParrySkill = window.L7RRollMath.parrySkillFromTn(this.atkTN, step);
             },
 
             // Kakita Phase 0 interrupt: the tracking bridge spent the two

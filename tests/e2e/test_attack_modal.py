@@ -1,6 +1,7 @@
 """E2E: Attack modal - opens for attack types, probability table, damage roll."""
 
 import pytest
+from playwright.sync_api import expect
 from tests.e2e.helpers import select_school, click_plus, apply_changes, start_new_character
 
 pytestmark = [pytest.mark.rolls]
@@ -126,7 +127,7 @@ def test_double_attack_miss_shows_elevated_tn(page, live_server_url):
     page.locator('[data-roll-key="knack:double_attack"]').click()
     page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=5000)
     modal = page.locator('[data-modal="attack"]')
-    modal.locator('select').first.select_option("20")
+    modal.locator("select:visible").first.select_option("20")
     modal.locator('[data-action="roll-attack"]').click()
     page.wait_for_function("""() => {
         const els = document.querySelectorAll('[x-data]');
@@ -740,3 +741,25 @@ def test_attack_damage_result_has_copy_as_image_button(page, live_server_url):
     # A rerolled 10 is its own die on the card (10, then 7), not one 17.
     card = page.evaluate("() => window._diceRoller._buildAttackDamageImagePayload()")
     assert {"parts": [10, 7]} in card["kept"] + card["dropped"], card
+
+
+@pytest.mark.parametrize("tn, parry", [("30", "5"), ("25", "4")])
+def test_failed_parry_skill_defaults_from_the_tn(page, live_server_url, tn, parry):
+    """Checking "Opponent made a failed parry" fills Parry skill from the TN
+    chosen for the attack (TN = 5 + 5 x Parry), not from the TN the modal
+    opened with; the number stays editable."""
+    from tests.e2e.dice_control import force_dice, restore_dice
+    _create_attacker(page, live_server_url, f"FailedParry{tn}")
+    _wait_alpine(page)
+    _open_attack_modal(page)
+    modal = page.locator('[data-modal="attack"]')
+    modal.locator('select:visible').first.select_option(tn)
+    force_dice(page, [10, 10, 9])  # a sure hit
+    _roll_attack_and_wait(page)
+    restore_dice(page)
+    page.wait_for_function("() => window._diceRoller.atkHit === true", timeout=2000)
+    modal.locator('[data-testid="atk-failed-parry"]').check()
+    skill = modal.locator('[data-testid="atk-parry-skill"]')
+    expect(skill).to_have_value(parry)
+    skill.fill("2")
+    page.wait_for_function("() => window._diceRoller.atkParrySkill === 2", timeout=2000)

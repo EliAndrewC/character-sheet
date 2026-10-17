@@ -121,6 +121,7 @@ The three failures were:
 - [x] Lucky keeps reroll when higher: pair records `kept: 'reroll'`; pair banner shows both totals with "kept" chip on Reroll half -> `test_ui_interactions.py::test_lucky_keeps_reroll_when_higher_attack`
 - [x] Lucky pair PATCH lands even when user navigates away immediately (no debounce, keepalive fetch) -> `test_ui_interactions.py::test_lucky_pair_persisted_on_immediate_navigation`
 - [x] Failed parry checkbox changes damage formula -> `test_ui_interactions.py::test_failed_parry_checkbox`
+- [x] Checking "Opponent made a failed parry" defaults Parry skill from the attack's TN (TN 30 -> 5, 25 -> 4), still editable -> `test_attack_modal.py::test_failed_parry_skill_defaults_from_the_tn`
 - [x] Predeclared parry rolls with +5 bonus -> `test_ui_interactions.py::test_predeclared_parry_with_bonus`
 - [x] Pre-roll "Extra bonus" toggle starts unchecked with defaults (+15 / "surrounding"); inputs hidden until checked -> `test_attack_modal.py::test_extra_bonus_starts_unchecked_with_defaults`
 - [x] Pre-roll "Extra bonus" doesn't persist between modal opens (per spec) -> `test_attack_modal.py::test_extra_bonus_does_not_persist_between_modal_opens`
