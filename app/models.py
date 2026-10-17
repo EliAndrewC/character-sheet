@@ -74,7 +74,8 @@ class User(Base):
     display_name: Mapped[str] = mapped_column(String, default="")
     granted_account_ids: Mapped[Optional[List[str]]] = mapped_column(JSON, default=list)
     # Per-user preferences as a free-form dict; e.g.
-    #   {"dice_animation_enabled": bool, "dice_sound_enabled": bool}
+    #   {"dice_animation_enabled": bool, "dice_sound_enabled": bool,
+    #    "dark_mode_enabled": bool, "roll_stats_enabled": bool}
     preferences: Mapped[Optional[Dict[str, Any]]] = mapped_column(JSON, default=dict)
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
 

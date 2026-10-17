@@ -848,7 +848,13 @@ def sheet_context(request: Request, character: Character, db: Session) -> Option
     user_prefs = {
         "dice_animation_enabled": viewer_prefs.get("dice_animation_enabled", True),
         "dice_sound_enabled": viewer_prefs.get("dice_sound_enabled", True),
+        # Roll statistics (probability-design): off unless the viewer opted in.
+        "roll_stats_enabled": bool(viewer_prefs.get("roll_stats_enabled", False)),
     }
+    roll_averages: dict = {}
+    if user_prefs["roll_stats_enabled"]:
+        from app.services.roll_stats import averages as _roll_averages
+        roll_averages = _roll_averages(char_dict, roll_formulas)
 
     # Compute roll info for each skill, skilled or unskilled. Unskilled rolls
     # still display (ring-only pool, -10 for advanced, 10s don't reroll) so
@@ -1479,6 +1485,7 @@ def sheet_context(request: Request, character: Character, db: Session) -> Option
         "roll_formulas": roll_formulas,
         "is_impaired_now": is_impaired_now,
         "user_prefs": user_prefs,
+        "roll_averages": roll_averages,
         "void_spend_config": void_spend_config,
         "wound_check_probs": wc_probs,
         "attack_probs": attack_probs,
@@ -1747,6 +1754,7 @@ async def update_profile(request: Request, db: Session = Depends(get_db)):
     prefs = dict(user_obj.preferences or {})
     prefs["dice_animation_enabled"] = form.get("dice_animation") == "on"
     prefs["dice_sound_enabled"] = form.get("dice_sound") == "on"
+    prefs["roll_stats_enabled"] = form.get("roll_stats") == "on"
     dark_mode = form.get("dark_mode") == "on"
     prefs["dark_mode_enabled"] = dark_mode
     user_obj.preferences = prefs

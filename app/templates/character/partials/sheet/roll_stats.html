@@ -1,0 +1,222 @@
+{# Roll statistics (probability-design/design.md): included only when the
+   viewer has "Show roll statistics" on. The averages live in an Alpine store
+   so every badge updates together when wounds change (Impaired changes which
+   10s reroll); the modal is its own component, outside the dice roller - it
+   rolls nothing. Every number comes from the server (GET .../roll-stats). #}
+<script type="application/json" id="roll-averages">{{ roll_averages | tojson }}</script>
+<script>
+document.addEventListener('alpine:init', () => {
+    const charId = {{ character.id | tojson }};
+    Alpine.store('rollStats', {
+        avg: JSON.parse(document.getElementById('roll-averages')?.textContent || '{}'),
+        async refresh() {
+            try {
+                const r = await fetch(`/characters/${charId}/roll-stats/averages`);
+                if (r.ok) this.avg = (await r.json()).averages || {};
+            } catch (e) { /* keep the last averages */ }
+        },
+    });
+    window.addEventListener('wound-changed', () => Alpine.store('rollStats').refresh());
+
+    Alpine.data('rollStatsModal', () => ({
+        open: false,
+        loading: false,
+        error: '',
+        key: '',
+        data: null,
+        vp: 0,
+        better: false,
+        selected: null,
+        async show(key) {
+            this.key = key;
+            this.open = true;
+            this.vp = 0;
+            this.selected = null;
+            await this.load();
+        },
+        async load() {
+            this.loading = true;
+            this.error = '';
+            try {
+                const r = await fetch(`/characters/${charId}/roll-stats?key=${encodeURIComponent(this.key)}`);
+                if (!r.ok) throw new Error((await r.json()).error || 'Could not load the statistics');
+                this.data = await r.json();
+                this.vp = Math.min(this.vp, this.data.void_max);
+            } catch (e) {
+                this.data = null;
+                this.error = e.message || 'Could not load the statistics';
+            }
+            this.loading = false;
+        },
+        get keys() {
+            return Object.entries(Alpine.store('rollStats').avg || {})
+                .map(([k, v]) => ({ key: k, label: v.label }))
+                .sort((a, b) => a.label.localeCompare(b.label));
+        },
+        get view() {
+            const lv = this.data?.levels?.[this.vp];
+            return lv ? (this.better ? lv.better : lv.normal) : null;
+        },
+        get bins() { return this.view?.bins || []; },
+        get peak() { return Math.max(0.0001, ...this.bins.map(b => b.p)); },
+        get gridLines() {
+            // Two or three recessive lines at round percentages.
+            const top = this.peak * 100;
+            const step = top > 30 ? 10 : top > 12 ? 5 : top > 5 ? 2 : 1;
+            const out = [];
+            for (let v = step; v <= top; v += step) out.push(v);
+            return out;
+        },
+        meanLeft() {
+            const b = this.bins;
+            if (!b.length || !this.view) return 0;
+            const span = (b[b.length - 1].hi + 1) - b[0].lo;
+            return Math.max(0, Math.min(100, (this.view.mean - b[0].lo) / span * 100));
+        },
+        binLabel(b) {
+            if (b.open_low) return `${b.hi} or less`;
+            if (b.open_high) return `${b.lo}+`;
+            return `${b.lo}-${b.hi}`;
+        },
+        pct(p) {
+            const v = p * 100;
+            if (v > 0 && v < 0.1) return '<0.1%';
+            return (v >= 10 ? v.toFixed(0) : v.toFixed(1)) + '%';
+        },
+        // Label every bar when there are few, otherwise every other one.
+        showTick(i) { return this.bins.length <= 12 || i % 2 === 0; },
+        selectedBin() { return this.selected === null ? null : this.bins[this.selected] || null; },
+        // The constant parts of a total: everything but the dice, the
+        // ability and the cap.
+        flatParts() {
+            return (this.view?.parts || []).filter(p => p.label !== 'Dice'
+                && p.label !== this.view.ability_label && !p.label.startsWith('Capped'));
+        },
+        fmt(v) { return (v > 0 ? '+' : '') + (Number.isInteger(v) ? v : v.toFixed(1)); },
+    }));
+});
+</script>
+
+<div x-data="rollStatsModal()" x-cloak
+     @open-roll-stats.window="show($event.detail.key)"
+     @keydown.escape.window="open = false"
+     data-testid="roll-stats-modal">
+    <div x-show="open" class="fixed inset-0 z-50 bg-ink/60 flex items-center justify-center p-4"
+         @click.self="open = false">
+        <div class="bg-white rounded-lg shadow-xl border border-ink/20 w-full max-w-2xl max-h-[90vh] overflow-y-auto p-4 sm:p-6"
+             role="dialog" aria-modal="true" aria-labelledby="roll-stats-title">
+            <div class="flex items-start justify-between gap-3 mb-3">
+                <div class="min-w-0">
+                    <h2 id="roll-stats-title" class="text-lg font-bold text-accent">Roll statistics</h2>
+                    <select x-model="key" @change="selected = null; load()" data-testid="roll-stats-key"
+                            class="mt-1 border border-ink/20 rounded px-2 py-1 text-sm max-w-full bg-white">
+                        <template x-for="k in keys" :key="k.key">
+                            <option :value="k.key" x-text="k.label" :selected="k.key === key"></option>
+                        </template>
+                    </select>
+                </div>
+                <button type="button" @click="open = false" aria-label="Close"
+                        class="text-ink/50 hover:text-ink text-2xl leading-none">&times;</button>
+            </div>
+
+            <p x-show="loading" class="text-sm text-ink/60 py-8 text-center">Loading...</p>
+            <p x-show="error" x-text="error" class="text-sm text-red-700 py-4" data-testid="roll-stats-error"></p>
+
+            <template x-if="view && !loading">
+                <div>
+                    {# Controls: the void stepper and the keep-the-better toggle #}
+                    <div class="flex flex-wrap items-center gap-x-6 gap-y-2 mb-4">
+                        <div class="flex items-center gap-2 text-sm" x-show="data.void_max > 0">
+                            <span class="text-ink/70">Void points</span>
+                            <button type="button" class="btn-pip w-7 h-7 rounded" data-testid="roll-stats-void-minus"
+                                    :disabled="vp <= 0" @click="vp--; selected = null">-</button>
+                            <span class="w-5 text-center font-bold" data-testid="roll-stats-void" x-text="vp"></span>
+                            <button type="button" class="btn-pip w-7 h-7 rounded" data-testid="roll-stats-void-plus"
+                                    :disabled="vp >= data.void_max" @click="vp++; selected = null">+</button>
+                        </div>
+                        <span class="text-sm text-ink/60" data-testid="roll-stats-dice" x-text="'Rolling ' + view.dice_label"></span>
+                        <label class="flex items-center gap-2 text-sm cursor-pointer" :title="data.keep_better_text">
+                            <input type="checkbox" x-model="better" data-testid="roll-stats-better"
+                                   class="rounded border-ink/30 accent-accent">
+                            <span>Keep the better of two rolls</span>
+                        </label>
+                    </div>
+
+                    {# Headline numbers #}
+                    <div class="flex flex-wrap items-baseline gap-x-6 gap-y-1 mb-1">
+                        <div>
+                            <span class="text-sm text-ink/60">Average</span>
+                            <span class="text-3xl font-bold" data-testid="roll-stats-mean" x-text="view.mean"></span>
+                        </div>
+                        <div class="text-sm text-ink/70">Median <span class="font-semibold" x-text="view.median"></span></div>
+                        <div class="text-sm text-ink/70">Middle 80%: <span class="font-semibold" x-text="view.p10 + ' to ' + view.p90"></span></div>
+                    </div>
+                    {# How the average breaks down #}
+                    <p class="text-sm text-ink/70 mb-4" data-testid="roll-stats-parts" x-show="view.parts.length > 1">
+                        <template x-for="(p, i) in view.parts" :key="p.label">
+                            <span><span x-show="i > 0" x-text="p.value < 0 ? ' - ' : ' + '"></span><span class="font-semibold" x-text="Math.abs(p.value) % 1 ? Math.abs(p.value).toFixed(1) : Math.abs(p.value)"></span> <span x-text="p.label.toLowerCase() === 'dice' ? 'from the dice' : p.label"></span></span>
+                        </template>
+                    </p>
+
+                    <div x-show="view.parts.length <= 1" class="mb-4"></div>
+                    {# The chart: one bar per 5 totals. Each column is a full-height
+                       button so the hit target is bigger than the bar. #}
+                    <div class="relative h-48 sm:h-56 pl-8" data-testid="roll-stats-chart">
+                        <template x-for="g in gridLines" :key="'g' + g">
+                            <div class="absolute left-8 right-0 border-t border-ink/10 pointer-events-none"
+                                 :style="'bottom:' + (g / (peak * 100) * 100) + '%'">
+                                <span class="absolute -left-8 -top-2 w-7 text-right text-[10px] text-ink/50" x-text="g + '%'"></span>
+                            </div>
+                        </template>
+                        <div class="absolute left-8 right-0 bottom-0 top-0 flex items-end">
+                            <template x-for="(b, i) in bins" :key="b.lo">
+                                <button type="button" class="relative flex-1 h-full flex items-end px-px focus:outline-none group"
+                                        :data-bin="b.lo"
+                                        :aria-label="binLabel(b) + ': ' + pct(b.p)"
+                                        @mouseenter="selected = i" @focus="selected = i" @click="selected = i">
+                                    <div class="w-full rounded-t transition-colors"
+                                         :class="selected === i ? 'bg-accent' : 'bg-accent/60 group-hover:bg-accent/80'"
+                                         :style="'height:' + (b.p / peak * 100) + '%; min-height:' + (b.p > 0 ? '1px' : '0')"></div>
+                                </button>
+                            </template>
+                            {# The average, as a thin dashed line #}
+                            <div class="absolute top-0 bottom-0 border-l-2 border-dashed border-ink/50 pointer-events-none"
+                                 :style="'left:' + meanLeft() + '%'" title="Average"></div>
+                        </div>
+                    </div>
+                    <div class="flex pl-8 mt-1">
+                        <template x-for="(b, i) in bins" :key="'t' + b.lo">
+                            <div class="flex-1 text-center text-[10px] text-ink/50 truncate" x-text="showTick(i) ? (b.open_low ? '≤' + b.hi : b.lo) : ''"></div>
+                        </template>
+                    </div>
+
+                    {# The selected bar, in words #}
+                    <div class="mt-3 min-h-[4.5rem] rounded bg-parchment p-3 text-sm" data-testid="roll-stats-detail">
+                        <template x-if="selectedBin()">
+                            <div>
+                                <div><span class="font-semibold" x-text="binLabel(selectedBin())"></span>:
+                                    <span x-text="pct(selectedBin().p)"></span> of rolls.
+                                    <span class="text-ink/70" x-text="pct(selectedBin().at_least) + ' reach ' + selectedBin().lo + ' or more.'"></span>
+                                </div>
+                                <div class="text-ink/70" x-show="selectedBin().dice !== undefined">
+                                    A total in this range is about
+                                    <span class="font-semibold" x-text="selectedBin().dice"></span> from the dice<template x-if="selectedBin().ability !== undefined"><span>, <span class="font-semibold" x-text="selectedBin().ability"></span> from <span x-text="view.ability_label"></span></span></template><template x-for="p in flatParts()" :key="'f' + p.label"><span>, <span x-text="fmt(p.value)"></span> <span x-text="p.label"></span></span></template>.
+                                </div>
+                            </div>
+                        </template>
+                        <p x-show="!selectedBin()" class="text-ink/50">Point at a bar (or tap it) to see how often it comes up and what it is made of.</p>
+                    </div>
+
+                    <ul x-show="data.notes.length" class="mt-3 text-xs text-ink/70 list-disc pl-5 space-y-0.5" data-testid="roll-stats-notes">
+                        <li class="list-none -ml-5 font-semibold text-ink/60">Not in the chart (added after the roll):</li>
+                        <template x-for="n in data.notes" :key="n"><li x-text="n"></li></template>
+                    </ul>
+                    <ul class="mt-2 text-xs text-ink/50 space-y-0.5" data-testid="roll-stats-assumptions">
+                        <template x-for="a in data.assumptions" :key="a"><li x-text="a"></li></template>
+                        <li x-show="better" x-text="data.keep_better_text"></li>
+                    </ul>
+                </div>
+            </template>
+        </div>
+    </div>
+</div>

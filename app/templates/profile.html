@@ -79,6 +79,15 @@
                            class="rounded border-ink/30 accent-accent">
                     <span class="font-medium">Play dice sound effects when rolling</span>
                 </label>
+                <label class="flex items-start gap-3 py-2 px-3 rounded hover:bg-parchment cursor-pointer">
+                    <input type="checkbox" name="roll_stats" data-testid="roll-stats-pref"
+                           {% if user_obj.preferences.get('roll_stats_enabled', False) %}checked{% endif %}
+                           class="rounded border-ink/30 accent-accent mt-1">
+                    <span>
+                        <span class="font-medium">Show roll statistics</span>
+                        <span class="block text-xs text-ink/60">The average of each roll on the character sheet. Click an average for a chart of how often each total comes up, with void points and school abilities.</span>
+                    </span>
+                </label>
             </div>
         </section>
 

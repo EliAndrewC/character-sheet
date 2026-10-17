@@ -1761,6 +1761,61 @@ async def undo_pcp_route(
     })
 
 
+def _viewable_character(request: Request, db: Session, char_id: int) -> Optional[Character]:
+    """The character if this viewer may see its sheet (hidden characters are
+    the editors' only, as on ``GET /characters/{id}``), else ``None``."""
+    character = db.query(Character).filter(Character.id == char_id).first()
+    if not character:
+        return None
+    if character.is_hidden:
+        user = getattr(request.state, "user", None)
+        owner = db.query(User).filter(User.discord_id == character.owner_discord_id).first()
+        if not can_view_drafts(user["discord_id"] if user else None,
+                               character.owner_discord_id,
+                               (owner.granted_account_ids or []) if owner else []):
+            return None
+    return character
+
+
+def _formulas_for_viewer(request: Request, db: Session, character: Character):
+    """``(character_data, formulas)`` exactly as the sheet builds them for
+    this viewer - party bonuses and their hidden-member rule included."""
+    from app.services.dice import build_all_roll_formulas
+    from app.services.party import party_member_data, visible_party_members
+    user = getattr(request.state, "user", None)
+    party = party_member_data(visible_party_members(db, character, user["discord_id"] if user else None))
+    data = character.to_dict()
+    return data, build_all_roll_formulas(data, party_members=party)
+
+
+@router.get("/{char_id}/roll-stats/averages")
+def roll_stats_averages(request: Request, char_id: int, db: Session = Depends(get_db)):
+    """The average of every roll with no void spent, for the sheet's badges
+    (``probability-design/design.md``). Re-fetched when wounds change, since
+    Impaired changes which 10s reroll."""
+    from app.services.roll_stats import averages
+    character = _viewable_character(request, db, char_id)
+    if character is None:
+        return JSONResponse({"error": "Not found"}, status_code=404)
+    data, formulas = _formulas_for_viewer(request, db, character)
+    return JSONResponse({"averages": averages(data, formulas)})
+
+
+@router.get("/{char_id}/roll-stats")
+def roll_stats_for_key(request: Request, char_id: int, key: str = "", db: Session = Depends(get_db)):
+    """One roll's distribution at every void level, with and without keeping
+    the better of two rolls. Read-only: the modal it feeds rolls nothing."""
+    from app.services.roll_stats import roll_stats
+    character = _viewable_character(request, db, char_id)
+    if character is None:
+        return JSONResponse({"error": "Not found"}, status_code=404)
+    data, formulas = _formulas_for_viewer(request, db, character)
+    stats = roll_stats(data, formulas, key)
+    if stats is None:
+        return JSONResponse({"error": f"No statistics for {key or 'that roll'}"}, status_code=404)
+    return JSONResponse(stats)
+
+
 @router.get("/{char_id}/draft-diff")
 async def draft_diff_route(
     request: Request, char_id: int, db: Session = Depends(get_db)

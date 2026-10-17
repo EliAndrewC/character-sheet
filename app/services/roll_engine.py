@@ -312,6 +312,38 @@ def _adds_lowest_three(character_data: Dict[str, Any]) -> bool:
 # ---------------------------------------------------------------------------
 
 
+def formula_with_void(
+    character_data: Dict[str, Any], formula: Dict[str, Any], void_spent: int,
+):
+    """``(formula, overflow, combat_vp)``: a copy of ``formula`` with
+    ``void_spent`` pre-roll void points applied, the overflow flat the 10k10
+    ceiling produced and Mirumoto 5th Dan's per-point combat bonus (0 when
+    it did not apply). Shared by a real roll and the roll-statistics modal
+    (``roll_stats``), so a hypothetical void point is the one a roll takes.
+
+    A void point is +1k1. Same order as the sheet's executeRoll: add the
+    dice, then apply the 10k10 ceiling (whose overflow becomes flat).
+    """
+    formula = dict(formula)
+    overflow = 0
+    combat_vp = 0
+    if void_spent:
+        capped = apply_dice_cap(
+            (formula.get("rolled") or 0) + void_spent,
+            (formula.get("kept") or 0) + void_spent,
+            formula.get("flat") or 0,
+        )
+        formula.update(
+            rolled=capped["rolled"], kept=capped["kept"], flat=capped["flat"],
+        )
+        overflow = capped["overflow_flat"]
+        # Mirumoto 5th Dan: +10 per void point, on COMBAT rolls only.
+        if formula.get("is_combat_roll"):
+            combat_vp = combat_vp_flat_bonus(character_data)
+            formula["flat"] = (formula.get("flat") or 0) + void_spent * combat_vp
+    return formula, overflow, combat_vp
+
+
 def execute_roll(
     character_data: Dict[str, Any],
     roll_key: str,
@@ -361,29 +393,9 @@ def execute_roll(
     if not formula:
         return None
 
-    # A void point is +1k1. Same order as the sheet's executeRoll: add the
-    # dice, then apply the 10k10 ceiling (whose overflow becomes flat).
-    formula = dict(formula)
     void_spent = max(0, int(void_spent or 0))
     activation = 1 if formula.get("requires_void_point") else 0
-    overflow = 0
-    combat_vp = 0
-    if void_spent:
-        capped = apply_dice_cap(
-            (formula.get("rolled") or 0) + void_spent,
-            (formula.get("kept") or 0) + void_spent,
-            formula.get("flat") or 0,
-        )
-        formula.update(
-            rolled=capped["rolled"], kept=capped["kept"], flat=capped["flat"],
-        )
-        overflow = capped["overflow_flat"]
-        # Mirumoto 5th Dan: +10 per void point, on COMBAT rolls only. No
-        # slash command can make a combat roll today, but the rule lives
-        # here so that the day one can, it matches the sheet.
-        if formula.get("is_combat_roll"):
-            combat_vp = combat_vp_flat_bonus(character_data)
-            formula["flat"] = (formula.get("flat") or 0) + void_spent * combat_vp
+    formula, overflow, combat_vp = formula_with_void(character_data, formula, void_spent)
 
     dice = roll_dice(
         formula.get("rolled") or 0,

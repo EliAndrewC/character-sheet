@@ -1,3 +1,4 @@
+{% from 'character/partials/sheet/_roll_avg.html' import roll_avg with context %}
     <section class="bg-white rounded-lg shadow p-6 border border-ink/10 md:w-1/2">
         <h2 class="text-xl font-bold mb-4 text-accent">Combat Skills & School Knacks</h2>
         <div class="space-y-2">
@@ -18,6 +19,7 @@
                         <span class="text-sm text-ink/60">
                             {{ _atk_rolled }}k{{ _atk_kept }}{% if _atk_flat %} + {{ _atk_flat }}{% endif %}
                         </span>
+                        {{ roll_avg('attack') }}
                         <div class="flex gap-0.5">
                             {% for i in range(1, 6) %}
                             <div class="w-4 h-4 rounded-full border {{ 'bg-accent border-accent' if i <= character.attack else 'border-ink/30' }}"></div>
@@ -47,6 +49,7 @@
                         <span class="text-sm text-ink/60">
                             {{ _par_rolled }}k{{ _par_kept }}{% if _par_flat %} + {{ _par_flat }}{% endif %}
                         </span>
+                        {{ roll_avg('parry') }}
                         <div class="flex gap-0.5">
                             {% for i in range(1, 6) %}
                             <div class="w-4 h-4 rounded-full border {{ 'bg-accent border-accent' if i <= character.parry else 'border-ink/30' }}"></div>
@@ -76,6 +79,7 @@
                     </div>
                     <div class="flex items-center gap-3">
                         {% if kid not in ['discern_honor', 'worldliness', 'otherworldliness', 'conviction', 'absorb_void'] %}
+                        {{ roll_avg('knack:' ~ kid) }}
                         <button type="button" data-roll-key="knack:{{ kid }}"
                                 aria-label="Roll" class="hover:scale-110 transition-transform"><svg class="roll-die-icon" aria-hidden="true" focusable="false"><use href="#d10-die"></use></svg></button>
                         {% endif %}
@@ -117,6 +121,7 @@
                         </div>
                         <div class="flex items-center gap-3">
                             {% if kid not in ['discern_honor', 'worldliness', 'otherworldliness', 'conviction', 'absorb_void'] %}
+                            {{ roll_avg('knack:' ~ kid) }}
                             <button type="button" data-roll-key="knack:{{ kid }}"
                                     aria-label="Roll" class="hover:scale-110 transition-transform"><svg class="roll-die-icon" aria-hidden="true" focusable="false"><use href="#d10-die"></use></svg></button>
                             {% endif %}

@@ -1615,6 +1615,7 @@ python3 -m pytest tests/e2e/ -m "skills or rings" --browser chromium
 | `permissions` | Edit/delete visibility, non-editor | `test_permissions.py` |
 | `banners` | Draft status banners | `test_banners.py` |
 | `keepalive` | Fly Keep-alive Pinger | `test_keepalive.py` |
+| `roll_stats` | Roll statistics (average badges, statistics modal) | `test_roll_stats.py` |
 | `telemetry` | Client diagnostics: error reports, dead-tab detection, memory samples, new-version banner | `test_telemetry.py` |
 | `combat` | GM combat tracker, generated NPCs, public combat page, combat rolls view | `test_combat.py` |
 | `server_rolls` | Rolls the server makes for the sheet: server dice, error + Retry, simulate mode | `test_server_rolls.py` |
@@ -2247,3 +2248,20 @@ The server rolls the sheet's dice (skills, knacks, rings, athletics, bless, the 
 **Uncovered:** 0
 
 All interactive UI features are covered by at least one e2e clicktest.
+
+## Roll Statistics (mark: `roll_stats`; probability-design; profile.html, partials/sheet/roll_stats.html, _roll_avg.html)
+
+The numbers are pinned by `tests/test_roll_stats.py`; these clicktests cover the browser wiring.
+
+- [x] Off by default: no average badges and no modal on the sheet - `test_roll_stats.py::test_off_by_default_no_badges`
+- [x] Profile "Show roll statistics" turns on badges on attack, parry, wound check, rings, skills and knacks - `test_roll_stats.py::test_badges_open_the_modal_with_void_and_keep_better`
+- [x] Clicking a badge opens the statistics modal, not the roll menu; its average matches the badge - `test_roll_stats.py::test_badges_open_the_modal_with_void_and_keep_better`
+- [x] Void stepper +: the count, the dice ("Rolling NkM") and the average all move - `test_roll_stats.py::test_badges_open_the_modal_with_void_and_keep_better`
+- [x] "Keep the better of two rolls" raises the average and shows its assumption line - `test_roll_stats.py::test_badges_open_the_modal_with_void_and_keep_better`
+- [x] Hovering a bar fills the detail panel (chance, chance to reach, dice part) - `test_roll_stats.py::test_badges_open_the_modal_with_void_and_keep_better`
+- [x] Escape closes the modal; reopening starts from 0 void; the roll picker switches rolls; the close button closes it - `test_roll_stats.py::test_badges_open_the_modal_with_void_and_keep_better`
+- [x] Post-roll bonuses (3rd Dan free raises) are listed as notes under the chart - `test_roll_stats.py::test_post_roll_bonuses_are_notes_not_chart`
+- [x] Shosuro 5th Dan's lowest three dice appear in the breakdown and in a bar's detail - `test_roll_stats.py::test_shosuro_5th_dan_breakdown`
+- [x] Becoming Impaired re-fetches the averages and the skill badge drops - `test_roll_stats.py::test_averages_follow_impaired`
+- [x] Phone width: no horizontal overflow with the badges or the modal; ring badges hidden (the picker still offers the rings); tapping a bar shows its detail - `test_roll_stats.py::test_modal_fits_a_phone`
+- [x] No JS errors with the setting on, stepping the modal through every roll (Kitsune Warden, profession) - `test_roll_stats.py::test_no_javascript_errors_with_stats_on`

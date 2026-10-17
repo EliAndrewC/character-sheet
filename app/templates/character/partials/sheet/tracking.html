@@ -82,6 +82,7 @@
                     <span class="text-lg font-bold w-8 text-center" x-text="seriousWounds"></span>
                     {% if viewer_can_edit %}
                     <button @click="op('serious_wounds', {delta: 1})"
+                            data-action="sw-plus"
                             class="btn-pip">+</button>
                     {% endif %}
                 </div>

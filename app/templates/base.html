@@ -295,6 +295,10 @@
                 border-width: 5px;
             }
             .rings-diamond .ring-node .ring-value { font-size: 1.4rem; }
+            /* Roll statistics: a 72px circle has no room for an average beside
+               its label, value and School badge (it clipped both). The
+               statistics modal's roll picker still reaches every ring. */
+            .rings-diamond .ring-node .ring-avg { display: none; }
         }
         /* Each ring is a circle absolutely positioned inside the diamond container */
         .ring-node {

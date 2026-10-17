@@ -1,3 +1,4 @@
+{% from 'character/partials/sheet/_roll_avg.html' import roll_avg with context %}
     <section x-data="freeformRoller()" x-init="init()"
              class="bg-white rounded-lg shadow p-6 border border-ink/10">
         <div class="flex items-center justify-between mb-4 gap-2 flex-wrap">
@@ -33,6 +34,7 @@
                  {% if ring_name != 'Void' %}data-roll-key="ring:{{ ring_name }}"{% endif %}>
                 <div class="ring-label" style="color: {{ rc.border }};">{{ ring_name }}</div>
                 <div class="ring-value">{{ ring_map[ring_name] }}</div>
+                {% if ring_name != 'Void' %}{{ roll_avg('ring:' ~ ring_name, 'ring-avg') }}{% endif %}
                 {% if is_school %}
                 <div class="ring-school-badge" style="color: {{ rc.border }};">School</div>
                 {% endif %}
@@ -145,6 +147,7 @@
             <div class="bg-parchment rounded p-2 flex items-center flex-wrap">
                 <span class="text-ink/60">Wound Check:</span>&nbsp;
                 <span class="font-bold">{{ _wc_rolled }}k{{ _wc_kept }}{% if _wc_flat %} + {{ _wc_flat }}{% endif %}</span>
+                {{ roll_avg('wound_check', 'ml-2') }}
             </div>
             {% if character.school == 'togashi_ise_zumi' %}
                 {% set _togashi_base_rolled = ring_map['Void'] + 1 + (1 if dan >= 1 else 0) %}

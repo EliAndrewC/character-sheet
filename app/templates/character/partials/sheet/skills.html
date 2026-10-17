@@ -1,3 +1,4 @@
+{% from 'character/partials/sheet/_roll_avg.html' import roll_avg with context %}
     <section class="bg-white rounded-lg shadow p-6 border border-ink/10">
         <h2 class="text-xl font-bold mb-4 text-accent">Skills</h2>
 
@@ -31,6 +32,7 @@
                         {% if has_modifiers %}
                         ({{ roll.parenthetical }})
                         {% endif %}
+                        {{ roll_avg('skill:' ~ sid, 'ml-1') }}
                     </span>
                     {% endif %}
                     <div class="tooltip-content absolute left-0 top-full z-10 mt-1 p-3 bg-ink text-parchment text-xs rounded shadow-lg max-w-sm">
