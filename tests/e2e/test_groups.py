@@ -611,6 +611,46 @@ def test_group_summary_unlucky_chips_render_correct_styling_per_character(
     assert "line-through" in beta_classes
 
 
+def test_group_summary_apply_unlucky_marks_it_used(page, live_server_url):
+    """Apply Unlucky on the Group Details page marks it used, and that
+    sticks: the chip turns gray at once, stays gray after a reload, and
+    the character's sheet shows the toggle on. The chip used to post the
+    whole adventure_state to ``/track`` (404 in production, 409 here for
+    want of a revision), so clicking Apply silently did nothing."""
+    from tests.e2e.helpers import create_and_apply
+
+    sheet_url = create_and_apply(
+        page, live_server_url, name="UnluckyApplyCard", school="akodo_bushi",
+        summary="Apply me", disadvantages=["unlucky"],
+    )
+    page.goto(sheet_url + "/edit")
+    page.wait_for_selector('select[name="gaming_group_id"]')
+    page.locator('select[name="gaming_group_id"]').select_option(label="Tuesday Group")
+    page.wait_for_timeout(300)
+
+    page.goto(live_server_url)
+    page.locator('[data-testid="group-link"]', has_text="Tuesday Group").click()
+    page.wait_for_url("**/groups/**")
+    chip = (page.locator('[data-group-card]', has_text="UnluckyApplyCard").first
+            .locator('[data-testid="card-unlucky-chip"]'))
+    assert chip.get_attribute("data-state") == "unused"
+    chip.click()
+    with page.expect_response(lambda r: r.url.endswith("/track/op")) as resp:
+        page.locator('[data-group-card]', has_text="UnluckyApplyCard").first.locator(
+            '[data-testid="card-unlucky-apply"]').click()
+    assert resp.value.ok
+    page.wait_for_function(
+        "el => el.dataset.state === 'used'", arg=chip.element_handle())
+
+    page.reload()
+    chip = (page.locator('[data-group-card]', has_text="UnluckyApplyCard").first
+            .locator('[data-testid="card-unlucky-chip"]'))
+    assert chip.get_attribute("data-state") == "used"
+
+    page.goto(sheet_url)
+    page.wait_for_selector('[data-action="toggle-unlucky_used-off"]', timeout=5000)
+
+
 def test_dark_secret_map_page(page, live_server_url):
     """GM: the Dark Secret chip on the Group Summary links to the map; the
     map draws an arrow knower -> holder with an instant hover tooltip, a

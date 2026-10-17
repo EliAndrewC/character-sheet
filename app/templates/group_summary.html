@@ -58,40 +58,34 @@
                    as the character name. Color-coded by per-adventure
                    state - gold when available, gray when already used.
                    Editors with edit access to the target character get
-                   a one-option dropdown ("Apply Unlucky") that posts
-                   the merged adventure_state to /track. Non-editors
+                   a one-option dropdown ("Apply Unlucky") that sends
+                   the ``toggle`` tracking op (/track/op; the old
+                   whole-state /track is 404 in production). Non-editors
                    and already-used chips have no dropdown. The chip
                    stays out of the bottom chip strip (it's filtered
                    out of ``card.social_disadvantages`` in the route). #}
                 {% if card.has_unlucky %}
-                {# Single-quoted x-data delimiter is load-bearing: the
-                   ``state`` field gets a Jinja ``tojson`` snapshot of
-                   adventure_state, which produces double-quoted JSON
-                   keys. With a double-quoted x-data attribute those
-                   inner quotes close the attribute early - Alpine
-                   then fails to initialize the chip, ``:class`` never
-                   binds, and the pill renders as unstyled "regular
-                   text" instead of gold/gray. Inner string literals
-                   (URL, headers) use double quotes for the same
-                   reason. Tetsuro-style empty adventure_state never
-                   tripped this because ``{}`` has no inner quotes. #}
+                {# Single-quoted x-data delimiter: the body below uses
+                   double-quoted JS strings (URL, headers, op JSON),
+                   which would close a double-quoted attribute early
+                   and leave the chip unstyled. The chip used to embed
+                   a ``tojson`` adventure_state snapshot for a whole-
+                   state /track write; the op needs no snapshot. #}
                 <div class="float-right ml-2 relative"
                      data-testid="card-unlucky"
                      x-data='{
                          used: {{ "true" if card.unlucky_used else "false" }},
                          canEdit: {{ "true" if card.viewer_can_edit else "false" }},
                          menuOpen: false,
-                         state: {{ (c.adventure_state or {}) | tojson }},
                          async apply() {
                              try {
-                                 const resp = await fetch("/characters/{{ c.id }}/track", {
+                                 const resp = await fetch("/characters/{{ c.id }}/track/op", {
                                      method: "POST",
                                      headers: {"Content-Type": "application/json"},
-                                     body: JSON.stringify({adventure_state: Object.assign({}, this.state, {unlucky_used: true})}),
+                                     body: JSON.stringify({op: "toggle", args: {id: "unlucky_used", value: true}}),
                                  });
                                  if (resp.ok) {
                                      this.used = true;
-                                     this.state = Object.assign({}, this.state, {unlucky_used: true});
                                      this.menuOpen = false;
                                  }
                              } catch (e) { /* swallow - the GM can retry */ }

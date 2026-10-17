@@ -351,12 +351,15 @@ class TestGroupSummaryPage:
             "x-data attribute appears truncated - did a tojson snapshot "
             "leak unescaped double quotes into a double-quoted attribute?"
         )
-        # And the ``state:`` initializer must still hold the full
-        # adventure_state snapshot (all three keys), not a prefix that
-        # got cut off at the first double quote.
-        assert "adventure_raises_used" in x_data
-        assert "lucky_used" in x_data
-        assert "unlucky_used" in x_data
+        # Apply sends the ``toggle`` tracking op. It used to post the
+        # whole adventure_state to ``/track``, which production answers
+        # 404, so clicking Apply silently did nothing.
+        assert '/track/op' in x_data
+        assert 'op: "toggle"' in x_data
+        assert '"unlucky_used"' in x_data
+        assert '/track"' not in x_data
+        # No adventure_state snapshot rides along any more.
+        assert "adventure_raises_used" not in x_data
 
     def test_unlucky_chips_remain_isolated_for_multiple_characters(self, client):
         """Regression: when a group contains two characters with
