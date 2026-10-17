@@ -1,6 +1,6 @@
 # Archery Attacks - Design
 
-Status: **built (2026-10-17).** The GM's answers are in section 4; what was built differently from
+Status: **built and deployed (2026-10-17).** The GM's answers are in section 4; what was built differently from
 the plan is noted under each phase in section 9.
 
 Source: `rules/03-combat.md` "Archery Rules" (TN to be hit, Parrying arrows, Moving while under fire).
@@ -293,4 +293,4 @@ Full cover makes a hit impossible. That is the GM saying "you can't", not an inp
 ### Phase 7 - Land
 - [x] CLAUDE.md: a short "Archery attacks" section and `archery-design/` in the structure list
 - [x] `school-features/*.md`: an Archery note for Kakita, Hida, Bayushi, Shinjo, Matsu, Otaku, Yogo, Kuni, Brotherhood
-- [ ] Commit, push, deploy (`scripts/deploy.sh`), verify live
+- [x] Commit, push, deploy (`scripts/deploy.sh`, 2026-10-17), verified live: a published sheet renders the Archery row and the die-menu item, `roll_math.js` serves the archery twins, `/api/rolls` answers 200
