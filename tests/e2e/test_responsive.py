@@ -748,3 +748,21 @@ def test_profession_panel_fits_a_phone_on_the_sheet(page, live_server_url):
     page.set_viewport_size(PHONE)
     page.wait_for_timeout(200)
     _assert_no_horizontal_overflow(page)
+
+
+def test_archery_modal_fits_at_phone_width(page, live_server_url):
+    """The attack modal's archery inputs (TN parts, phase, extra dice) wrap
+    inside the modal at phone width rather than scrolling sideways."""
+    sheet_url = _create_character_then_phone(page, live_server_url, "PhoneArrow")
+    page.evaluate("async () => { const t = window._trackingBridge; t.setActionDice([1, 2, 3, 4]); await t.whenSaved(); }")
+    page.set_viewport_size(PHONE)
+    page.goto(sheet_url)
+    page.locator('[data-testid="archery-row"]').click()
+    inputs = page.locator('[data-testid="archery-inputs"]')
+    inputs.wait_for(state="visible", timeout=5000)
+    page.locator('[data-action="archery-phase"]').select_option("4")
+    over = inputs.evaluate("el => el.scrollWidth - el.clientWidth")
+    assert over <= 0, f"archery inputs overflow by {over}px"
+    box = inputs.bounding_box()
+    assert box["x"] >= 0 and box["x"] + box["width"] <= PHONE["width"]
+    _assert_no_horizontal_overflow(page)

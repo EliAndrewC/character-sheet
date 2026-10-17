@@ -76,6 +76,60 @@
       return excess > 0 ? Math.floor(excess / 5) : 0;
     },
 
+    // Archery (archery-design/design.md). Twins of combat_math.py's
+    // archery_tn / archery_hold_bonus / arrow_damage_bands /
+    // arrow_band_for_d10 / arrow_ability_excess, pinned to the same cases in
+    // tests/shared/combat_math_cases.json. The server decides the roll; these
+    // only draw the modal's preview.
+
+    /** The arrow's TN and its parts. distance indexes ARCHERY_DISTANCES. */
+    archeryTn: function (baseTn, unseen, distance, evasion, cover) {
+      var bands = L7RRollMath.ARCHERY_DISTANCES;
+      var band = bands[Math.max(0, Math.min(bands.length - 1, distance | 0))];
+      var base = unseen ? 5 : Math.max(0, baseTn | 0);
+      var parts = [{label: unseen ? "can't see the arrow" : "base TN", amount: base},
+                   {label: band[0], amount: band[1]}];
+      if (evasion) parts.push({label: "evasion", amount: 5});
+      if (cover) parts.push({label: "cover", amount: Math.max(0, cover | 0)});
+      var tn = 0;
+      parts.forEach(function (p) { tn += p.amount; });
+      return {tn: tn, parts: parts};
+    },
+
+    ARCHERY_DISTANCES: [["0-49 ft", 5], ["50-99 ft", 10], ["100-199 ft", 15], ["200-399 ft", 20]],
+
+    /** +1 per phase held, counted from the later of the die and the last arrow. */
+    archeryHoldBonus: function (dieValue, phase, lastArrowPhase) {
+      return Math.max(0, phase - Math.max(dieValue, lastArrowPhase || 0));
+    },
+
+    /** The 10k2/4/6/8 odds (tenths) and free raises for an excess. */
+    arrowDamageBands: function (excess) {
+      var shifts = excess > 0 ? Math.floor(excess / 5) : 0;
+      var odds = [3, 3, 3, 1];
+      for (var n = 0; n < Math.min(shifts, 9); n++) {
+        var low = odds[0] ? 0 : (odds[1] ? 1 : 2);
+        odds[low] -= 1;
+        odds[3] += 1;
+      }
+      return {odds: odds, raises: Math.max(0, shifts - 9)};
+    },
+
+    /** The kept dice (2/4/6/8) a d10 picks from those odds. */
+    arrowBandForD10: function (odds, d10) {
+      var bands = [2, 4, 6, 8], seen = 0;
+      for (var i = 0; i < bands.length; i++) {
+        seen += odds[i];
+        if (d10 <= seen) return bands[i];
+      }
+      return 8;
+    },
+
+    /** Ability damage dice as band excess: 5 per rolled or kept die. */
+    arrowAbilityExcess: function (extraRolled, extraKept) {
+      return 5 * (Math.max(0, extraRolled | 0) + Math.max(0, extraKept | 0));
+    },
+
     /**
      * Doji Artisan 5th Dan bonus shape: floor((value - 10) / 5), clamped at 0.
      * Used keyed on the attack TN, the wound-check light wounds, and the

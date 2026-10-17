@@ -120,7 +120,7 @@ def server_rolled(roll_key: str) -> bool:
         return True
     if not roll_key or roll_key.startswith("initiative"):
         return False
-    if roll_key in PARRY_KEYS or roll_key in ("attack", "athletics:attack", "wound_check", KAKITA_5TH) \
+    if roll_key in PARRY_KEYS or roll_key in ("attack", "archery", "athletics:attack", "wound_check", KAKITA_5TH) \
             or roll_key in DUEL_KEYS:
         return True
     kind = roll_key.split(":", 1)[0]
@@ -1268,6 +1268,18 @@ def _after_attack_roll(character: Character, session: RollSession, consumes: lis
     state = dict(character.adventure_state or {})
     for key in consumes:
         state.pop(key, None)
+    spend = (session.formula or {}).get("archery_spend")
+    if spend:
+        # The extra actions the arrow spent, and the phase it was fired in:
+        # the next arrow's hold counts from here (cleared by new initiative).
+        dice = [dict(d) for d in character.action_dice or []]
+        for i in spend["dice"]:
+            dice[i]["spent"] = True
+            dice[i]["spent_by"] = "Archery (extra action)"
+        if spend["dice"]:
+            character.action_dice = dice
+        if spend["phase"]:
+            state["archery_last_arrow_phase"] = spend["phase"]
     excess = pre_w1 - out["effective_tn"]
     if (flags["hida_counterattack_wc_bonus"] and out["hit"]
             and (session.formula or {}).get("attack_variant") == "counterattack" and excess > 0):
@@ -1390,7 +1402,9 @@ def _hida_reroll(db, session, character, args, rng):
     if not flags["hida_reroll"]:
         raise RollRefused(f"{character.name} has no Hida 3rd Dan reroll")
     _once(session, "hida_reroll", "the Hida reroll")
-    is_counter = (session.formula or {}).get("attack_variant") == "counterattack"
+    # An arrow takes every attack type's bonuses, counterattack's 2X included
+    # (GM, archery-design Q5).
+    is_counter = (session.formula or {}).get("attack_variant") in ("counterattack", "archery")
     top = 2 * flags["hida_reroll_x"] if is_counter else flags["hida_reroll_x"]
     if is_impaired(character.to_dict()):
         top = -(-top // 2)
@@ -1431,6 +1445,8 @@ def _damage(db, session, character, args, rng):
     f = session.formula or {}
     data = character.to_dict()
     flags = attack_flags(data)
+    if f.get("attack_variant") == "archery":
+        return _arrow_damage(db, session, character, data, flags, args, out, rng)
     try:
         parry_skill = max(0, min(10, int(args.get("parry_skill") or 0)))
         weapon = (max(0, min(10, int(args.get("weapon_rolled", 4)))),
@@ -1442,15 +1458,7 @@ def _damage(db, session, character, args, rng):
         if not flags["otaku_trade_dice_for_sw"]:
             raise RollRefused(f"{character.name} cannot trade damage dice")
         trade = 10
-    state = character.adventure_state or {}
-    extra_flats = []
-    if current_posture(state) == "offensive":
-        extra_flats.append(("offensive posture", 5))
-    if flags["mantis_posture_accumulation"] and offensive_count(state):
-        extra_flats.append(("Mantis 5th Dan (offensive posture count)", offensive_count(state)))
-    accum = int(state.get("mantis_offensive_3rd_dan_accum") or 0)
-    if flags["mantis_3rd_dan_offensive"] and accum:
-        extra_flats.append(("Mantis 3rd Dan (offensive)", accum))
+    extra_flats = _posture_damage_flats(character, flags)
     pool = cm.damage_pool(
         f, extra_dice=out["extra_dice"], failed_parry=bool(args.get("failed_parry")),
         parry_skill=parry_skill, flags=damage_flags(data), weapon_dice=weapon,
@@ -1465,9 +1473,87 @@ def _damage(db, session, character, args, rng):
         "wave_man_round_damage": f.get("wave_man_round_damage") or 0,
         "shosuro_5th_dan": bool(f.get("shosuro_5th_dan")), "traded_for_sw": bool(trade),
     }
-    dice = roll_dice(pool["rolled"], pool["kept"], True, rng)["in_order"]
-    scored = score_roll(data, dformula, dice, list(pool["parts"]))
-    payload = dict(scored, title=dformula["label"], formula=_formula_text(dformula))
+    return _damage_child(db, session, character, data, dformula, rng)
+
+
+def _posture_damage_flats(character, flags) -> list:
+    """The Mantis posture bonuses a damage roll adds, as ``(label, amount)``."""
+    state = character.adventure_state or {}
+    extra_flats = []
+    if current_posture(state) == "offensive":
+        extra_flats.append(("offensive posture", 5))
+    if flags["mantis_posture_accumulation"] and offensive_count(state):
+        extra_flats.append(("Mantis 5th Dan (offensive posture count)", offensive_count(state)))
+    accum = int(state.get("mantis_offensive_3rd_dan_accum") or 0)
+    if flags["mantis_3rd_dan_offensive"] and accum:
+        extra_flats.append(("Mantis 3rd Dan (offensive)", accum))
+    return extra_flats
+
+
+def _arrow_damage(db, session, character, data, flags, args, out, rng):
+    """An arrow's damage (rules/03-combat.md, archery-design 2.3): a d10 picks
+    10k2 / 10k4 / 10k6 / 10k8 from odds shifted by how far the attack beat its
+    TN - plus 5 per damage die an ability grants - with a free raise for each
+    further 5 once 10k8 is certain; and the automatic serious wounds (1, plus
+    1 with the double attack knack; a failed parry takes back the first)."""
+    if args.get("trade"):
+        raise RollRefused("an arrow has no damage dice to trade")
+    f = session.formula or {}
+    rng = rng or random.SystemRandom()
+    # The Wave Man's W1 raises get the arrow to the TN and no further.
+    raw_excess = max(0, out["excess"] - 5 * out["wave_man_raises"])
+    ability = int(f.get("archery_damage_excess") or 0)
+    if damage_flags(data).get("bayushi_vp_damage"):
+        ability += 10 * int(f.get("void_spent") or 0)
+    bands = cm.arrow_damage_bands(raw_excess + ability)
+    d10 = rng.randint(1, 10)
+    kept = cm.arrow_band_for_d10(bands["odds"], d10)
+    chance = 10 * bands["odds"][cm.ARROW_BANDS.index(kept)]
+    parts = [f"10k{kept} arrow (table roll {d10}: {chance}% chance)"]
+    if ability:
+        parts.append(f"+{ability} excess from abilities")
+    flat = int(f.get("damage_flat_bonus") or 0)
+    parts.extend(cm.damage_flat_parts(f, flat))
+    hiruma = int(f.get("hiruma_parry_bonus") or 0)
+    if hiruma:
+        parts.append(f"+{hiruma} from Hiruma 3rd Dan (after a parry)")
+        flat += hiruma
+    for label, amount in _posture_damage_flats(character, flags):
+        parts.append(f"+{amount} flat from {label}")
+        flat += amount
+    if bands["raises"]:
+        n = bands["raises"]
+        parts.append(f"+{5 * n} from {n} free raise{'s' if n != 1 else ''} (beat the TN by more than 45)")
+        flat += 5 * n
+    failed_parry = bool(args.get("failed_parry"))
+    sw = 1 + int(f.get("archery_double_attack_sw") or 0) - (1 if failed_parry else 0)
+    if failed_parry:
+        parts.append("failed parry: the arrow's own serious wound is negated")
+    dformula = {
+        "attack_damage": True, "arrow_damage": True,
+        "label": "Arrow Damage", "rolled": 10, "kept": kept,
+        "flat": flat, "reroll_tens": True, "is_damage_roll": True, "bonuses": [],
+        "damage_parts": parts, "void_spent": 0, "void_overflow_bonus": 0,
+        "wave_man_round_damage": f.get("wave_man_round_damage") or 0,
+        "shosuro_5th_dan": bool(f.get("shosuro_5th_dan")), "traded_for_sw": False,
+        "arrow_serious_wounds": sw, "arrow_band": kept, "arrow_band_odds": bands["odds"],
+        "arrow_d10": d10, "arrow_failed_parry": failed_parry,
+        "arrow_unseen": bool(f.get("archery_unseen")),
+    }
+    return _damage_child(db, session, character, data, dformula, rng, {
+        "footer": f"+ {sw} serious wound{'s' if sw != 1 else ''}",
+        "serious_wounds": sw, "arrow_band": kept, "arrow_d10": d10,
+        "arrow_band_odds": bands["odds"], "arrow_unseen": bool(f.get("archery_unseen")),
+    })
+
+
+def _damage_child(db, session, character, data, dformula, rng, extra_payload=None):
+    """Roll a hit's damage formula as a session of its own and record it as
+    ``<attack key>:damage``."""
+    dice = roll_dice(dformula["rolled"], dformula["kept"], True, rng)["in_order"]
+    scored = score_roll(data, dformula, dice, list(dformula["damage_parts"]))
+    payload = dict(scored, title=dformula["label"], formula=_formula_text(dformula),
+                   **(extra_payload or {}))
     key = session.roll_key + ":damage"
     history_id = None
     choices = session.choices or {}

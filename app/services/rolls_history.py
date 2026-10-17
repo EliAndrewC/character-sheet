@@ -79,7 +79,7 @@ def should_record_roll(
 # Roll keys that are rolled off the ``attack`` combat skill. ``parry`` is
 # the only key that maps to the parry skill, so it needs no set.
 _ATTACK_ROLL_KEYS = frozenset({
-    "attack", "double_attack", "counterattack", "lunge",
+    "attack", "double_attack", "counterattack", "lunge", "archery",
 })
 
 

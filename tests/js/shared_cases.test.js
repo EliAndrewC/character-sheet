@@ -51,6 +51,11 @@ const combatFns = {
   wound_check_result: "woundCheckResult",
   wave_man_weapon_floor: "waveManWeaponFloor",
   wave_man_failed_parry_dice: "waveManFailedParryDice",
+  archery_tn: "archeryTn",
+  archery_hold_bonus: "archeryHoldBonus",
+  arrow_damage_bands: "arrowDamageBands",
+  arrow_band_for_d10: "arrowBandForD10",
+  arrow_ability_excess: "arrowAbilityExcess",
 };
 for (const [section, fn] of Object.entries(combatFns)) {
   for (const c of combatCases[section]) {

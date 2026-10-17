@@ -232,3 +232,71 @@ def damage_pool(
         # Shosuro Actor 5th Dan: the lowest 3 dice are added after the roll.
         "add_lowest_three": bool(formula.get("shosuro_5th_dan")),
     }
+
+
+# ---------------------------------------------------------------------------
+# Archery (rules/03-combat.md "Archery Rules"; archery-design/design.md).
+# Each function names its roll_math.js twin; both are pinned to the
+# "archery_*" / "arrow_*" sections of tests/shared/combat_math_cases.json.
+# ---------------------------------------------------------------------------
+
+#: The distance bands a bow can hit a moving target in, as (label, TN +).
+#: Past 400 ft is out of range, so it is not a band.
+ARCHERY_DISTANCES = (("0-49 ft", 5), ("50-99 ft", 10), ("100-199 ft", 15), ("200-399 ft", 20))
+
+#: The damage table: kept dice per band, and each band's base odds in tenths.
+ARROW_BANDS = (2, 4, 6, 8)
+ARROW_BASE_ODDS = (3, 3, 3, 1)
+
+
+def archery_tn(base_tn: int, unseen: bool, distance: int, evasion: bool, cover: int) -> Dict[str, Any]:
+    """``archeryTn``: the TN to hit with an arrow, and its parts. A target who
+    cannot see the arrow starts at 5 (not melee's 0); otherwise at the TN the
+    caller gives (5 + 5 x parry). ``distance`` indexes ``ARCHERY_DISTANCES``."""
+    label, plus = ARCHERY_DISTANCES[max(0, min(len(ARCHERY_DISTANCES) - 1, int(distance)))]
+    base = 5 if unseen else max(0, int(base_tn))
+    parts = [{"label": "can't see the arrow" if unseen else "base TN", "amount": base},
+             {"label": label, "amount": plus}]
+    if evasion:
+        parts.append({"label": "evasion", "amount": 5})
+    if cover:
+        parts.append({"label": "cover", "amount": max(0, int(cover))})
+    return {"tn": sum(p["amount"] for p in parts), "parts": parts}
+
+
+def archery_hold_bonus(die_value: int, phase: int, last_arrow_phase: int) -> int:
+    """``archeryHoldBonus``: +1 per phase an action was held, counted from the
+    later of the die's value and the phase the last arrow was fired."""
+    return max(0, int(phase) - max(int(die_value), int(last_arrow_phase or 0)))
+
+
+def arrow_damage_bands(excess: int) -> Dict[str, Any]:
+    """``arrowDamageBands``: the 10k2 / 10k4 / 10k6 / 10k8 odds (in tenths)
+    after the attack beat its TN by ``excess``. Each full 5 moves a tenth from
+    the lowest band that has any to 10k8; once 10k8 is certain, each further
+    full 5 is a free raise on the damage."""
+    shifts = excess // 5 if excess > 0 else 0
+    odds = list(ARROW_BASE_ODDS)
+    for _ in range(min(shifts, 9)):
+        low = next(i for i in range(3) if odds[i])
+        odds[low] -= 1
+        odds[3] += 1
+    return {"odds": odds, "raises": max(0, shifts - 9)}
+
+
+def arrow_band_for_d10(odds: List[int], d10: int) -> int:
+    """``arrowBandForD10``: the kept dice a d10 (1-10) picks, lowest band on
+    the lowest faces."""
+    seen = 0
+    for kept, tenths in zip(ARROW_BANDS, odds):
+        seen += tenths
+        if d10 <= seen:
+            return kept
+    return ARROW_BANDS[-1]
+
+
+def arrow_ability_excess(extra_rolled: int, extra_kept: int) -> int:
+    """``arrowAbilityExcess``: an arrow's damage takes no extra dice. Each
+    rolled or kept damage die an ability grants counts as 5 more excess for
+    the bands instead (GM, archery-design Q3)."""
+    return 5 * (max(0, int(extra_rolled)) + max(0, int(extra_kept)))

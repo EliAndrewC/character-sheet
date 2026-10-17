@@ -77,3 +77,7 @@
 ## Test References
 
 - No school-specific test references found. Otaku Bushi exists only in `app/game_data.py` definitions and `SCHOOL_TECHNIQUE_BONUSES`.
+
+## Archery
+
+On an arrow: the 1st Dan iaijutsu die stacks, the lunge die does not (lunge is left out of archery entirely, GM Q4); 5th Dan's dice trade is refused (an arrow has no dice pool, Q6). See `archery-design/design.md`.

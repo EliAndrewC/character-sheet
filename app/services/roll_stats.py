@@ -93,7 +93,7 @@ def _ability(character_data: Dict[str, Any], formula: Dict[str, Any]) -> Tuple[O
     flags = attack_flags(character_data)
     if flags["hida_reroll"] and formula.get("is_attack_type") and formula.get("reroll_tens"):
         n = flags["hida_reroll_x"]
-        if formula.get("attack_variant") == "counterattack":
+        if formula.get("attack_variant") in ("counterattack", "archery"):
             n *= 2
         if is_impaired(character_data):
             n = -(-n // 2)
@@ -291,6 +291,9 @@ def notes(character_data: Dict[str, Any], formula: Dict[str, Any]) -> List[str]:
         out.append(f"3rd Dan free raises after the roll: +5 each, up to {n} on this roll.")
     if formula.get("courtier_5th_dan_optional"):
         out.append(f"Courtier 5th Dan: +{formula['courtier_5th_dan_optional']} when it applies.")
+    if formula.get("attack_variant") == "archery":
+        out.append("Archery: +1 per phase an action was held (since your last arrow) and +5 per extra "
+                   "action, chosen in the attack window.")
     if formula.get("doji_5th_dan_always") or formula.get("doji_5th_dan_optional"):
         out.append("Doji 5th Dan: +1 for every 5 the TN exceeds 10.")
     for alt in formula.get("alternatives") or []:

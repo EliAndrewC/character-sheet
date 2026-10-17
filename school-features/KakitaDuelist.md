@@ -98,3 +98,7 @@
 
 **General contested-roll skill-gap bonus:** for every rank by which the Kakita's iaijutsu exceeds the opponent's picked skill (iaijutsu when they have it, attack when they don't), the player gains +5 flat (one free raise). This is a general contested-roll rule that currently only surfaces on the 5th Dan modal; future contested-roll flows should use the same `_kakita5thContestSkillBonus` math pattern.
 - **Server (server-rolls-design Phase 9):** the contest is the `kakita_5th_dan` roll session (`duels.kakita_5th_formula` adds the three bonuses from the modal's inputs); the server refuses it once `adventure_state.kakita_5th_dan_used` is set and sets it the moment the contest is rolled. The damage is the `kakita_5th_damage` action, a child session recorded as `kakita_5th_dan:damage`. Tests: `tests/test_duel_rolls.py`, `tests/e2e/test_server_rolls.py::test_kakita_5th_dan_is_latched_by_the_server`.
+
+## Archery
+
+The rules' own archery example: on an arrow a 4th Dan Kakita gets +2k0 (1st Dan's iaijutsu and double attack dice) +5 (2nd Dan, iaijutsu), plus the iaijutsu rank, and +5 damage (4th Dan, normally iaijutsu only). Pinned by `tests/test_archery.py::TestArcheryFormula::test_rules_example_kakita_4th_dan`. The 3rd Dan defender-phase bonus applies to arrows as to any attack. See `archery-design/design.md`.

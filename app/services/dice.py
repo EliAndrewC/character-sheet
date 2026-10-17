@@ -1225,6 +1225,57 @@ def build_combat_formula(
     return formula
 
 
+#: Archery (rules/03-combat.md): "all types of bonuses to attack rolls ...
+#: for all types of attacks stack". The arrow is rolled as an attack, so these
+#: are the OTHER attack types whose school bonuses it also takes. Lunge is
+#: left out entirely (GM, archery-design Q4); feint is not an attack roll.
+ARCHERY_STACKED_KEYS = ("double_attack", "counterattack", "iaijutsu")
+
+
+def build_archery_formula(character_data: dict) -> Optional[RollFormula]:
+    """The archery attack: the plain attack formula (attack + Fire, every
+    bonus keyed to ``attack``), plus the 1st Dan dice and 2nd Dan raises keyed
+    to each of ``ARCHERY_STACKED_KEYS``, plus the iaijutsu knack's rank as a
+    flat bonus. The rules' own example pins it: a 4th Dan Kakita gets +2k0 +5.
+    """
+    formula = build_combat_formula("attack", character_data)
+    if formula is None:
+        return None
+    formula.label = formula.label.replace("Attack", "Archery", 1)
+    school_id = character_data.get("school", "")
+    knacks = character_data.get("knacks", {}) or {}
+    tech_choices = character_data.get("technique_choices") or {}
+    for key in ARCHERY_STACKED_KEYS:
+        # Applied to a scratch formula so each bonus can be named for the
+        # attack type it comes from ("2nd Dan technique (iaijutsu)").
+        scratch = RollFormula(label="", rolled=0, kept=0)
+        _apply_school_technique_bonus(scratch, key, school_id, knacks, tech_choices)
+        formula.rolled += scratch.rolled
+        name = key.replace("_", " ")
+        for b in scratch.bonuses:
+            _add_flat_bonus(formula, f"{b['label']} ({name})", b["amount"])
+    iaijutsu = merged_knacks(character_data).get("iaijutsu", 0)
+    if iaijutsu > 0:
+        _add_flat_bonus(formula, f"Iaijutsu ({iaijutsu})", iaijutsu)
+    _finalize_caps(formula)
+    return formula
+
+
+def archery_first_dan_sources(character_data: dict) -> List[str]:
+    """The attack types whose 1st Dan extra die the arrow takes, for the
+    attack modal's bonus list."""
+    school_id = character_data.get("school", "")
+    knacks = character_data.get("knacks", {}) or {}
+    tech_choices = character_data.get("technique_choices") or {}
+    out = []
+    for key in ("attack",) + ARCHERY_STACKED_KEYS:
+        scratch = RollFormula(label="", rolled=0, kept=0)
+        _apply_school_technique_bonus(scratch, key, school_id, knacks, tech_choices)
+        if scratch.rolled:
+            out.append(f"+{scratch.rolled} rolled die from 1st Dan ({key.replace('_', ' ')})")
+    return out
+
+
 def build_ring_formula(
     ring_name: str, character_data: dict
 ) -> Optional[RollFormula]:
@@ -1728,13 +1779,16 @@ def build_all_roll_formulas(
         # Strip the category prefix (skill:, knack:, athletics:) to get
         # the bare ID that appears in applicable_to.
         bare = key.split(":", 1)[-1] if ":" in key else key
-        if bare in third_dan_applicable:
+        # An arrow is every attack type at once (rules: their bonuses stack).
+        if bare in third_dan_applicable or (
+                bare == "archery"
+                and third_dan_applicable & {"attack", *ARCHERY_STACKED_KEYS}):
             formula_dict["adventure_raises_max_per_roll"] = third_dan_max_per_roll
         return formula_dict
 
     # Attack-type metadata for the combat modal. These formulas open the
     # attack modal instead of the void-spending dropdown.
-    ATTACK_TYPE_KEYS = {"attack", "double_attack", "counterattack", "lunge"}
+    ATTACK_TYPE_KEYS = {"attack", "double_attack", "counterattack", "lunge", "archery"}
     rings = character_data.get("rings", {})
     advantages = character_data.get("advantages", []) or []
 
@@ -1843,7 +1897,9 @@ def build_all_roll_formulas(
             bonus_sources: list = []
             tech_bonuses_here = SCHOOL_TECHNIQUE_BONUSES.get(school_id, {})
             first_dan_list = tech_bonuses_here.get("first_dan_extra_die") or []
-            if dan >= 1 and bare in first_dan_list:
+            if bare == "archery":
+                bonus_sources.extend(archery_first_dan_sources(character_data))
+            elif dan >= 1 and bare in first_dan_list:
                 bonus_sources.append("+1 rolled die from 1st Dan")
             # Flexible 1st Dan (Kitsune Warden et al.) - same display label.
             if (
@@ -2067,6 +2123,23 @@ def build_all_roll_formulas(
             d = _annotate_third_dan(which, formula.to_dict())
             out[which] = _annotate_attack_type(which, d)
 
+    # Archery (rules/03-combat.md, archery-design/design.md): anyone can shoot.
+    arch = build_archery_formula(character_data)
+    if arch is not None:
+        d = _annotate_attack_type("archery", _annotate_third_dan("archery", arch.to_dict()))
+        # Damage bonuses of every attack type stack too: Kakita 4th Dan's +5,
+        # normally iaijutsu damage only, is the rules' own example.
+        if school_id == "kakita_duelist" and dan >= 4:
+            d["damage_flat_bonus"] += FREE_RAISE_VALUE
+            d["damage_bonus_sources"].append("+5 from 4th Dan (iaijutsu)")
+        # An arrow's damage is the table roll alone: extra damage dice from
+        # abilities become 5 excess each instead (GM, archery-design Q3).
+        d["archery_damage_excess"] = 5 * (d["damage_extra_rolled"] + d["damage_extra_kept"])
+        # Double attack: an automatic extra serious wound on every arrow.
+        d["archery_double_attack_sw"] = 1 if merged_knacks(character_data).get("double_attack", 0) > 0 else 0
+        d["archery_iaijutsu_bonus"] = max(0, merged_knacks(character_data).get("iaijutsu", 0))
+        out["archery"] = d
+
     # Bare ring rolls: (2 * Ring)k(Ring) with no athletics bonus. Void is
     # excluded - the L7R rules don't model standalone Void rolls this way.
     for ring_name in (r.value for r in Ring if r != Ring.VOID):
@@ -2212,7 +2285,7 @@ def is_combat_roll(key: str) -> bool:
     all: its generic roller added the +10 to whatever it rolled, a Sincerity
     roll included.
     """
-    if key in ("attack", "parry", "wound_check", "athletics:attack", "athletics:parry"):
+    if key in ("attack", "archery", "parry", "wound_check", "athletics:attack", "athletics:parry"):
         return True
     kind, _, rest = key.partition(":")
     return kind == "knack" and rest.split(":")[0] in _COMBAT_KNACK_IDS
@@ -2234,7 +2307,7 @@ def _discordant_blocks_void(key: str) -> bool:
     if key == "wound_check":
         return False
     return (key.startswith(("skill:", "knack:"))
-            or key in ("attack", "parry", "double_attack", "counterattack", "lunge"))
+            or key in ("attack", "archery", "parry", "double_attack", "counterattack", "lunge"))
 
 
 def _attach_kitsune_swaps(

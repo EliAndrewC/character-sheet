@@ -136,6 +136,19 @@ The three failures were:
 - [x] Post-roll "Extra bonus" updates atkExtraDice (each +5 above TN grants another rolled damage die) -> `test_attack_modal.py::test_post_roll_bonus_updates_extra_damage_dice`
 - [x] Post-roll "Extra bonus" breakdown row renders only when the box is on and applied != 0 -> `test_attack_modal.py::test_post_roll_bonus_breakdown_row_shows_when_active`
 
+## Archery (archery-design/design.md)
+
+- [x] Combat Skills "Archery" row with the stacked formula (Akodo: attack + double attack dice) opens the attack modal in archery mode -> `test_archery.py::test_archery_row_opens_the_archery_modal`
+- [x] Target's TN, "Can't see the arrow" (base 5, TN input disabled), Distance, Evasion and Cover build the TN live; the table hides the melee damage columns -> `test_archery.py::test_archery_row_opens_the_archery_modal`
+- [x] Hit panel: exceeded-by line with the automatic serious wounds (2 with double attack), the shifted damage table, failed parry takes one serious wound back -> `test_archery.py::test_arrow_hit_damage_table_and_serious_wounds`
+- [x] Damage roll: the d10 picks the band (10k8 on a 10), "+ N serious wound(s)" on the result -> `test_archery.py::test_arrow_hit_damage_table_and_serious_wounds`
+- [x] Action-die menu "Archery Attack"; phase picker shows the hold bonus; extra-action checkboxes (only dice that have come up); dice 1 + 2 in phase 5 = +12; extra die spent; last-arrow phase stored -> `test_archery.py::test_hold_bonus_extra_actions_and_reset`
+- [x] Second arrow: phases before the last arrow are not offered, hold counts from the last arrow, "Moving while firing" drops it -> `test_archery.py::test_hold_bonus_extra_actions_and_reset`
+- [x] Unseen target: no failed-parry box, the no-parry / no-discretionary-wound-check note -> `test_archery.py::test_unseen_target_cannot_parry`
+- [x] NPC archer from the combat page overlay: the Target picker seeds the base TN; the fight log records hit, damage and serious wounds -> `test_archery.py::test_npc_archer_from_the_combat_page`
+- [x] Non-editor test-drive: the arrow simulates; the owner's dice and last-arrow phase are untouched -> `test_archery.py::test_a_non_editor_arrow_changes_nothing`
+- [x] Archery inputs fit inside the modal at phone width -> `test_responsive.py::test_archery_modal_fits_at_phone_width`
+
 ## Iaijutsu Duel
 
 - [x] Iaijutsu Duel option in roll menu -> `test_iaijutsu_duel.py::test_duel_option_in_iaijutsu_menu`
@@ -1620,6 +1633,7 @@ python3 -m pytest tests/e2e/ -m "skills or rings" --browser chromium
 | `roll_stats` | Roll statistics (average badges, statistics modal) and the /probabilities page | `test_roll_stats.py`, `test_probabilities.py` |
 | `telemetry` | Client diagnostics: error reports, dead-tab detection, memory samples, new-version banner | `test_telemetry.py` |
 | `combat` | GM combat tracker, generated NPCs, public combat page, combat rolls view | `test_combat.py` |
+| `archery` | Archery attacks: the Archery row, the attack modal's archery mode, arrow damage and serious wounds | `test_archery.py` |
 | `server_rolls` | Rolls the server makes for the sheet: server dice, error + Retry, simulate mode | `test_server_rolls.py` |
 | `pcp` | Player Character Points (confirm modal, reroll/free-raise/reroll-10s, void refresh, XP category, undo, read-only) | `test_pcp.py` |
 | `status_display` | Status section on sheet | `test_sheet_display.py`, `test_sheet_advanced.py` |

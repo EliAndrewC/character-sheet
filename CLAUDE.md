@@ -365,6 +365,15 @@ The design, every GM decision (D1-D34) and the phase checklist are in `combat-de
 - **Simulator dependency:** editable install locally; deploys bundle the simulator checkout's committed `HEAD` (`scripts/deploy.sh`, which also passes the commit as `SIMULATOR_COMMIT`), exactly as every other file in the image comes from this machine. Uncommitted simulator edits never ship. Each NPC records the simulator commit that built it (`npc_generation.simulator`).
 - Tests: `tests/test_npc_generator.py`, `tests/test_npcs.py`, `tests/test_combat_math.py`, `tests/test_combat_actions.py`; clicktests `tests/e2e/test_combat.py` (mark `combat`).
 
+## Archery attacks
+
+Design, the GM's answers (Q1-Q8) and the checklist: `archery-design/design.md`. Anyone can shoot; it is the roll key `archery`, an attack type (`attack_variant: "archery"`) made in the attack modal's archery mode (`atkIsArchery()`), not a modal of its own - every post-roll block reaches it.
+
+- **Every attack type's bonuses stack** (`dice.build_archery_formula`): the attack formula plus the 1st / 2nd Dan bonuses keyed to `ARCHERY_STACKED_KEYS` (double attack, counterattack, iaijutsu - **never lunge**, GM), plus the iaijutsu rank as a flat. The rules' Kakita 4th Dan example is a test. Kakita 4th Dan's +5 damage reaches arrows too.
+- **The server builds the TN and the action bonuses** (`attack_rolls._archery`): TN from parts (`combat_math.archery_tn`), +1 per phase held counted from the later of the die and `adventure_state.archery_last_arrow_phase` (in `PER_ROUND_STATE_KEYS`), +5 per extra die, which a live roll spends. The modal's preview uses the `roll_math.js` twins (shared cases in `combat_math_cases.json`).
+- **Damage is one table roll** (`roll_sessions._arrow_damage`): a d10 (the first forced die in tests) picks 10k2/4/6/8 from odds each 5 of excess shifts; past 45, raises. **Ability damage dice are never added to it**: each is 5 excess (Bayushi: 10 per void point). Serious wounds (1, +1 with double attack, -1 on a failed parry) ride the payload (`serious_wounds`), which a history PATCH cannot change (`rolls.ARROW_DAMAGE_KEYS`). Nothing is written to the target.
+- Tests: `tests/test_archery.py`; clicktests `tests/e2e/test_archery.py` (mark `archery`).
+
 ## Roll statistics (opt-in averages and probability charts)
 
 Design and decisions P1-P11: `probability-design/design.md`. A per-viewer setting (`User.preferences["roll_stats_enabled"]`, Profile > Roll Settings, off by default) shows an average beside every roll and opens a statistics modal (`partials/sheet/roll_stats.html`, badges from `_roll_avg.html`).
@@ -558,7 +567,7 @@ that one character, so a poll would cost one authenticated call per PC per tick.
   feature that touches the write path.**
 - **Response shape is flattened, not the raw payload:** `kept` / `dropped` are plain ints, one per
   die, each the sum of an exploded chain (a 10 rerolled into a 7 is `17`); `bonuses` rows are
-  `{label, value}` (stored as `amount`); `alternatives` pass through as stored, caps included.
+  `{label, value}` (stored as `amount`); `alternatives` pass through as stored, caps included. An arrow's damage row (`archery:damage`) also carries `serious_wounds`.
 - Read-only. No write endpoints under `/api`. No webhooks - the REPL polls every 15-30s during a
   session, which costs nothing at that rate and is far simpler than a subscription.
 

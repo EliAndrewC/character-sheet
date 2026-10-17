@@ -42,6 +42,8 @@ PER_ROUND_STATE_KEYS = (
     "mantis_defensive_3rd_dan_accum",
     "kakita_5th_dan_used",
     "mirumoto_round_points",
+    # Archery: the phase the last arrow was fired (its hold bonus resets).
+    "archery_last_arrow_phase",
 )
 
 

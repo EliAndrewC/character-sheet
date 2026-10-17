@@ -144,6 +144,7 @@
         if (d.effective_tn !== undefined) s += " vs " + d.effective_tn;
         if (d.outcome) s += " (" + d.outcome + ")";
         if (d.damage !== undefined) s += ", " + d.damage + " damage";
+        if (d.serious_wounds) s += " + " + d.serious_wounds + " serious wound" + (d.serious_wounds === 1 ? "" : "s");
         if (d.void) s += ", " + d.void + " void";
         return s;
       },

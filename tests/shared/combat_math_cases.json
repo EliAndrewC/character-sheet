@@ -48,5 +48,44 @@
     {"name": "gives back 2 per copy", "args": [5, 1], "want": 2},
     {"name": "never more than removed", "args": [1, 2], "want": 1},
     {"name": "no copies", "args": [4, 0], "want": 0}
+  ],
+  "archery_tn": [
+    {"name": "parry 3, close", "args": [20, false, 0, false, 0], "want": {"tn": 25, "parts": [{"label": "base TN", "amount": 20}, {"label": "0-49 ft", "amount": 5}]}},
+    {"name": "unseen starts at 5", "args": [30, true, 1, false, 0], "want": {"tn": 15, "parts": [{"label": "can't see the arrow", "amount": 5}, {"label": "50-99 ft", "amount": 10}]}},
+    {"name": "far, evading, in cover", "args": [15, false, 3, true, 20], "want": {"tn": 60, "parts": [{"label": "base TN", "amount": 15}, {"label": "200-399 ft", "amount": 20}, {"label": "evasion", "amount": 5}, {"label": "cover", "amount": 20}]}},
+    {"name": "100-199 ft", "args": [10, false, 2, false, 0], "want": {"tn": 25, "parts": [{"label": "base TN", "amount": 10}, {"label": "100-199 ft", "amount": 15}]}}
+  ],
+  "archery_hold_bonus": [
+    {"name": "rules example: die 1 fired in phase 5", "args": [1, 5, 0], "want": 4},
+    {"name": "second arrow the same phase", "args": [2, 5, 5], "want": 0},
+    {"name": "held since the last arrow", "args": [2, 8, 5], "want": 3},
+    {"name": "die later than the last arrow", "args": [6, 9, 3], "want": 3},
+    {"name": "never negative", "args": [7, 5, 0], "want": 0}
+  ],
+  "arrow_damage_bands": [
+    {"name": "missed or exactly the TN", "args": [0], "want": {"odds": [3, 3, 3, 1], "raises": 0}},
+    {"name": "under a shift", "args": [4], "want": {"odds": [3, 3, 3, 1], "raises": 0}},
+    {"name": "rules example: 12 over", "args": [12], "want": {"odds": [1, 3, 3, 3], "raises": 0}},
+    {"name": "rules example: 22 over", "args": [22], "want": {"odds": [0, 2, 3, 5], "raises": 0}},
+    {"name": "45 over: 10k8 certain", "args": [45], "want": {"odds": [0, 0, 0, 10], "raises": 0}},
+    {"name": "49 over: still no raise", "args": [49], "want": {"odds": [0, 0, 0, 10], "raises": 0}},
+    {"name": "50 over: one raise", "args": [50], "want": {"odds": [0, 0, 0, 10], "raises": 1}},
+    {"name": "62 over: three raises", "args": [62], "want": {"odds": [0, 0, 0, 10], "raises": 3}}
+  ],
+  "arrow_band_for_d10": [
+    {"name": "base odds, 1", "args": [[3, 3, 3, 1], 1], "want": 2},
+    {"name": "base odds, 3", "args": [[3, 3, 3, 1], 3], "want": 2},
+    {"name": "base odds, 4", "args": [[3, 3, 3, 1], 4], "want": 4},
+    {"name": "base odds, 9", "args": [[3, 3, 3, 1], 9], "want": 6},
+    {"name": "base odds, 10", "args": [[3, 3, 3, 1], 10], "want": 8},
+    {"name": "empty lowest band skipped", "args": [[0, 2, 3, 5], 1], "want": 4},
+    {"name": "shifted, 6", "args": [[0, 2, 3, 5], 6], "want": 8},
+    {"name": "all 10k8", "args": [[0, 0, 0, 10], 1], "want": 8},
+    {"name": "past the table is 10k8", "args": [[3, 3, 3, 1], 11], "want": 8}
+  ],
+  "arrow_ability_excess": [
+    {"name": "none", "args": [0, 0], "want": 0},
+    {"name": "1st Dan rolled die", "args": [1, 0], "want": 5},
+    {"name": "Bayushi, 2 void", "args": [2, 2], "want": 20}
   ]
 }

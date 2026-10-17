@@ -81,3 +81,7 @@
 ## Test References
 
 - No school-specific test references found. Matsu Bushi is only referenced in `app/services/dice.py` for the initiative override.
+
+## Archery
+
+4th Dan's near miss does not apply to arrows (GM, archery-design Q6); the 1st / 2nd Dan double attack and iaijutsu bonuses stack onto arrows. See `archery-design/design.md`.

@@ -198,6 +198,12 @@ async def create_roll(
 # ---------------------------------------------------------------------------
 
 
+
+#: The arrow-damage fields the server stamps on a damage payload
+#: (roll_sessions._arrow_damage); a PATCH carries them forward.
+ARROW_DAMAGE_KEYS = ("serious_wounds", "arrow_band", "arrow_d10", "arrow_band_odds", "arrow_unseen")
+
+
 @router.patch("/{char_id}/rolls/{roll_id}")
 async def update_roll(
     request: Request, char_id: int, roll_id: int,
@@ -236,6 +242,7 @@ async def update_roll(
 
     body = await request.json()
     if "payload" in body:
+        previous = dict(row.payload or {})
         previous_rank = (row.payload or {}).get("skill_rank")
         previous_target = (row.payload or {}).get("target_message_id")
         row.payload = coerce_payload(body["payload"])
@@ -252,6 +259,11 @@ async def update_roll(
         }
         if previous_target is not None:
             row.payload["target_message_id"] = previous_target
+        # An arrow's table roll and serious wounds are the server's, like
+        # skill_rank: a post-roll toggle's payload never changes them.
+        for key in ARROW_DAMAGE_KEYS:
+            if key in previous:
+                row.payload[key] = previous[key]
     if "action_die_spent" in body:
         row.action_die_spent = coerce_action_die_spent(body["action_die_spent"])
     db.commit()

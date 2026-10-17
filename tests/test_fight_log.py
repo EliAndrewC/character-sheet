@@ -60,6 +60,20 @@ def test_a_missed_attack_then_damage_on_a_hit(client, world):
     assert second.detail["damage"] == dmg["damage"]["total"]
 
 
+def test_an_npc_arrow_is_logged_with_its_serious_wounds(client, world):
+    _arm(world)
+    npc, pc = world["npc"], world["pc"]
+    hit = _roll(client, npc, roll_key="archery", archery={"base_tn": 5}, target_id=pc.id).json()
+    assert hit["attack"]["hit"] is True
+    dmg = client.post(f"/characters/{npc.id}/roll/{hit['session_id']}/act",
+                      json={"action": "damage", "args": {}},
+                      headers={"X-Test-Dice": "5,5,5,5,5,5,5,5,5,5"}).json()
+    (a,) = _actions(world)
+    assert a.kind == "attack" and a.target_character_id == pc.id
+    assert a.detail["damage"] == dmg["damage"]["total"]
+    assert a.detail["serious_wounds"] == dmg["damage"]["payload"]["serious_wounds"] >= 1
+
+
 def test_a_target_outside_the_fight_is_not_named(client, world):
     _arm(world)
     out = _roll(client, world["npc"], roll_key="attack", tn=5, target_id=world["hidden"].id)

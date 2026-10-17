@@ -90,3 +90,6 @@
 
 ## Test References
 
+## Archery
+
+Special on an arrow: the +1k1 damage per void point spent on the attack is not added to the 10kN roll; each point counts as 10 more excess for the damage bands (GM, archery-design Q3). The 1st / 2nd Dan double attack bonuses stack onto arrows. See `archery-design/design.md`.

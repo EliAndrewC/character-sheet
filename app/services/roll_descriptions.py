@@ -24,6 +24,17 @@ _HARDCODED: Dict[str, Dict[str, str]] = {
             "Parry skill. Extra damage die for every 5 points exceeding the TN."
         ),
     },
+    "archery": {
+        "title": "Archery",
+        "body": (
+            "Shoot a bow with Attack + Fire; every attack type's bonuses "
+            "stack, plus iaijutsu and +1 per phase an action was held. TN = "
+            "5 + 5 * Parry (5 if unseen) + 5 to 20 for distance, plus evasion "
+            "and cover. A hit deals 1 automatic serious wound (2 with double "
+            "attack) and 10k2 to 10k8 damage: each 5 over the TN makes 10k8 "
+            "more likely."
+        ),
+    },
     "parry": {
         "title": "Parry",
         "body": (
@@ -157,6 +168,16 @@ def describe_roll(roll_key: Optional[str]) -> Dict[str, str]:
     if roll_key.endswith(":damage"):
         parent_key = roll_key[: -len(":damage")]
         parent = describe_roll(parent_key)
+        if parent_key == "archery":
+            return {
+                "title": "Damage (Archery)",
+                "body": (
+                    "An arrow's damage: one d10 picks 10k2, 10k4, 10k6 or "
+                    "10k8; each 5 the attack beat its TN by moves 10% to "
+                    "10k8, and past 45 each 5 is a free raise. Plus the "
+                    "automatic serious wounds."
+                ),
+            }
         return {
             "title": f"Damage ({parent['title']})",
             "body": (

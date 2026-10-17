@@ -112,9 +112,12 @@ def build_attack(character: Any, formula: Dict[str, Any], choices: Dict[str, Any
     flags = attack_flags(data)
     state = character.adventure_state or {}
     f = dict(formula)
-    tn = _int(choices, "tn")
-    if tn is None:
-        raise ValueError("the attack needs a TN")
+    if f.get("attack_variant") == "archery":
+        tn = _archery(character, f, choices.get("archery") or {})
+    else:
+        tn = _int(choices, "tn")
+        if tn is None:
+            raise ValueError("the attack needs a TN")
     f["attack_tn"] = tn
     # Mantis Wave-Treader Special: +5 in an offensive posture.
     if current_posture(state) == "offensive":
@@ -195,6 +198,74 @@ def build_attack(character: Any, formula: Dict[str, Any], choices: Dict[str, Any
         f["ide_tn_reduce"] = ide
         consumes.append("ide_banked_tn_reduce")
     return {"formula": f, "consumes": consumes}
+
+
+def _archery(character: Any, f: Dict[str, Any], a: Dict[str, Any]) -> int:
+    """An arrow's situational inputs (rules/03-combat.md, archery-design 2.1 /
+    2.2): its TN from the parts, and the bonuses for the actions it spends -
+    each held die +1 per phase since the later of its value and the last
+    arrow this round, each extra die +5 more. Returns the TN; names every
+    bonus on ``f`` and leaves on ``f["archery_spend"]`` what a live roll
+    spends. Raises ``ValueError`` for a bad input."""
+    if not isinstance(a, dict):
+        raise ValueError("archery choices must be an object")
+    unseen = bool(a.get("unseen"))
+    base = _int(a, "base_tn", 0, 200)
+    if base is None and not unseen:
+        raise ValueError("the arrow needs the target's TN")
+    distance = _int(a, "distance", 0, len(cm.ARCHERY_DISTANCES) - 1) or 0
+    cover = _int(a, "cover", 0, 100) or 0
+    built = cm.archery_tn(base or 0, unseen, distance, bool(a.get("evasion")), cover)
+    f["archery_tn_parts"] = built["parts"]
+    f["archery_unseen"] = unseen
+    dice = list(character.action_dice or [])
+    phase = _int(a, "phase", 0, 10) or 0
+    last = int((character.adventure_state or {}).get("archery_last_arrow_phase") or 0)
+    moving = bool(a.get("moving"))
+    index = a.get("die_index")
+    extras = a.get("extra_dice") or []
+    if not isinstance(extras, list):
+        raise ValueError("extra_dice must be a list")
+    if extras and not phase:
+        raise ValueError("extra actions need the current phase")
+
+    def die(i: Any) -> Dict[str, Any]:
+        if isinstance(i, bool) or not isinstance(i, int) or not 0 <= i < len(dice):
+            raise ValueError("no such action die")
+        if dice[i].get("athletics_only"):
+            raise ValueError("that action die may only be spent on athletics")
+        return dice[i]
+
+    def held(d: Dict[str, Any]) -> int:
+        return 0 if moving else cm.archery_hold_bonus(int(d.get("value") or 0), phase, last)
+
+    if index is not None and phase:
+        d = die(index)
+        hold = held(d)
+        if hold:
+            _bonus(f, f"held {hold} phase{'s' if hold != 1 else ''} (die {d.get('value')})", hold,
+                   "archery-hold-breakdown")
+    seen = {index}
+    extra_total, values = 0, []
+    for i in extras:
+        d = die(i)
+        if i in seen:
+            raise ValueError("an action die can be spent only once")
+        if d.get("spent"):
+            raise ValueError("that action die is already spent")
+        if int(d.get("value") or 0) > phase:
+            raise ValueError(f"a die showing {d.get('value')} has not come up by phase {phase}")
+        seen.add(i)
+        values.append(str(d.get("value")))
+        extra_total += 5 + held(d)
+    if extras:
+        n = len(extras)
+        _bonus(f, f"{n} extra action{'s' if n != 1 else ''} (dice {', '.join(values)})", extra_total,
+               "archery-extra-breakdown")
+    if moving:
+        f["archery_moving"] = True
+    f["archery_spend"] = {"dice": list(extras), "phase": phase}
+    return built["tn"]
 
 
 def attack_outcome(formula: Dict[str, Any], total: int, wave_man_raised: int = 0,

@@ -114,6 +114,10 @@ def record_act(db: Session, character: Character, session_id: str, action: str,
         if not result.get("damage"):
             return
         detail["damage"] = result["damage"].get("total")
+        # An arrow's automatic serious wounds (archery-design 2.3).
+        sw = (result["damage"].get("payload") or {}).get("serious_wounds")
+        if sw is not None:
+            detail["serious_wounds"] = sw
     elif result.get("total") is not None:
         entry.total = result["total"]
         if result.get("attack"):

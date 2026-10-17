@@ -276,6 +276,10 @@ def _serialize_roll(
     rolled_by = payload.get("rolled_by")
     if rolled_by:
         out["rolled_by"] = rolled_by
+    # An arrow's damage row: its automatic serious wounds come with the
+    # light-wound total (archery-design 2.3). Absent on every other roll.
+    if payload.get("serious_wounds") is not None:
+        out["serious_wounds"] = payload["serious_wounds"]
     return out
 
 

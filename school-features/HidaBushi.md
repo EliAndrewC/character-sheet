@@ -89,3 +89,6 @@
 
 ## Test References
 
+## Archery
+
+3rd Dan rerolls **2X** dice on an arrow, as on a counterattack (GM, archery-design Q5): `roll_sessions._hida_reroll`, `roll_stats._ability`, and the sheet's `hidaRerollMax` call. The 5th Dan counterattack bank does not apply to arrows (Q6). See `archery-design/design.md`.

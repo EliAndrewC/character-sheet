@@ -5342,7 +5342,7 @@ class TestCombatRollFlag:
     went through its generic roller - a Sincerity roll included."""
 
     COMBAT = {
-        "attack", "parry", "wound_check", "athletics:attack", "athletics:parry",
+        "attack", "archery", "parry", "wound_check", "athletics:attack", "athletics:parry",
         "knack:counterattack", "knack:double_attack", "knack:lunge",
         "knack:feint", "knack:iaijutsu", "knack:iaijutsu:attack",
         "knack:iaijutsu:strike", "knack:iaijutsu:evaluate",

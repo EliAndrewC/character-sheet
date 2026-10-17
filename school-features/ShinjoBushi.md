@@ -91,3 +91,7 @@
 ## Test References
 
 - No school-specific test references in the test suite. Shinjo Bushi is referenced in `app/services/dice.py` for the 4th Dan initiative mechanic and `app/templates/character/sheet.html,2430` for the client-side implementation.
+
+## Archery
+
+The Special's +2 per phase held stacks with archery's own +1 per phase held (GM, archery-design Q2); the archery modal's phase picker drives both. See `archery-design/design.md`.

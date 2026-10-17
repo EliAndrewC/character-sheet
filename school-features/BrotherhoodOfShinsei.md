@@ -73,3 +73,7 @@
 > Once per round after you have been attacked but before damage is rolled, you may spend an action die from any phase to attack your attacker.  If your attack roll is at least as high as your attacker's then the attack against you is canceled; your attack continues and you hit/miss and roll damage as normal.
 
 **Status:** Out of scope - requires reactive counter-attack mechanics (combat-phase tracking).
+
+## Archery
+
+On an arrow, 1st Dan's extra rolled damage die counts as 5 more excess for the damage bands instead of a die (GM, archery-design Q3); 4th Dan's parry modifier has nothing to act on (a failed parry takes no dice from an arrow). See `archery-design/design.md`.

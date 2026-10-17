@@ -98,3 +98,7 @@
 ## Test References
 
 - No school-specific test references found in the test suite. Yogo Warden exists only in `app/game_data.py` definitions and `SCHOOL_TECHNIQUE_BONUSES`.
+
+## Archery
+
+On an arrow, 1st Dan's extra rolled damage die counts as 5 more excess for the damage bands instead of a die (GM, archery-design Q3). See `archery-design/design.md`.

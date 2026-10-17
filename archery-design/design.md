@@ -1,6 +1,7 @@
 # Archery Attacks - Design
 
-Status: **GM answers in (2026-10-17); implementation in progress** - see section 9.
+Status: **built (2026-10-17).** The GM's answers are in section 4; what was built differently from
+the plan is noted under each phase in section 9.
 
 Source: `rules/03-combat.md` "Archery Rules" (TN to be hit, Parrying arrows, Moving while under fire).
 
@@ -252,44 +253,44 @@ Full cover makes a hit impossible. That is the GM saying "you can't", not an inp
 - [x] GM answers Q1-Q8 (section 4)
 
 ### Phase 1 - Pure arithmetic
-- [ ] `combat_math`: `archery_tn`, `archery_hold_bonus`, `arrow_damage_bands`, `arrow_band_for_d10`, `arrow_damage`
-- [ ] Unit tests: the rules' three band examples (excess 12, 22, 50), 45 exactly, a 4 excess (no shift), the band for every d10 face, hold reset (the rules' phase 1 / 2 / 5 example), moving, unseen base 5, every distance band, cover
-- [ ] `tests/shared/archery_cases.json` for the TN and hold arithmetic the modal previews, run by pytest and `tests/js/shared_cases.test.js`; the JS twins in `roll_math.js`
+- [x] `combat_math`: `archery_tn`, `archery_hold_bonus`, `arrow_damage_bands`, `arrow_band_for_d10`, `arrow_ability_excess` (the whole damage roll lives in `roll_sessions._arrow_damage`, beside the plain `_damage`)
+- [x] Cases: the rules' band examples (12, 22), 45 / 49 / 50 / 62 over, 4 over, the d10 faces, the hold reset (the rules' phase 1 / 2 / 5 example), unseen base 5, every distance band, cover
+- [x] The cases live in `tests/shared/combat_math_cases.json` (not a new file), run by `tests/test_combat_math.py` and `tests/js/shared_cases.test.js`; the JS twins are in `roll_math.js`
 
 ### Phase 2 - Formula
-- [ ] `build_archery_formula` + `_annotate_attack_type` damage metadata (flats, plus ability dice as band excess)
-- [ ] The rules' Kakita 4th Dan example as a test: +2k0 +5 attack, +5 damage
-- [ ] Tests for a school with every stacked key (Akodo: attack + double attack = +2k0), a flexible pick on iaijutsu, the iaijutsu rank flat, no iaijutsu knack = no flat
-- [ ] `archery` in `is_combat_roll`, `_discordant_blocks_void`, `is_wave_man_attack_key`, `_ATTACK_ROLL_KEYS`; 3rd Dan applicability; tests for each
-- [ ] Coverage 100%
+- [x] `build_archery_formula` + damage metadata: flats (Kakita 4th Dan +5 added), ability dice as `archery_damage_excess`; `archery_double_attack_sw`, `archery_iaijutsu_bonus`
+- [x] The rules' Kakita 4th Dan example as a test
+- [x] Akodo attack + double attack, Hida counterattack raise, Otaku's lunge die left out, a flexible pick on iaijutsu, the iaijutsu rank flat (foreign iaijutsu too), no flat without the knack, dice past 10k10
+- [x] `archery` in `is_combat_roll`, `_discordant_blocks_void`, `_ATTACK_ROLL_KEYS`, `server_rolled`; `is_wave_man_attack_key` needed nothing (it follows `is_attack_type`); 3rd Dan applicability (Doji's counterattack raises, Kitsuki's attack raises)
+- [x] Coverage 100% on everything touched
 
 ### Phase 3 - Roll session
-- [ ] `build_attack` archery branch (TN parts, hold, extra dice, moving, iaijutsu) with named bonuses; validation refusals tested
-- [ ] Extra dice spent and `archery_last_arrow_phase` set on a live roll only; the key in `PER_ROUND_STATE_KEYS` (and so Night's Rest); simulated roll changes nothing
-- [ ] `attack.archery` in the answer (TN parts, band odds, raises)
-- [ ] `damage` archery branch: d10 band draw, raises, serious wounds, failed parry, cap; `archery:damage` history row
-- [ ] Every attack-only action works on an archery session (one test each that it is accepted; the excluded ones refuse)
-- [ ] `fight_log` records the serious wounds
-- [ ] `tests/test_archery.py`; coverage 100%
+- [x] `build_attack` archery branch with named bonuses ("held 4 phases (die 1)", "1 extra action (dice 2)"); every refusal tested
+- [x] Extra dice spent and `archery_last_arrow_phase` set on a live roll only; the key in `PER_ROUND_STATE_KEYS`; a simulated roll changes nothing. **As built:** the sheet still spends the arrow's own die (the path every attack uses); the server spends the extra dice, so it checks each one (unspent, not athletics-only, come up by the phase)
+- [x] **Instead of `attack.archery` in the answer**, the formula carries `archery_tn_parts` and the damage-excess fields, and the hit panel draws the bands with the JS twin, so a post-roll raise moves them at once (the server re-judges at the damage roll)
+- [x] `damage` archery branch: the d10 is the first die from the session's rng, so `X-Test-Dice` forces it; raises, serious wounds, failed parry; `archery:damage` history row with `serious_wounds` / `arrow_*` fields that a later PATCH cannot change; Otaku's trade refused
+- [x] Attack actions on an arrow: Hida reroll (2X), Mirumoto points, Akodo 4th Dan void, Lucky, the Isawa trade
+- [x] `fight_log` records the serious wounds; the GM's action log shows them
+- [x] `tests/test_archery.py`
 
 ### Phase 4 - Sheet
-- [ ] Entry points: action-die menu "Archery Attack", Combat Skills "Archery" row with its roll menu
-- [ ] Attack modal archery mode: pre-roll inputs (6.4), live TN and hold display, extra-die checkboxes, probability table at the composed TN
-- [ ] Hit panel: band table, raises, failed-parry checkbox, serious wounds; damage result panel; unseen note
-- [ ] Hide the inapplicable blocks (weapon inputs, Matsu near miss, Otaku trade, Ikoma floor note, W3 / W9)
-- [ ] Read-only walk-through leaves the sheet's counters alone; dark mode; phone width; `scripts/build-css.sh`
+- [x] Entry points: action-die menu "Archery Attack", Combat Skills "Archery" row (formula, tooltip, statistics badge)
+- [x] Archery mode of the attack modal: TN parts with the live total, phase picker (never before the die or the last arrow) with the hold, Shinjo's bonus, extra-die checkboxes, "Moving while firing"; the probability table at the composed TN and pre-roll flats, without the melee damage columns
+- [x] Hit panel: exceeded-by + serious wounds, band table, raises, ability excess, failed-parry box (hidden for an unseen target, with the no-parry note); damage result with "+ N serious wounds"
+- [x] Hidden for arrows: weapon inputs, Otaku trade, Ikoma floor note, W9, the parry-skill input. Matsu's near miss cannot fire (it is keyed to double attack)
+- [x] Read-only test-drive simulates; dark mode via the existing `.dark .text-red-700` rule; phone width; `scripts/build-css.sh`
 
 ### Phase 5 - Cards, history, statistics
-- [ ] Dice card and history titles; damage card shows band, d10, odds, serious wounds
-- [ ] Roll statistics badge and chart on the Archery row; situational notes
+- [x] Card titles "Archery" / "Arrow Damage"; the damage card's footer and the history payload carry the serious wounds; its extras name the band, d10 and odds
+- [x] Statistics badge and chart on the Archery row, with an archery note
 
 ### Phase 6 - Clicktests
-- [ ] `archery` mark in `pytest.ini`; `tests/e2e/test_archery.py` (forced dice; `save_tracking` before rolling): hit with band draw, hold reset across two arrows, extra dice spent, unseen TN, failed parry, double-attack SW, Kakita stacking visible in the formula, read-only mode, NPC archer from the combat page
-- [ ] `COVERAGE.md` entries for every new control and test
-- [ ] `test_sheet_js_errors.py` sweep, `test_client_endpoints.py`, a `test_responsive.py` check on the modal at phone width
-- [ ] Gate: `pytest tests/e2e/test_archery.py --browser chromium` plus `-k` on the touched attack-modal tests; `node --test tests/js/*.test.js`; the unit suite
+- [x] `archery` mark; `tests/e2e/test_archery.py`: row and TN parts, hit / bands / failed parry / damage, hold + extra dice + reset + moving, unseen, NPC archer from the combat page, non-editor
+- [x] `COVERAGE.md`
+- [x] `test_sheet_js_errors.py` sweep, `test_client_endpoints.py` (unit suite), `test_responsive.py::test_archery_modal_fits_at_phone_width`
+- [x] Gates: see the commit message
 
 ### Phase 7 - Land
-- [ ] CLAUDE.md: a short "Archery" section and `archery-design/` in the structure list
-- [ ] `school-features/*.md`: note archery for the schools whose bonuses now stack onto it
+- [x] CLAUDE.md: a short "Archery attacks" section and `archery-design/` in the structure list
+- [x] `school-features/*.md`: an Archery note for Kakita, Hida, Bayushi, Shinjo, Matsu, Otaku, Yogo, Kuni, Brotherhood
 - [ ] Commit, push, deploy (`scripts/deploy.sh`), verify live

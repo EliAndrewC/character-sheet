@@ -679,6 +679,15 @@
             atkRaisesSpent: 0,
             atkConvictionSpent: 0,
             atkFailedParry: false,
+            // Archery (archery-design/design.md): the TN's parts, and the
+            // extra action dice (indices) spent on the same arrow.
+            atkArcheryBaseTn: 20,
+            atkArcheryUnseen: false,
+            atkArcheryDistance: 0,
+            atkArcheryEvasion: false,
+            atkArcheryCover: 0,
+            atkArcheryMoving: false,
+            atkArcheryExtra: [],
             atkParrySkill: 3,
             // Wave Man W9 is a "you may", so it gets a toggle rather than
             // firing automatically. Defaults on: it only ever adds dice.
@@ -1948,6 +1957,7 @@
                     lunge: 'Lunge',
                     athletics_attack: 'Athletics Attack',
                     iaijutsu: 'Iaijutsu Attack',
+                    archery: 'Archery',
                 };
                 const label = labelMap[variant] || 'Attack';
                 const effTN = this.atkEffectiveTN ? this.atkEffectiveTN() : this.atkTN;
@@ -1957,6 +1967,8 @@
                 let text = `${label}: rolled ${this.atkRollTotal} vs TN ${effTN} - ${outcome}`;
                 if (includeDamage && this.atkDamageTotal > 0) {
                     text += `, damage ${this.atkDamageTotal}`;
+                    const sw = this.formula?.arrow_damage ? (this.formula.arrow_serious_wounds || 0) : 0;
+                    if (sw) text += ` + ${sw} serious wound${sw === 1 ? '' : 's'}`;
                 }
                 return text;
             },
@@ -2754,7 +2766,9 @@
             _buildAttackImagePayload() {
                 const bonuses = this._cardBonusRows(this.atkFormula);
                 let footer;
-                if (this.atkHit) {
+                if (this.atkHit && this.atkIsArchery()) {
+                    footer = `vs TN ${this.atkEffectiveTN()} - Hit by ${this.atkExcess || 0}`;
+                } else if (this.atkHit) {
                     const extras = this.atkExtraDice || 0;
                     const noun = extras === 1 ? 'die' : 'dice';
                     footer = `vs TN ${this.atkEffectiveTN()} - Hit (+${extras} damage ${noun})`;
@@ -2785,8 +2799,12 @@
                 // kept-sum + flat; we surface it as the trophy line.
                 // ``atkDamageParts`` is an array of strings ("+N from
                 // <source>") that we lift into named bonus entries.
+                const arrow = !!this.formula?.arrow_damage;
+                const sw = arrow ? (this.formula.arrow_serious_wounds || 0) : 0;
                 return {
-                    title: 'Damage',
+                    title: arrow ? 'Arrow Damage' : 'Damage',
+                    // An arrow's automatic serious wounds come with the light wounds.
+                    footer: arrow ? `+ ${sw} serious wound${sw === 1 ? '' : 's'}` : undefined,
                     formula: (this.atkDamageRolled || 0)
                         + 'k' + (this.atkDamageKept || 0),
                     kept: this._cellsFromDice(
@@ -4318,6 +4336,9 @@
                 const t = this.combatTargets.find(c => String(c.id) === String(id));
                 this.atkTargetId = t ? t.id : null;
                 if (!t) return;
+                // An arrow starts from the target's TN; distance, evasion
+                // and cover are added on top.
+                if (this.atkIsArchery()) { this.atkArcheryBaseTn = t.tn; return; }
                 this.atkTN = this.atkIsAthleticsAttack() ? 5 + 10 * (t.parry || 0) : t.tn;
                 const listed = this.atkIsAthleticsAttack() ? [5, 15, 25, 35, 45, 55] : [5, 10, 15, 20, 25, 30];
                 this.atkShowCustomTN = !listed.includes(this.atkTN);
@@ -4354,6 +4375,12 @@
                 this.atkFailedParry = false;
                 this.atkIsawaTnTrade = false;
                 this.atkOtakuTradeDice = false;
+                this.atkArcheryUnseen = false;
+                this.atkArcheryDistance = 0;
+                this.atkArcheryEvasion = false;
+                this.atkArcheryCover = 0;
+                this.atkArcheryMoving = false;
+                this.atkArcheryExtra = [];
                 // Reset arbitrary bonuses every modal open so a prior
                 // attack's selection never leaks. Defaults match the
                 // initial Alpine state.
@@ -4379,6 +4406,7 @@
                 // first option (the phase-bonus dropdown starts at die_value
                 // since earlier phases are impossible).
                 this.atkShinjoPhase = this._shinjoDieToSpend()?.value || 1;
+                if (this.atkIsArchery()) this.atkShinjoPhase = this.archeryPhases()[0] || 10;
                 // 0 is the "no selection yet" sentinel; the roll button stays
                 // disabled until the Kakita picks a real phase. Stronger than
                 // defaulting to 11 because an overlooked default silently
@@ -4826,6 +4854,82 @@
                 return this.atkFormula?.attack_variant === 'athletics_attack';
             },
 
+            // --- Archery (archery-design/design.md) ---------------------- //
+            // The server builds the arrow's TN and its hold / extra-action
+            // bonuses from the same inputs; these only draw the preview.
+            atkIsArchery() {
+                return this.atkFormula?.attack_variant === 'archery';
+            },
+            atkArcheryTn() {
+                return window.L7RRollMath.archeryTn(
+                    parseInt(this.atkArcheryBaseTn, 10) || 0, !!this.atkArcheryUnseen,
+                    parseInt(this.atkArcheryDistance, 10) || 0, !!this.atkArcheryEvasion,
+                    Math.max(0, parseInt(this.atkArcheryCover, 10) || 0));
+            },
+            _archeryLastPhase() {
+                return window._trackingBridge?.adventureState?.archery_last_arrow_phase || 0;
+            },
+            _archeryPhase() {
+                return parseInt(this.atkShinjoPhase, 10) || 0;
+            },
+            _archeryHold(die) {
+                if (!die || this.atkArcheryMoving) return 0;
+                return window.L7RRollMath.archeryHoldBonus(die.value || 0, this._archeryPhase(), this._archeryLastPhase());
+            },
+            // The die the arrow itself spends (null without initiative).
+            _archeryDie() {
+                if (!this.atkIsArchery() || this.initiativeWarningVariant() !== null) return null;
+                return this._shinjoDieToSpend();
+            },
+            // Every other unspent die that has come up by the chosen phase.
+            archeryExtraChoices() {
+                const t = window._trackingBridge;
+                const main = this._archeryDie();
+                if (!t || !main) return [];
+                const phase = this._archeryPhase();
+                return (t.actionDice || []).map((d, i) => ({...d, i}))
+                    .filter(d => !d.spent && !d.athletics_only
+                        && t.actionDice[d.i] !== main && (d.value || 0) <= phase);
+            },
+            // The phases the arrow can be fired in: not before its die comes
+            // up, and not before the last arrow this round.
+            archeryPhases() {
+                const low = Math.max(this._archeryDie()?.value || 1, this._archeryLastPhase(), 1);
+                return [1, 2, 3, 4, 5, 6, 7, 8, 9, 10].filter(p => p >= low);
+            },
+            archeryToggleExtra(i) {
+                this.atkArcheryExtra = this.atkArcheryExtra.includes(i)
+                    ? this.atkArcheryExtra.filter(x => x !== i) : [...this.atkArcheryExtra, i];
+            },
+            // Extra dice still valid at the chosen phase (a phase moved back
+            // drops dice that have not come up yet).
+            _archeryExtraPicked() {
+                const ok = new Set(this.archeryExtraChoices().map(d => d.i));
+                return this.atkArcheryExtra.filter(i => ok.has(i));
+            },
+            archeryHoldBonus() {
+                return this._archeryHold(this._archeryDie());
+            },
+            archeryExtraBonus() {
+                const dice = window._trackingBridge?.actionDice || [];
+                return this._archeryExtraPicked().reduce((n, i) => n + 5 + this._archeryHold(dice[i]), 0);
+            },
+            _archeryPreRollFlat() {
+                return this.atkIsArchery() ? this.archeryHoldBonus() + this.archeryExtraBonus() : 0;
+            },
+            // The damage table for the current excess: the shifted 10k2 /
+            // 10k4 / 10k6 / 10k8 odds and any free raises past 45.
+            archeryBands() {
+                const f = this.atkFormula || {};
+                let ability = f.archery_damage_excess || 0;
+                if (this.schoolAbilities?.bayushi_vp_damage) ability += 10 * (f.void_spent || 0);
+                const raw = Math.max(0, (this.atkExcess || 0) - 5 * (this.atkWaveManRaises || 0));
+                return {...window.L7RRollMath.arrowDamageBands(raw + ability), ability};
+            },
+            archerySeriousWounds() {
+                return 1 + (this.atkFormula?.archery_double_attack_sw || 0) - (this.atkFailedParry ? 1 : 0);
+            },
+
             // Human-readable name of the action the attack modal is handling.
             // Falls back to the formula label (stripped of parenthetical rings
             // like "(Fire)") and finally to a generic label.
@@ -5201,7 +5305,7 @@
                 // Mantis Wave-Treader: offensive posture (+5) plus 5th Dan
                 // offensive-posture-count accumulator (+N) feed into the target.
                 const postureFlat = this._mantisLiveAttackFlat();
-                const extraBonus = this._atkExtraBonusFlat();
+                const extraBonus = this._atkExtraBonusFlat() + this._archeryPreRollFlat();
                 const target = Math.max(0,
                     this.atkEffectiveTN() - (probs.flat || 0) - vpFlat - dojiBonus - dojiUntouched - shinjoPhase - kakita3rd - shosuroFlat - postureFlat - specFlat - extraBonus);
                 return target < arr.length ? arr[target] : 0;
@@ -5219,7 +5323,7 @@
                 const shosuroFlat = probs.shosuro_flats?.[rk] || 0;
                 const specFlat = this._attackSpecBonus();
                 const postureFlat = this._mantisLiveAttackFlat();
-                const extraBonus = this._atkExtraBonusFlat();
+                const extraBonus = this._atkExtraBonusFlat() + this._archeryPreRollFlat();
                 return (probs.avgs?.[rk] || 0) + (probs.flat || 0) + vpFlat + dojiBonus + dojiUntouched + shinjoPhase + kakita3rd + shosuroFlat + postureFlat + specFlat + extraBonus;
             },
 
@@ -5425,6 +5529,14 @@
                 // have already paid their dice cost up-front and set
                 // ``atkForceAttackerPhase``; those skip the auto-spend so
                 // the attack doesn't consume a third die.
+                // An arrow's die and extra dice are read before the die is
+                // spent: the extras are picked against it, and a non-editor's
+                // test-drive (which spends nothing) still gets the bonuses
+                // its preview showed.
+                const archeryMain = this.atkIsArchery() ? this._archeryDie() : null;
+                const archeryIdx = archeryMain
+                    ? (window._trackingBridge?.actionDice || []).indexOf(archeryMain) : -1;
+                const archeryExtras = archeryIdx >= 0 ? this._archeryExtraPicked() : [];
                 if (this.atkForceAttackerPhase === null
                         || this.atkForceAttackerPhase === undefined) {
                     this._autoSpendActionDie('Attack (rolling...)', this._isAthleticsActionKey(this.atkKey));
@@ -5466,6 +5578,20 @@
                     target_id: this.atkTargetId,
                     request_id: this._newRequestId(),
                 };
+                if (this.atkIsArchery()) {
+                    this._atkRequest.tn = this.atkArcheryTn().tn;
+                    this._atkRequest.archery = {
+                        base_tn: parseInt(this.atkArcheryBaseTn, 10) || 0,
+                        unseen: !!this.atkArcheryUnseen,
+                        distance: parseInt(this.atkArcheryDistance, 10) || 0,
+                        evasion: !!this.atkArcheryEvasion,
+                        cover: Math.max(0, parseInt(this.atkArcheryCover, 10) || 0),
+                        phase: archeryIdx >= 0 ? this._archeryPhase() : 0,
+                        die_index: archeryIdx >= 0 ? archeryIdx : null,
+                        extra_dice: archeryExtras,
+                        moving: !!this.atkArcheryMoving,
+                    };
+                }
                 await this._runServerAttack();
             },
 
@@ -5515,7 +5641,8 @@
                 // player's; the server makes it).
                 this.hidaRerollPhase = '';
                 if (this.schoolAbilities.hida_reroll) {
-                    const isCounter = this.formula.attack_variant === 'counterattack';
+                    // An arrow rerolls 2X, like a counterattack (archery-design Q5).
+                    const isCounter = ['counterattack', 'archery'].includes(this.formula.attack_variant);
                     const isImpaired = this._impairedNow();
                     this.hidaRerollImpaired = isImpaired;
                     this.hidaRerollMax = window.L7RRollMath.hidaRerollMax(this.schoolAbilities.hida_reroll_x, isCounter, isImpaired);

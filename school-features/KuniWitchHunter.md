@@ -71,3 +71,6 @@
 - Client: tracking section shows "Kuni 5th Dan - Reflect Damage" UI with LW input. Reflecting applies half the reflected LW as additional damage to self.
 - The "Tainted-only bonus: attack in current phase adds to reflected damage" is out of scope (combat-phase tracking).
 
+## Archery
+
+On an arrow, 1st Dan's extra rolled damage die counts as 5 more excess for the damage bands instead of a die (GM, archery-design Q3). See `archery-design/design.md`.

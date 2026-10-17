@@ -254,6 +254,7 @@ def test_per_round_state_is_cleared_and_everything_else_survives(client):
         "kakita_5th_dan_used": True,
         # Cleared too; refilled only for a Mirumoto at 3rd Dan.
         "mirumoto_round_points": 1,
+        "archery_last_arrow_phase": 5,
     }
     assert set(per_round) == set(PER_ROUND_STATE_KEYS)
     session, char = _make(

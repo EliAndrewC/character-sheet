@@ -54,7 +54,97 @@
                             </template>
                         </select>
                     </div>
-                    <div class="grid grid-cols-2 gap-4">
+                    {# Archery (archery-design/design.md): the TN from its parts,
+                       the phase (for the hold bonus) and the extra actions.
+                       The server rebuilds all of it from these inputs. #}
+                    <template x-if="atkIsArchery()">
+                    <div class="space-y-3" data-testid="archery-inputs"
+                         x-effect="atkTN = atkArcheryTn().tn">
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-sm font-medium mb-1">Target's TN</label>
+                                <input type="number" x-model.number="atkArcheryBaseTn" min="0" max="200" step="5"
+                                       :disabled="atkArcheryUnseen" data-testid="archery-base-tn"
+                                       class="w-full border rounded px-2 py-1.5 text-sm disabled:opacity-40">
+                                <div class="text-xs text-ink/50 mt-1">5 + 5 &times; their Parry</div>
+                                <label class="flex items-center gap-2 text-xs mt-1 cursor-pointer">
+                                    <input type="checkbox" x-model="atkArcheryUnseen" data-testid="archery-unseen"
+                                           class="rounded text-accent">
+                                    Can't see the arrow (TN starts at 5)
+                                </label>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium mb-1">Distance</label>
+                                <select x-model.number="atkArcheryDistance" data-testid="archery-distance"
+                                        class="w-full border rounded px-2 py-1.5 text-sm">
+                                    <template x-for="(d, i) in window.L7RRollMath.ARCHERY_DISTANCES" :key="i">
+                                        <option :value="i" :selected="atkArcheryDistance === i"
+                                                x-text="d[0] + ' (+' + d[1] + ')'"></option>
+                                    </template>
+                                </select>
+                                <div class="text-xs text-ink/50 mt-1">400+ ft is out of range.</div>
+                            </div>
+                        </div>
+                        <div class="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm">
+                            <label class="flex items-center gap-2 cursor-pointer">
+                                <input type="checkbox" x-model="atkArcheryEvasion" data-testid="archery-evasion"
+                                       class="rounded text-accent">
+                                Target is evading (+5)
+                            </label>
+                            <label class="flex items-center gap-2">
+                                Cover +
+                                <input type="number" x-model.number="atkArcheryCover" min="0" max="100" step="5"
+                                       data-testid="archery-cover"
+                                       class="w-16 border rounded px-2 py-1 text-sm text-center">
+                            </label>
+                        </div>
+                        <div class="text-sm bg-parchment rounded p-2" data-testid="archery-tn">
+                            <span class="font-medium">TN to hit:</span>
+                            <span class="font-bold" x-text="atkArcheryTn().tn"></span>
+                            <span class="text-xs text-ink/60"
+                                  x-text="'(' + atkArcheryTn().parts.map(p => p.label + ' ' + p.amount).join(' + ') + ')'"></span>
+                        </div>
+                        <div x-show="_archeryDie()" x-cloak data-testid="archery-phase"
+                             class="text-xs text-ink/70 bg-parchment rounded p-2 space-y-2">
+                            <div class="flex flex-wrap items-center gap-2">
+                                <span>Die <span class="font-mono" x-text="_archeryDie()?.value ?? ''"></span> fired in phase</span>
+                                <select x-model.number="atkShinjoPhase" data-action="archery-phase"
+                                        class="border rounded px-1 py-0.5 text-xs">
+                                    <template x-for="p in archeryPhases()" :key="p">
+                                        <option :value="p" :selected="atkShinjoPhase === p" x-text="p"></option>
+                                    </template>
+                                </select>
+                                <span data-testid="archery-hold-display">
+                                    (+<span x-text="archeryHoldBonus()"></span> for holding<span x-show="_archeryLastPhase()" x-cloak>, counted from the last arrow in phase <span x-text="_archeryLastPhase()"></span></span>)
+                                </span>
+                                <span x-show="_shinjoPhaseBonus() > 0" x-cloak data-testid="archery-shinjo-display">
+                                    Shinjo: +<span x-text="_shinjoPhaseBonus()"></span>
+                                </span>
+                            </div>
+                            <div x-show="archeryExtraChoices().length" x-cloak>
+                                <span class="font-medium">Extra actions (+5 each, plus their hold):</span>
+                                <template x-for="d in archeryExtraChoices()" :key="d.i">
+                                    <label class="inline-flex items-center gap-1 ml-2 cursor-pointer">
+                                        <input type="checkbox" :checked="atkArcheryExtra.includes(d.i)"
+                                               @change="archeryToggleExtra(d.i)"
+                                               :data-testid="'archery-extra-' + d.i" class="rounded text-accent">
+                                        <span x-text="'die ' + d.value + ' (+' + (5 + _archeryHold(d)) + ')'"></span>
+                                    </label>
+                                </template>
+                            </div>
+                            <label class="flex items-center gap-2 cursor-pointer">
+                                <input type="checkbox" x-model="atkArcheryMoving" data-testid="archery-moving"
+                                       class="rounded text-accent">
+                                Moving while firing (no bonus for holding)
+                            </label>
+                        </div>
+                        <div x-show="atkFormula?.archery_double_attack_sw" x-cloak
+                             class="text-xs text-ink/60 bg-parchment rounded p-2">
+                            Double attack: every arrow that hits deals 2 automatic serious wounds.
+                        </div>
+                    </div>
+                    </template>
+                    <div x-show="!atkIsArchery()" class="grid grid-cols-2 gap-4">
                         <div>
                             <label class="block text-sm font-medium mb-1">
                                 Opponent's Base TN
@@ -237,6 +327,7 @@
                        actually consume an action die - suppressed entirely
                        when the initiative warning is active. #}
                     <div x-show="atkFormula?.shinjo_phase_bonus_attack
+                                 && !atkIsArchery()
                                  && schoolAbilities.shinjo_phase_bonus
                                  && initiativeWarningVariant() === null
                                  && _shinjoDieToSpend()" x-cloak
@@ -313,7 +404,7 @@
                     </div>
 
                     {# Ikoma 4th Dan: 10-dice floor on unparried damage #}
-                    <div x-show="schoolAbilities.ikoma_10_dice_floor" x-cloak
+                    <div x-show="schoolAbilities.ikoma_10_dice_floor && !atkIsArchery()" x-cloak
                          class="text-xs text-ink/60 bg-parchment rounded p-2">
                         Ikoma 4th Dan: unparried attacks always roll at least 10 damage dice. Avg Damage below reflects this.
                     </div>
@@ -352,8 +443,8 @@
                                     <th class="text-left py-1 pr-3">Void</th>
                                     <th class="text-right py-1 px-2">Attack Roll</th>
                                     <th class="text-right py-1 px-2">Hit %</th>
-                                    <th class="text-right py-1 px-2">Avg Extra Dice</th>
-                                    <th class="text-right py-1 px-2">Avg Damage</th>
+                                    <th x-show="!atkIsArchery()" class="text-right py-1 px-2">Avg Extra Dice</th>
+                                    <th x-show="!atkIsArchery()" class="text-right py-1 px-2">Avg Damage</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -366,9 +457,9 @@
                                             x-text="((atkKitsuneSwap && atkProbs[atkKey]?.kitsune_swap?.void_keys?.[String(v)]) || atkProbs[atkKey]?.void_keys?.[String(v)] || '').replace(',', 'k')"></td>
                                         <td class="text-right py-1 px-2 text-success"
                                             x-text="Math.round(atkHitChance(v) * 100) + '%'"></td>
-                                        <td class="text-right py-1 px-2"
+                                        <td x-show="!atkIsArchery()" class="text-right py-1 px-2"
                                             x-text="atkAvgExtraDice(v)"></td>
-                                        <td class="text-right py-1 px-2 font-bold"
+                                        <td x-show="!atkIsArchery()" class="text-right py-1 px-2 font-bold"
                                             x-text="atkAvgDamage(v)"></td>
                                     </tr>
                                 </template>
@@ -646,9 +737,14 @@
                                 <span>HIT - exceeded base TN by <span x-text="atkRollTotal - atkTN"></span>
                                 (<span x-text="atkExtraDice"></span> extra damage dice) + automatic serious wound</span>
                             </template>
-                            <template x-if="!atkNearMiss && !atkIsDoubleAttack()">
+                            <template x-if="!atkNearMiss && !atkIsDoubleAttack() && !atkIsArchery()">
                                 <span>HIT - exceeded TN by <span x-text="atkExcess"></span>
                                 (<span x-text="atkExtraDice"></span> extra damage dice)</span>
+                            </template>
+                            <template x-if="atkIsArchery()">
+                                <span data-testid="archery-hit">HIT - exceeded TN by <span x-text="atkExcess"></span>
+                                + <span x-text="archerySeriousWounds()"></span> automatic serious
+                                wound<span x-show="archerySeriousWounds() !== 1">s</span></span>
                             </template>
                         </div>
 
@@ -669,8 +765,36 @@
                             </template>
                         </div>
 
+                        {# Archery: the damage table this hit rolls on (each 5 over
+                           the TN, and each ability damage die, moves 10% to
+                           10k8; past 45, each 5 is a free raise). #}
+                        <div x-show="atkIsArchery()" x-cloak class="text-sm mb-2" data-testid="archery-bands">
+                            <span class="font-medium">Arrow damage (one d10 picks the row):</span>
+                            <table class="text-xs mt-1">
+                                <tbody>
+                                    <template x-for="(t, i) in archeryBands().odds" :key="i">
+                                        <tr x-show="t > 0" :data-testid="'archery-band-' + [2, 4, 6, 8][i]">
+                                            <td class="pr-3 font-mono" x-text="'10k' + [2, 4, 6, 8][i]"></td>
+                                            <td class="text-right" x-text="(10 * t) + '%'"></td>
+                                        </tr>
+                                    </template>
+                                </tbody>
+                            </table>
+                            <div x-show="archeryBands().raises > 0" x-cloak class="text-xs text-ink/70"
+                                 data-testid="archery-band-raises">
+                                + <span x-text="5 * archeryBands().raises"></span> from
+                                <span x-text="archeryBands().raises"></span> free raise<span x-show="archeryBands().raises !== 1">s</span>
+                                (beat the TN by more than 45)
+                            </div>
+                            <div x-show="archeryBands().ability > 0" x-cloak class="text-xs text-ink/60">
+                                Includes <span x-text="archeryBands().ability"></span> excess from ability damage dice.
+                            </div>
+                            <div x-show="atkFormula?.damage_bonus_sources?.length" x-cloak class="text-xs text-ink/60"
+                                 x-text="'Damage bonuses: ' + (atkFormula?.damage_bonus_sources || []).filter(p => !/rolled die/.test(p)).join(', ')"></div>
+                        </div>
+
                         {# Damage formula breakdown #}
-                        <div x-show="atkCurrentDamage()" class="text-sm mb-2">
+                        <div x-show="atkCurrentDamage() && !atkIsArchery()" class="text-sm mb-2">
                             <span class="font-medium">Damage roll:</span>
                             <span class="font-mono font-bold" x-text="atkCurrentDamage()?.rolled + 'k' + atkCurrentDamage()?.kept + (atkCurrentDamage()?.flat > 0 ? ' + ' + atkCurrentDamage()?.flat : '')"></span>
                             <span class="text-ink/50 ml-1">avg <span x-text="atkCurrentDamage()?.avg"></span></span>
@@ -682,12 +806,17 @@
                         </div>
 
                         {# Failed parry checkbox #}
-                        <label class="flex items-center gap-2 text-sm mt-2 cursor-pointer">
+                        <label x-show="!(atkIsArchery() && atkArcheryUnseen)" class="flex items-center gap-2 text-sm mt-2 cursor-pointer">
                             <input type="checkbox" x-model="atkFailedParry" data-testid="atk-failed-parry"
                                    @change="if (atkFailedParry) atkDefaultParrySkill()" class="rounded text-accent">
                             Opponent made a failed parry
+                            <span x-show="atkIsArchery()" x-cloak class="text-xs text-ink/60">(negates the arrow's own serious wound)</span>
                         </label>
-                        <div x-show="atkFailedParry" x-cloak class="ml-6 mt-1 flex items-center gap-2 text-sm">
+                        <div x-show="atkIsArchery() && atkArcheryUnseen" x-cloak class="text-xs text-ink/60 mt-2"
+                             data-testid="archery-unseen-note">
+                            The target could not see the arrow: they may not parry it, or spend void points or other discretionary bonuses on the wound check.
+                        </div>
+                        <div x-show="atkFailedParry && !atkIsArchery()" x-cloak class="ml-6 mt-1 flex items-center gap-2 text-sm">
                             <span class="text-ink/60">Parry skill:</span>
                             <input type="number" x-model.number="atkParrySkill" min="1" max="5" data-testid="atk-parry-skill"
                                    class="w-16 border rounded px-2 py-1 text-sm text-center">
@@ -696,7 +825,7 @@
                            dice that you would have rolled had they not
                            attempted to parry", per copy. A "may", so it gets
                            a toggle - though it only ever adds dice. #}
-                        <label x-show="atkFailedParry && atkFormula?.wave_man_failed_parry_dice"
+                        <label x-show="atkFailedParry && atkFormula?.wave_man_failed_parry_dice && !atkIsArchery()"
                                x-cloak class="flex items-center gap-2 text-sm mt-1 ml-6 cursor-pointer">
                             <input type="checkbox" x-model="atkWaveManRecover"
                                    data-action="wave-man-recover-dice" class="rounded text-accent">
@@ -892,7 +1021,7 @@
                         </div>
 
                         {# Otaku 5th Dan: trade 10 damage dice for 1 auto serious wound (pre-roll) #}
-                        <label x-show="schoolAbilities.otaku_trade_dice_for_sw && atkCurrentDamage()?.rawRolled > 10" x-cloak
+                        <label x-show="schoolAbilities.otaku_trade_dice_for_sw && !atkIsArchery() && atkCurrentDamage()?.rawRolled > 10" x-cloak
                                class="flex items-center gap-2 text-sm mt-2 cursor-pointer">
                             <input type="checkbox" x-model="atkOtakuTradeDice" class="rounded text-accent">
                             <span>Trade 10 damage dice for 1 automatic serious wound (5th Dan)
@@ -1122,6 +1251,9 @@
                     <div class="bg-ink/5 rounded p-3">
                         <div class="flex items-center justify-between gap-3">
                             <div class="font-bold text-2xl text-accent" x-text="atkDamageTotal + ' damage'"></div>
+                            <div x-show="formula?.arrow_damage" x-cloak data-testid="arrow-serious-wounds"
+                                 class="font-bold text-lg text-red-700"
+                                 x-text="'+ ' + (formula?.arrow_serious_wounds || 0) + ' serious wound' + ((formula?.arrow_serious_wounds || 0) === 1 ? '' : 's')"></div>
                             {% include 'character/partials/copy_roll_image_button.html' %}
                         </div>
                         {# W4 (Wave Man): show the raw roll as well as the
@@ -1132,7 +1264,7 @@
                             &bull; rolled <span x-text="atkDamageWaveManRaw"></span>,
                             rounded up to <span x-text="atkDamageTotal"></span> by Wave Man
                         </div>
-                        <template x-if="atkDamageParts.length > 0 && (atkDamageFlat > 0 || atkDamageShosuroBonus > 0 || convictionSpentThisRoll > 0)">
+                        <template x-if="atkDamageParts.length > 0 && (formula?.arrow_damage || atkDamageFlat > 0 || atkDamageShosuroBonus > 0 || convictionSpentThisRoll > 0)">
                             <div class="mt-1">
                                 <div class="text-xs text-ink/70">
                                     &bull; <span x-text="keptSum"></span> from kept dice

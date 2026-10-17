@@ -53,6 +53,12 @@
                                                     @click="window._diceRoller?.rollForActionDie('attack', i); actionMenuOpen = null; actionMenuHoverRow = null"
                                                     class="block w-full text-left px-3 py-2 hover:bg-parchment">Roll Attack</button>
                                         </template>
+                                        <template x-if="!die.athletics_only && rollFormulas['archery']">
+                                            <button type="button"
+                                                    data-action-die-menu-item="archery"
+                                                    @click="window._diceRoller?.rollForActionDie('archery', i); actionMenuOpen = null; actionMenuHoverRow = null"
+                                                    class="block w-full text-left px-3 py-2 hover:bg-parchment">Archery Attack</button>
+                                        </template>
                                         {% if school_abilities.get('has_athletics_combat') %}
                                         <template x-if="die.athletics_only || {{ 'true' if school_abilities.get('athletics_combat_everywhere') else 'false' }}">
                                             <button type="button"
