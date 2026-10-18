@@ -1,6 +1,7 @@
 """E2E: School-specific ability UI - buttons, banked bonuses, display notes."""
 
 import pytest
+from tests.e2e.helpers import open_melee_attack
 
 from tests.e2e.dice_control import force_dice, restore_dice
 from tests.e2e.helpers import save_tracking
@@ -554,7 +555,7 @@ def test_hida_3rd_dan_reroll_appears(page, live_server_url):
     """Hida at 3rd Dan sees dice reroll selection after attack roll."""
     _create_char(page, live_server_url, "HidaReroll", "hida_bushi",
                  knack_overrides={"counterattack": 3, "double_attack": 3, "iaijutsu": 3})
-    page.locator('[data-roll-key="attack"]').click()
+    open_melee_attack(page)
     page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=10000)
     modal = page.locator('[data-modal="attack"]')
     modal.locator('select:visible').select_option("5")
@@ -1054,7 +1055,7 @@ def test_mirumoto_5th_dan_prob_charts_include_bonus(page, live_server_url):
     assert config.get("combat_vp_flat_bonus") == 10
 
     # Open attack modal to make atkHitChance available
-    page.locator('[data-roll-key="attack"]').click()
+    open_melee_attack(page)
     page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=10000)
     modal = page.locator('[data-modal="attack"]')
     modal.locator('select:visible').select_option("15")
@@ -1118,7 +1119,7 @@ def test_mirumoto_4th_dan_prob_charts_no_bonus(page, live_server_url):
     assert config.get("combat_vp_flat_bonus") == 0
 
     # Open attack modal
-    page.locator('[data-roll-key="attack"]').click()
+    open_melee_attack(page)
     page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=10000)
     modal = page.locator('[data-modal="attack"]')
     modal.locator('select:visible').select_option("15")
@@ -1611,7 +1612,7 @@ def test_hida_reroll_selection_appears(page, live_server_url):
     """Hida at 3rd Dan sees ALL dice (kept and unkept) for reroll selection."""
     _create_char(page, live_server_url, "HidaReroll2", "hida_bushi",
                  knack_overrides={"counterattack": 3, "double_attack": 3, "iaijutsu": 3})
-    page.locator('[data-roll-key="attack"]').click()
+    open_melee_attack(page)
     page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=10000)
     modal = page.locator('[data-modal="attack"]')
     modal.locator('select:visible').select_option("5")
@@ -1687,7 +1688,7 @@ def test_hida_3rd_dan_allowance_is_still_halved_while_impaired(page, live_server
     }""")
     page.wait_for_timeout(300)
 
-    page.locator('[data-roll-key="attack"]').click()
+    open_melee_attack(page)
     page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=10000)
     modal = page.locator('[data-modal="attack"]')
     modal.locator('select:visible').select_option("5")
@@ -2178,7 +2179,7 @@ def test_isawa_duelist_3rd_dan_tn_trade_toggle(page, live_server_url):
     assert sa.get("isawa_tn_trade") is True
 
     # Open the attack modal
-    page.locator('[data-roll-key="attack"]').click()
+    open_melee_attack(page)
     page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=10000)
     page.wait_for_timeout(300)
 
@@ -3186,7 +3187,7 @@ def test_ally_sees_priest_3rd_dan_pool_on_attack_roll(page, live_server_url):
     assert allies[0]["pool"] == [{"value": 9}, {"value": 4}]
 
     # Fire an attack roll; the attack modal should show the priest's pool.
-    page.locator('[data-roll-key="attack"]').click()
+    open_melee_attack(page)
     page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=5000)
     # Pre-roll: pool block is already in the DOM (the predicate is based on
     # atkFormula.is_attack_type which is set when the modal opens).
@@ -3556,7 +3557,7 @@ def test_ally_swaps_priest_pool_die_and_broadcasts(page, live_server_url):
     # and the rest 2s, which the priest's 10 can replace.
     from tests.e2e.dice_control import force_dice, restore_dice
     force_dice(page, [8, 2])
-    page.locator('[data-roll-key="attack"]').click()
+    open_melee_attack(page)
     page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=5000)
     page.locator('[data-modal="attack"] select:visible').first.select_option("5")
     page.locator('[data-modal="attack"] [data-action="roll-attack"]').click()
@@ -3893,7 +3894,7 @@ def test_brotherhood_unarmed_damage_behavioral(page, live_server_url):
     _create_char(page, live_server_url, "Brotherhood_UB", "brotherhood_of_shinsei_monk",
                  knack_overrides={"conviction": 2, "otherworldliness": 2, "worldliness": 2})
     _mock_dice_high(page)
-    page.locator('[data-roll-key="attack"]').click()
+    open_melee_attack(page)
     page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=10000)
     modal = page.locator('[data-modal="attack"]')
     modal.locator('select:visible').select_option("5")
@@ -3934,7 +3935,7 @@ def test_isawa_duelist_water_damage_behavioral(page, live_server_url):
     # Also roll and verify damage parts mention Water
     _mock_dice_high(page)
     # Open attack modal with low TN to guarantee hit
-    page.locator('[data-roll-key="attack"]').click()
+    open_melee_attack(page)
     page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=10000)
     modal = page.locator('[data-modal="attack"]')
     modal.locator('select:visible').select_option("5")
@@ -4395,7 +4396,7 @@ def test_kakita_3rd_dan_defender_phase_control_hidden_without_initiative(page, l
     """No action dice -> initiative warning fires and the Kakita 3rd Dan
     control stays hidden."""
     _make_kakita_dan_3(page, live_server_url, "KakitaK3NoInit")
-    page.locator('[data-roll-key="attack"]').click()
+    open_melee_attack(page)
     page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=10000)
     assert not page.locator('[data-testid="kakita-3rd-dan-bonus"]').is_visible()
     page.locator('[data-testid="attack-init-warning-no-init"]').wait_for(state="visible", timeout=5000)
@@ -4409,7 +4410,7 @@ def test_kakita_3rd_dan_defender_phase_control_hidden_out_of_dice(page, live_ser
         const t = window._trackingBridge;
         t.actionDice = [{value: 4, spent: true}];
     }""")
-    page.locator('[data-roll-key="attack"]').click()
+    open_melee_attack(page)
     page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=10000)
     assert not page.locator('[data-testid="kakita-3rd-dan-bonus"]').is_visible()
 
@@ -4421,7 +4422,7 @@ def test_kakita_3rd_dan_defender_phase_control_visible_with_action_dice(page, li
     page.evaluate("""() => {
         window._trackingBridge.actionDice = [{value: 4, spent: false}];
     }""")
-    page.locator('[data-roll-key="attack"]').click()
+    open_melee_attack(page)
     page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=10000)
     control = page.locator('[data-testid="kakita-3rd-dan-bonus"]')
     control.wait_for(state="visible", timeout=5000)
@@ -4444,7 +4445,7 @@ def test_kakita_3rd_dan_bonus_applied_to_attack_roll(page, live_server_url):
     page.evaluate("""() => {
         window._trackingBridge.actionDice = [{value: 4, spent: false}];
     }""")
-    page.locator('[data-roll-key="attack"]').click()
+    open_melee_attack(page)
     page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=10000)
     modal = page.locator('[data-modal="attack"]')
     page.locator('[data-action="kakita-3rd-dan-defender-phase"]').select_option("10")
@@ -4477,7 +4478,7 @@ def test_kakita_3rd_dan_bonus_clamps_when_defender_acts_first(page, live_server_
     page.evaluate("""() => {
         window._trackingBridge.actionDice = [{value: 7, spent: false}];
     }""")
-    page.locator('[data-roll-key="attack"]').click()
+    open_melee_attack(page)
     page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=10000)
     page.locator('[data-action="kakita-3rd-dan-defender-phase"]').select_option("3")
     text = page.locator('[data-testid="kakita-3rd-dan-bonus-display"]').text_content()
@@ -4490,7 +4491,7 @@ def test_kakita_3rd_dan_bonus_shifts_probability_chart(page, live_server_url):
     page.evaluate("""() => {
         window._trackingBridge.actionDice = [{value: 4, spent: false}];
     }""")
-    page.locator('[data-roll-key="attack"]').click()
+    open_melee_attack(page)
     page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=10000)
     # Start with phase 4 == attacker phase -> no bonus.
     page.locator('[data-action="kakita-3rd-dan-defender-phase"]').select_option("4")
@@ -4531,7 +4532,7 @@ def test_kakita_3rd_dan_phase_11_yields_max_bonus_for_no_remaining_actions(page,
     page.evaluate("""() => {
         window._trackingBridge.actionDice = [{value: 4, spent: false}];
     }""")
-    page.locator('[data-roll-key="attack"]').click()
+    open_melee_attack(page)
     page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=10000)
     page.locator('[data-action="kakita-3rd-dan-defender-phase"]').select_option("11")
     # attacker=4, defender=11, X=2 -> +14.
@@ -4546,7 +4547,7 @@ def test_kakita_below_3rd_dan_no_bonus_control(page, live_server_url):
     page.evaluate("""() => {
         window._trackingBridge.actionDice = [{value: 4, spent: false}];
     }""")
-    page.locator('[data-roll-key="attack"]').click()
+    open_melee_attack(page)
     page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=10000)
     assert not page.locator('[data-testid="kakita-3rd-dan-bonus"]').is_visible()
 
@@ -4578,7 +4579,7 @@ def test_kakita_3rd_dan_roll_button_disabled_until_phase_picked(page, live_serve
     page.evaluate("""() => {
         window._trackingBridge.actionDice = [{value: 4, spent: false}];
     }""")
-    page.locator('[data-roll-key="attack"]').click()
+    open_melee_attack(page)
     page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=10000)
     roll = page.locator('[data-modal="attack"] [data-action="roll-attack"]')
     assert roll.is_disabled()
@@ -4595,7 +4596,7 @@ def test_kakita_3rd_dan_roll_button_enabled_with_no_remaining_actions(page, live
     page.evaluate("""() => {
         window._trackingBridge.actionDice = [{value: 4, spent: false}];
     }""")
-    page.locator('[data-roll-key="attack"]').click()
+    open_melee_attack(page)
     page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=10000)
     roll = page.locator('[data-modal="attack"] [data-action="roll-attack"]')
     page.locator('[data-action="kakita-3rd-dan-defender-phase"]').select_option("11")
@@ -4610,7 +4611,7 @@ def test_kakita_below_3rd_dan_roll_button_always_enabled(page, live_server_url):
     page.evaluate("""() => {
         window._trackingBridge.actionDice = [{value: 4, spent: false}];
     }""")
-    page.locator('[data-roll-key="attack"]').click()
+    open_melee_attack(page)
     page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=10000)
     roll = page.locator('[data-modal="attack"] [data-action="roll-attack"]')
     assert not roll.is_disabled()
@@ -5471,7 +5472,7 @@ def test_ikoma_4th_dan_attack_modal_note(page, live_server_url):
     _create_char(page, live_server_url, "Ikoma4Note", "ikoma_bard",
                  knack_overrides={"discern_honor": 4, "oppose_knowledge": 4, "oppose_social": 4})
     # Open attack modal (don't roll, just check the pre-roll note)
-    page.locator('[data-roll-key="attack"]').click()
+    open_melee_attack(page)
     page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=10000)
     modal = page.locator('[data-modal="attack"]')
     assert "Ikoma 4th Dan" in modal.text_content()
@@ -5494,7 +5495,7 @@ def test_matsu_5th_dan_lw_reset_note_behavioral(page, live_server_url):
                  knack_overrides={"double_attack": 5, "iaijutsu": 5, "lunge": 5})
     _mock_dice_high(page)
     # Roll attack, hit, then roll damage
-    page.locator('[data-roll-key="attack"]').click()
+    open_melee_attack(page)
     page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=10000)
     modal = page.locator('[data-modal="attack"]')
     modal.locator('select:visible').select_option("5")  # low TN for guaranteed hit
@@ -5545,7 +5546,7 @@ def test_shinjo_phase_bonus_hidden_without_initiative(page, live_server_url):
     dice; the initiative warning already tells the player what's missing."""
     _create_char(page, live_server_url, "ShinjoPhNoInit", "shinjo_bushi",
                  knack_overrides={"double_attack": 1, "iaijutsu": 1, "lunge": 1})
-    page.locator('[data-roll-key="attack"]').click()
+    open_melee_attack(page)
     page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=10000)
     assert not page.locator('[data-testid="shinjo-phase-bonus"]').is_visible()
     page.locator('[data-testid="attack-init-warning-no-init"]').wait_for(state="visible", timeout=5000)
@@ -5561,7 +5562,7 @@ def test_shinjo_phase_bonus_hidden_out_of_dice(page, live_server_url):
         const t = window._trackingBridge;
         t.actionDice = [{value: 5, spent: true}];
     }""")
-    page.locator('[data-roll-key="attack"]').click()
+    open_melee_attack(page)
     page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=10000)
     assert not page.locator('[data-testid="shinjo-phase-bonus"]').is_visible()
 
@@ -5576,7 +5577,7 @@ def test_shinjo_phase_bonus_visible_with_action_dice(page, live_server_url):
         const t = window._trackingBridge;
         t.actionDice = [{value: 4, spent: false}, {value: 7, spent: false}];
     }""")
-    page.locator('[data-roll-key="attack"]').click()
+    open_melee_attack(page)
     page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=10000)
     control = page.locator('[data-testid="shinjo-phase-bonus"]')
     control.wait_for(state="visible", timeout=5000)
@@ -5598,7 +5599,7 @@ def test_shinjo_phase_bonus_applied_to_attack_roll(page, live_server_url):
         const t = window._trackingBridge;
         t.actionDice = [{value: 4, spent: false}, {value: 7, spent: false}];
     }""")
-    page.locator('[data-roll-key="attack"]').click()
+    open_melee_attack(page)
     page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=10000)
     modal = page.locator('[data-modal="attack"]')
     page.locator('[data-action="shinjo-phase"]').select_option("9")
@@ -5634,7 +5635,7 @@ def test_shinjo_phase_bonus_shifts_probability_chart(page, live_server_url):
         const t = window._trackingBridge;
         t.actionDice = [{value: 3, spent: false}];
     }""")
-    page.locator('[data-roll-key="attack"]').click()
+    open_melee_attack(page)
     page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=10000)
     low = page.evaluate("() => window._diceRoller.atkHitChance(0)")
     page.locator('[data-action="shinjo-phase"]').select_option("10")
@@ -6265,7 +6266,7 @@ def test_doji_5th_dan_attack_auto_bonus(page, live_server_url):
     _create_char(page, live_server_url, "Doji5Atk", "doji_artisan",
                  knack_overrides={"counterattack": 5, "oppose_social": 5, "worldliness": 5})
     # Open attack modal - default TN is 20, so bonus = floor((20-10)/5) = 2
-    page.locator('[data-roll-key="attack"]').click()
+    open_melee_attack(page)
     page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=10000)
     modal = page.locator('[data-modal="attack"]')
     # Verify the pre-roll Doji note is visible
@@ -6337,7 +6338,7 @@ def test_doji_4th_dan_untouched_checkbox_hidden_below_4th_dan(page, live_server_
     """Doji below 4th Dan: the untouched-target checkbox is NOT rendered."""
     _create_char(page, live_server_url, "Doji3NoUT", "doji_artisan",
                  knack_overrides={"counterattack": 3, "oppose_social": 3, "worldliness": 3})
-    page.locator('[data-roll-key="attack"]').click()
+    open_melee_attack(page)
     page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=10000)
     ut = page.locator('[data-testid="doji-4th-dan-untouched"]')
     assert not ut.is_visible()
@@ -6348,7 +6349,7 @@ def test_doji_4th_dan_untouched_checkbox_visible_on_attack(page, live_server_url
     page, with a phase dropdown that only appears once checked."""
     _create_char(page, live_server_url, "Doji4UT", "doji_artisan",
                  knack_overrides={"counterattack": 4, "oppose_social": 4, "worldliness": 4})
-    page.locator('[data-roll-key="attack"]').click()
+    open_melee_attack(page)
     page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=10000)
     ut = page.locator('[data-testid="doji-4th-dan-untouched"]')
     ut.wait_for(state="visible", timeout=5000)
@@ -6366,7 +6367,7 @@ def test_doji_4th_dan_bonus_shifts_probability_table(page, live_server_url):
     chance in the probability table (the bonus is added to the attack roll)."""
     _create_char(page, live_server_url, "Doji4Prob", "doji_artisan",
                  knack_overrides={"counterattack": 4, "oppose_social": 4, "worldliness": 4})
-    page.locator('[data-roll-key="attack"]').click()
+    open_melee_attack(page)
     page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=10000)
     base_chance = page.evaluate("""() => {
         const els = document.querySelectorAll('[x-data]');
@@ -6396,7 +6397,7 @@ def test_doji_4th_dan_bonus_applied_to_roll_and_breakdown(page, live_server_url)
     formula and surfaces the labeled line in the post-roll breakdown."""
     _create_char(page, live_server_url, "Doji4Roll", "doji_artisan",
                  knack_overrides={"counterattack": 4, "oppose_social": 4, "worldliness": 4})
-    page.locator('[data-roll-key="attack"]').click()
+    open_melee_attack(page)
     page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=10000)
     modal = page.locator('[data-modal="attack"]')
     ut = page.locator('[data-testid="doji-4th-dan-untouched"]')
@@ -6425,7 +6426,7 @@ def test_doji_4th_dan_bonus_not_applied_when_unchecked(page, live_server_url):
     """Doji 4th Dan: without the checkbox the formula has no 4th Dan bonus."""
     _create_char(page, live_server_url, "Doji4NoApply", "doji_artisan",
                  knack_overrides={"counterattack": 4, "oppose_social": 4, "worldliness": 4})
-    page.locator('[data-roll-key="attack"]').click()
+    open_melee_attack(page)
     page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=10000)
     modal = page.locator('[data-modal="attack"]')
     # Leave the checkbox unchecked; set a phase directly just to prove it
@@ -6869,7 +6870,7 @@ def test_conviction_button_on_missed_attack(page, live_server_url):
     _create_char(page, live_server_url, "ConvMissAtk", "brotherhood_of_shinsei_monk",
                  knack_overrides={"conviction": 3, "otherworldliness": 3, "worldliness": 3})
     _mock_dice_low(page)
-    page.locator('[data-roll-key="attack"]').click()
+    open_melee_attack(page)
     page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=10000)
     modal = page.locator('[data-modal="attack"]')
     # TN 30 (max in the dropdown) guarantees a miss against mocked-low dice.
@@ -7135,7 +7136,7 @@ def test_akodo_3rd_dan_bank_and_apply_behavioral(page, live_server_url):
     banked = page.evaluate("window._diceRoller?.akodoBankedBonuses?.filter(b => !b.spent)?.length || 0")
     assert banked > 0, "A bonus should be banked after passing wound check"
     # Roll an attack and check for the Apply button
-    page.locator('[data-roll-key="attack"]').click()
+    open_melee_attack(page)
     page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=10000)
     modal = page.locator('[data-modal="attack"]')
     modal.locator('select:visible').select_option("5")
@@ -7296,7 +7297,7 @@ def test_bayushi_vp_damage_behavioral(page, live_server_url):
     page.wait_for_timeout(200)
     _mock_dice_high(page)
     # Open attack modal, spend 1 VP, roll
-    page.locator('[data-roll-key="attack"]').click()
+    open_melee_attack(page)
     page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=10000)
     modal = page.locator('[data-modal="attack"]')
     modal.locator('select:visible').select_option("5")
@@ -7329,7 +7330,7 @@ def test_hiruma_3rd_dan_parry_then_attack_behavioral(page, live_server_url):
     assert page.locator('text="Banked Post-Parry Bonuses"').is_visible()
     # Roll attack - bonus should be auto-applied (not discretionary)
     _mock_dice_high(page)
-    page.locator('[data-roll-key="attack"]').click()
+    open_melee_attack(page)
     page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=10000)
     modal = page.locator('[data-modal="attack"]')
     modal.locator('select:visible').select_option("5")
@@ -7559,7 +7560,7 @@ def test_mirumoto_4th_dan_parry_reduction_behavioral(page, live_server_url):
                  knack_overrides={"counterattack": 4, "double_attack": 4, "iaijutsu": 4})
     _mock_dice_high(page)
     # Roll attack, check the failed parry checkbox, verify halved text
-    page.locator('[data-roll-key="attack"]').click()
+    open_melee_attack(page)
     page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=10000)
     modal = page.locator('[data-modal="attack"]')
     modal.locator('select:visible').select_option("5")
@@ -7600,7 +7601,7 @@ def test_otaku_5th_dan_trade_dice_behavioral(page, live_server_url):
     # dice (the server judges the attack, so they must be earned).
     force_dice(page, [10, 10, 10, 9])
     # Roll attack with low TN to guarantee hit
-    page.locator('[data-roll-key="attack"]').click()
+    open_melee_attack(page)
     page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=10000)
     modal = page.locator('[data-modal="attack"]')
     modal.locator('select:visible').select_option("5")
@@ -10196,18 +10197,18 @@ def test_mantis_4th_dan_die_menu_shows_only_athletics_and_3rd_dan(page, live_ser
 
 @pytest.mark.school_abilities
 def test_mantis_attack_skill_menu_no_athletics_choice(page, live_server_url):
-    """Clicking the Attack skill on a Mantis character must not open the
-    Togashi-style attack-choice menu; it should go straight to the attack
-    modal. Athletics attack is reached via the Athletics skill instead."""
+    """Clicking the Attack skill on a Mantis character offers melee and
+    archery but not the Togashi-style athletics attack, which a Mantis
+    reaches via the Athletics skill instead."""
     _create_char(page, live_server_url, "MantisAtkNoChoice", "mantis_wave_treader")
     # Confirm athletics:attack formula does exist server-side (would normally
     # trigger the attack choice menu for Togashi).
     has_formula = page.evaluate("() => !!(window._diceRoller?.formulas?.['athletics:attack'])")
     assert has_formula is True
     page.locator('[data-roll-key="attack"]').click()
-    page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=3000)
-    # The attack-choice menu never appeared.
-    assert page.locator('[data-roll-menu="root"]:visible').count() == 0
+    page.wait_for_selector('[data-attack-choice-menu]', state='visible', timeout=3000)
+    assert page.locator('[data-attack-choice="archery"]').is_visible()
+    assert page.locator('[data-attack-choice="athletics_attack"]').count() == 0
 
 
 @pytest.mark.school_abilities
@@ -10230,6 +10231,8 @@ def test_togashi_attack_skill_menu_shows_athletics_choice(page, live_server_url)
     # The attack choice menu includes both regular and athletics options.
     page.locator('[data-attack-choice-menu]').wait_for(state="visible", timeout=5000)
     assert page.locator('[data-attack-choice-menu]').is_visible()
+    for choice in ("attack", "athletics_attack", "archery"):
+        assert page.locator(f'[data-attack-choice="{choice}"]').is_visible()
 
 
 @pytest.mark.school_abilities
@@ -10609,7 +10612,7 @@ def test_suzume_5th_dan_never_tn_skill_no_input(page, live_server_url):
 def test_suzume_5th_dan_attack_auto_bonus(page, live_server_url):
     """Suzume 5th Dan: attack rolls auto-apply bonus from TN."""
     _make_suzume(page, live_server_url, "Suzume5Atk", dan=5)
-    page.locator('[data-roll-key="attack"]').click()
+    open_melee_attack(page)
     page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=10000)
     modal = page.locator('[data-modal="attack"]')
     pre_text = modal.text_content()
@@ -10975,7 +10978,7 @@ def test_kitsune_4th_dan_athletics_attack_hidden_without_athletics_knack(page, l
     in that group."""
     _make_kitsune(page, live_server_url, "K4NoAth", dan=4)
     # Click Attack to open the roll menu (or modal if no choice menu fires).
-    page.locator('[data-roll-key="attack"]').click()
+    open_melee_attack(page)
     page.wait_for_timeout(300)
     # If the chooser appears, "Athletics Attack" should NOT be there.
     # If the attack modal opens directly, that already implies no chooser.

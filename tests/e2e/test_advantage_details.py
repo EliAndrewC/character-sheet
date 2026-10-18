@@ -2,6 +2,7 @@
 
 from tests.e2e.helpers import select_school, apply_changes, start_new_character, wait_xp, create_and_apply
 import pytest
+from tests.e2e.helpers import open_melee_attack
 
 pytestmark = pytest.mark.advantage_details
 
@@ -200,7 +201,7 @@ def test_attack_specialization_checkboxes_on_attack_modal(page, live_server_url)
     apply_changes(page, "Two attack specs")
 
     # Open the attack modal.
-    page.locator('[data-roll-key="attack"]').click()
+    open_melee_attack(page)
     page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=10000)
 
     section = page.locator('[data-testid="attack-spec-section"]')
@@ -268,7 +269,7 @@ def test_attack_specialization_section_hidden_without_attack_spec(page, live_ser
     page.wait_for_selector('text="Saved"', timeout=5000)
     apply_changes(page, "Non-combat spec only")
 
-    page.locator('[data-roll-key="attack"]').click()
+    open_melee_attack(page)
     page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=10000)
     section = page.locator('[data-testid="attack-spec-section"]')
     assert not section.is_visible()

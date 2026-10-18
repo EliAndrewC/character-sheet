@@ -6,7 +6,7 @@ and label truncation producing zero-width elements.
 """
 
 import pytest
-from tests.e2e.helpers import select_profession, select_school, click_plus, apply_changes, start_new_character
+from tests.e2e.helpers import select_profession, select_school, click_plus, apply_changes, start_new_character, open_archery_attack
 
 pytestmark = pytest.mark.responsive
 
@@ -757,7 +757,7 @@ def test_archery_modal_fits_at_phone_width(page, live_server_url):
     page.evaluate("async () => { const t = window._trackingBridge; t.setActionDice([1, 2, 3, 4]); await t.whenSaved(); }")
     page.set_viewport_size(PHONE)
     page.goto(sheet_url)
-    page.locator('[data-testid="archery-row"]').click()
+    open_archery_attack(page)
     inputs = page.locator('[data-testid="archery-inputs"]')
     inputs.wait_for(state="visible", timeout=5000)
     page.locator('[data-action="archery-phase"]').select_option("4")

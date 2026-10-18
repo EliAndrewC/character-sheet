@@ -400,23 +400,34 @@
                     </template>
                 </div>
             </template>
-            {# Attack button opens a menu (instead of jumping straight to the modal) when an athletics:attack formula is available, letting the player choose regular vs athletics attack. #}
+            {# The Attack row opens this menu: melee or archery, plus the athletics attack for a Togashi Ise Zumi. #}
             <template x-if="rollMenuHasAttackChoice">
                 <div data-attack-choice-menu>
                     <button type="button"
                             data-attack-choice="attack"
                             @click="rollMenuOpen = false; openAttackModal('attack')"
                             class="w-full text-left px-4 py-2 text-sm hover:bg-parchment transition-colors border-b border-ink/10 font-medium">
-                        Roll Attack
-                        <span class="text-xs text-ink/50" x-text="'(' + (formulas.attack?.rolled || 0) + 'k' + (formulas.attack?.kept || 0) + ')'"></span>
+                        Melee Attack
+                        <span class="text-xs text-ink/50" x-text="'(' + (formulas.attack?.rolled || 0) + 'k' + (formulas.attack?.kept || 0) + (formulas.attack?.flat ? ' + ' + formulas.attack.flat : '') + ')'"></span>
                     </button>
-                    <button type="button"
-                            data-attack-choice="athletics_attack"
-                            @click="rollMenuOpen = false; openAttackModal('athletics:attack')"
-                            class="w-full text-left px-4 py-2 text-sm hover:bg-parchment transition-colors font-medium">
-                        Athletics Attack
-                        <span class="text-xs text-ink/50" x-text="'(' + (formulas['athletics:attack']?.rolled || 0) + 'k' + (formulas['athletics:attack']?.kept || 0) + ')'"></span>
-                    </button>
+                    <template x-if="formulas['athletics:attack'] && schoolAbilities.athletics_combat_everywhere">
+                        <button type="button"
+                                data-attack-choice="athletics_attack"
+                                @click="rollMenuOpen = false; openAttackModal('athletics:attack')"
+                                class="w-full text-left px-4 py-2 text-sm hover:bg-parchment transition-colors border-b border-ink/10 font-medium">
+                            Athletics Attack
+                            <span class="text-xs text-ink/50" x-text="'(' + (formulas['athletics:attack']?.rolled || 0) + 'k' + (formulas['athletics:attack']?.kept || 0) + ')'"></span>
+                        </button>
+                    </template>
+                    <template x-if="formulas.archery">
+                        <button type="button"
+                                data-attack-choice="archery"
+                                @click="rollMenuOpen = false; openAttackModal('archery')"
+                                class="w-full text-left px-4 py-2 text-sm hover:bg-parchment transition-colors font-medium">
+                            Archery Attack
+                            <span class="text-xs text-ink/50" data-testid="archery-formula" x-text="'(' + (formulas.archery?.rolled || 0) + 'k' + (formulas.archery?.kept || 0) + (formulas.archery?.flat ? ' + ' + formulas.archery.flat : '') + ')'"></span>
+                        </button>
+                    </template>
                 </div>
             </template>
             {# Touch-only attack menu: a single Roll button (which opens the

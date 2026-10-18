@@ -6,7 +6,7 @@ import pytest
 from playwright.sync_api import expect
 
 from tests.e2e.dice_control import force_dice, restore_dice
-from tests.e2e.helpers import create_and_apply
+from tests.e2e.helpers import create_and_apply, open_archery_attack
 
 pytestmark = [pytest.mark.archery]
 
@@ -36,16 +36,18 @@ def _roll(page):
                            timeout=10000)
 
 
-def test_archery_row_opens_the_archery_modal(page, live_server_url):
-    """Every character has an Archery row; it opens the attack modal in
-    archery mode, whose TN follows its parts and whose table drops the
-    melee damage columns."""
+def test_attack_row_offers_archery(page, live_server_url):
+    """Every character's Attack row offers Archery Attack (there is no
+    separate Archery row); it opens the attack modal in archery mode, whose
+    TN follows its parts and whose table drops the melee damage columns."""
     create_and_apply(page, live_server_url, "ArcheryRow")
-    row = page.locator('[data-testid="archery-row"]')
-    expect(row).to_be_visible()
+    assert page.locator('[data-roll-key="archery"]').count() == 0
+    page.locator('[data-roll-key="attack"]').click()
+    choice = page.locator('[data-attack-choice="archery"]')
+    expect(choice).to_be_visible()
     # Akodo 1st Dan: +1k0 attack AND +1k0 double attack: 5k2 at attack 1.
-    expect(row.locator('[data-testid="archery-formula"]')).to_contain_text("5k2")
-    row.click()
+    expect(choice.locator('[data-testid="archery-formula"]')).to_contain_text("5k2")
+    choice.click()
     m = _modal(page)
     m.wait_for(state="visible", timeout=5000)
     tn = m.locator('[data-testid="archery-tn"]')
@@ -68,7 +70,7 @@ def test_arrow_hit_damage_table_and_serious_wounds(page, live_server_url):
     attack: 2); a failed parry takes one back; the damage roll is the table
     row the d10 picked."""
     create_and_apply(page, live_server_url, "ArcheryHit")
-    page.locator('[data-testid="archery-row"]').click()
+    open_archery_attack(page)
     m = _modal(page)
     m.wait_for(state="visible", timeout=5000)
     m.locator('[data-testid="archery-base-tn"]').fill("5")
@@ -131,7 +133,7 @@ def test_hold_bonus_extra_actions_and_reset(page, live_server_url):
 
 def test_unseen_target_cannot_parry(page, live_server_url):
     create_and_apply(page, live_server_url, "ArcheryUnseen")
-    page.locator('[data-testid="archery-row"]').click()
+    open_archery_attack(page)
     m = _modal(page)
     m.wait_for(state="visible", timeout=5000)
     m.locator('[data-testid="archery-unseen"]').check()
@@ -177,7 +179,7 @@ def test_a_non_editor_arrow_changes_nothing(page, page_nonadmin, live_server_url
     url = create_and_apply(page, live_server_url, "ArcheryViewer")
     _set_dice(page, [1, 2])
     page_nonadmin.goto(url)
-    page_nonadmin.locator('[data-testid="archery-row"]').click()
+    open_archery_attack(page_nonadmin)
     m = _modal(page_nonadmin)
     m.wait_for(state="visible", timeout=5000)
     m.locator('[data-testid="archery-base-tn"]').fill("5")

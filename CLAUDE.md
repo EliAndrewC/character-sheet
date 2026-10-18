@@ -367,7 +367,7 @@ The design, every GM decision (D1-D34) and the phase checklist are in `combat-de
 
 ## Archery attacks
 
-Design, the GM's answers (Q1-Q8) and the checklist: `archery-design/design.md`. Anyone can shoot; it is the roll key `archery`, an attack type (`attack_variant: "archery"`) made in the attack modal's archery mode (`atkIsArchery()`), not a modal of its own - every post-roll block reaches it.
+Design, the GM's answers (Q1-Q8) and the checklist: `archery-design/design.md`. Anyone can shoot; it is the roll key `archery`, an attack type (`attack_variant: "archery"`) made in the attack modal's archery mode (`atkIsArchery()`), not a modal of its own - every post-roll block reaches it. It is reached from the Attack row's choice menu (Melee Attack / Archery Attack, plus Athletics for a Togashi; there is no separate Archery row) and from an action die's menu. Clicktests open it with `helpers.open_melee_attack` / `open_archery_attack`.
 
 - **Every attack type's bonuses stack** (`dice.build_archery_formula`): the attack formula plus the 1st / 2nd Dan bonuses keyed to `ARCHERY_STACKED_KEYS` (double attack, counterattack, iaijutsu - **never lunge**, GM), plus the iaijutsu rank as a flat. The rules' Kakita 4th Dan example is a test. Kakita 4th Dan's +5 damage reaches arrows too.
 - **The server builds the TN and the action bonuses** (`attack_rolls._archery`): TN from parts (`combat_math.archery_tn`), +1 per phase held counted from the later of the die and `adventure_state.archery_last_arrow_phase` (in `PER_ROUND_STATE_KEYS`), +5 per extra die, which a live roll spends. The modal's preview uses the `roll_math.js` twins (shared cases in `combat_math_cases.json`).

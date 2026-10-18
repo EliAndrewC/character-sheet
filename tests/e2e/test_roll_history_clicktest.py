@@ -6,6 +6,7 @@ and the readonly roll-results modal.
 """
 
 import pytest
+from tests.e2e.helpers import open_melee_attack
 
 from tests.e2e.helpers import (
     apply_changes, click_plus, select_school, start_new_character,
@@ -75,7 +76,7 @@ def _char_id(page):
 
 def _real_attack(page, tn=20, dice=(9,), void=0):
     from tests.e2e.dice_control import force_dice, restore_dice
-    page.locator('[data-roll-key="attack"]').click()
+    open_melee_attack(page)
     page.wait_for_selector('[data-modal="attack"]', state="visible", timeout=5000)
     page.locator('[data-modal="attack"] select:visible').first.select_option(str(tn))
     if void:

@@ -1,6 +1,7 @@
 """E2E: UI interaction tests for buttons/elements with no prior clicktest coverage."""
 
 import pytest
+from tests.e2e.helpers import open_melee_attack
 from tests.e2e.helpers import select_school, click_plus, apply_changes, start_new_character
 
 pytestmark = [pytest.mark.rolls]
@@ -209,7 +210,7 @@ def test_no_lucky_on_regular_roll_without_advantage(page, live_server_url):
 def test_lucky_reroll_on_attack(page, live_server_url):
     """Lucky button appears on attack result for Lucky characters."""
     _create_char(page, live_server_url, "LuckyAtk", "akodo_bushi")
-    page.locator('[data-roll-key="attack"]').click()
+    open_melee_attack(page)
     page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=3000)
     modal = page.locator('[data-modal="attack"]')
     modal.locator('select:visible').select_option("5")
@@ -223,7 +224,7 @@ def test_lucky_reroll_on_attack(page, live_server_url):
 def test_no_lucky_on_attack_without_advantage(page, live_server_url):
     """Lucky button does NOT appear on attack result without Lucky."""
     _create_char(page, live_server_url, "PlainAtk", "akodo_bushi")
-    page.locator('[data-roll-key="attack"]').click()
+    open_melee_attack(page)
     page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=3000)
     modal = page.locator('[data-modal="attack"]')
     modal.locator('select:visible').select_option("5")
@@ -240,7 +241,7 @@ def test_no_lucky_on_attack_without_advantage(page, live_server_url):
 def test_lucky_reroll_on_damage(page, live_server_url):
     """Lucky button appears on damage result for Lucky characters."""
     _create_char(page, live_server_url, "LuckyDmg", "akodo_bushi")
-    page.locator('[data-roll-key="attack"]').click()
+    open_melee_attack(page)
     page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=3000)
     modal = page.locator('[data-modal="attack"]')
     modal.locator('select:visible').select_option("5")
@@ -296,7 +297,7 @@ def test_lucky_carries_over_free_raise_attack(page, live_server_url):
     """Lucky reroll on attack preserves previously-spent free raises."""
     _create_char(page, live_server_url, "LuckyRaiseAtk", "akodo_bushi",
                  knack_overrides={"double_attack": 3, "feint": 3, "iaijutsu": 3})
-    page.locator('[data-roll-key="attack"]').click()
+    open_melee_attack(page)
     page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=3000)
     modal = page.locator('[data-modal="attack"]')
     modal.locator('select:visible').select_option("25")
@@ -424,7 +425,7 @@ def test_lucky_carries_over_akodo_bonus(page, live_server_url):
     }""")
     page.wait_for_timeout(200)
     # Roll attack with high TN to miss
-    page.locator('[data-roll-key="attack"]').click()
+    open_melee_attack(page)
     page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=3000)
     modal = page.locator('[data-modal="attack"]')
     modal.locator('select:visible').select_option("30")
@@ -467,7 +468,7 @@ def test_lucky_pair_totals_frozen_effective_total_updates(page, live_server_url)
     formula updated with spends."""
     _create_char(page, live_server_url, "LuckyFrozen", "akodo_bushi",
                  knack_overrides={"double_attack": 3, "feint": 3, "iaijutsu": 3})
-    page.locator('[data-roll-key="attack"]').click()
+    open_melee_attack(page)
     page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=3000)
     modal = page.locator('[data-modal="attack"]')
     modal.locator('select:visible').select_option("25")
@@ -617,7 +618,7 @@ def test_duel_restart_resets_tns(page, live_server_url):
 def test_failed_parry_checkbox(page, live_server_url):
     """Checking failed parry changes the damage formula display."""
     _create_char(page, live_server_url, "ParryCheck", "akodo_bushi")
-    page.locator('[data-roll-key="attack"]').click()
+    open_melee_attack(page)
     page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=3000)
     modal = page.locator('[data-modal="attack"]')
     modal.locator('select:visible').select_option("5")
@@ -769,7 +770,7 @@ def test_akodo_banked_bonus_on_miss(page, live_server_url):
     from tests.e2e.dice_control import force_dice, restore_dice
     force_dice(page, [1])
     # Roll attack with high TN to guarantee miss
-    page.locator('[data-roll-key="attack"]').click()
+    open_melee_attack(page)
     page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=3000)
     modal = page.locator('[data-modal="attack"]')
     modal.locator('select:visible').select_option("30")
@@ -823,7 +824,7 @@ def test_akodo_undo_visible_after_all_bonuses_spent(page, live_server_url):
     # Mock dice high, roll attack with low TN to guarantee hit
     from tests.e2e.dice_control import force_dice, restore_dice
     force_dice(page, [7])
-    page.locator('[data-roll-key="attack"]').click()
+    open_melee_attack(page)
     page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=3000)
     modal = page.locator('[data-modal="attack"]')
     modal.locator('select:visible').select_option("5")
@@ -977,7 +978,7 @@ def test_lucky_auto_uses_higher_on_attack(page, live_server_url):
     extra-damage-dice followup count is computed off the higher original."""
     _create_char(page, live_server_url, "LuckyHighAtk", "akodo_bushi",
                  knack_overrides={"double_attack": 3, "feint": 3, "iaijutsu": 3})
-    page.locator('[data-roll-key="attack"]').click()
+    open_melee_attack(page)
     page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=3000)
     modal = page.locator('[data-modal="attack"]')
     modal.locator('select:visible').select_option("15")
@@ -1108,7 +1109,7 @@ def test_lucky_keeps_reroll_when_higher_attack(page, live_server_url):
     banner, and the pair records ``kept: 'reroll'``."""
     _create_char(page, live_server_url, "LuckyHighReroll", "akodo_bushi",
                  knack_overrides={"double_attack": 3, "feint": 3, "iaijutsu": 3})
-    page.locator('[data-roll-key="attack"]').click()
+    open_melee_attack(page)
     page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=3000)
     modal = page.locator('[data-modal="attack"]')
     modal.locator('select:visible').select_option("15")

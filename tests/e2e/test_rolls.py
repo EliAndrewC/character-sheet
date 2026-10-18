@@ -6,6 +6,7 @@ toggles.
 """
 
 import pytest
+from tests.e2e.helpers import open_melee_attack
 
 from tests.e2e.helpers import select_school, click_plus, apply_changes, create_and_apply, start_new_character
 
@@ -56,7 +57,7 @@ def test_knack_roll_trigger_shows_d10_kite_icon(page, live_server_url):
 def test_click_attack_opens_attack_modal(page, live_server_url):
     """Clicking attack opens the attack modal (not the regular dice roller)."""
     _create_roller(page, live_server_url, "ClickAttack")
-    page.locator('[data-roll-key="attack"]').click()
+    open_melee_attack(page)
     page.wait_for_selector('[data-modal="attack"] h3.text-accent', state='visible', timeout=5000)
     title = page.locator('[data-modal="attack"] h3.text-accent').text_content()
     assert "Attack" in title
@@ -481,13 +482,21 @@ def test_attack_button_shows_athletics_choice_when_athletics_available(page, liv
     assert page.locator('[data-attack-choice="athletics_attack"]').is_visible()
 
 
-def test_attack_button_no_choice_menu_for_non_athletics_character(page, live_server_url):
-    """Akodo (no athletics knack) clicks attack → attack modal opens directly."""
+def test_attack_button_offers_melee_and_archery(page, live_server_url):
+    """Akodo (no athletics knack) clicks Attack: the menu offers Melee Attack
+    and Archery Attack, no athletics attack, and Melee opens the modal."""
     _create_roller(page, live_server_url, "AkodoAtk")
     page.locator('[data-roll-key="attack"]').click()
+    page.wait_for_selector('[data-attack-choice-menu]', state='visible', timeout=3000)
+    melee = page.locator('[data-attack-choice="attack"]')
+    archery = page.locator('[data-attack-choice="archery"]')
+    assert "Melee Attack" in melee.text_content()
+    assert "Archery Attack" in archery.text_content()
+    assert page.locator('[data-attack-choice="athletics_attack"]').count() == 0
+    melee.click()
     page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=5000)
-    # No choice menu should appear
     assert not page.locator('[data-attack-choice-menu]').is_visible()
+    assert not page.locator('[data-testid="archery-inputs"]').is_visible()
 
 
 def test_attack_choice_athletics_opens_modal_with_doubled_tn(page, live_server_url):
@@ -797,7 +806,7 @@ def test_die_top_angle_is_about_70_degrees(page, live_server_url):
     page.wait_for_selector('[data-roll-key="attack"]')
     # Re-enable animations for this test (conftest disables them)
     page.evaluate("if (window._diceRoller) window._diceRoller.prefs.dice_animation_enabled = true")
-    page.locator('[data-roll-key="attack"]').click()
+    open_melee_attack(page)
     # Attack now opens the attack modal - click "Roll Attack" to start the roll
     page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=5000)
     page.locator('[data-modal="attack"] select:visible').select_option("5")
@@ -1495,7 +1504,7 @@ def test_attack_auto_spends_lowest_action_die(page, live_server_url):
     _create_roller(page, live_server_url, "ActionDieAttack")
     page.evaluate("window._trackingBridge.setActionDice([2, 4, 6]);")
     page.wait_for_timeout(100)
-    page.locator('[data-roll-key="attack"]').click()
+    open_melee_attack(page)
     page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=5000)
     # Click the Roll button inside the attack modal
     page.locator('[data-modal="attack"] [data-action="roll-attack"]').click()
@@ -1515,7 +1524,7 @@ def test_attack_with_all_dice_spent_still_rolls(page, live_server_url):
         " window._trackingBridge.save();"
     )
     page.wait_for_timeout(100)
-    page.locator('[data-roll-key="attack"]').click()
+    open_melee_attack(page)
     page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=5000)
     page.locator('[data-modal="attack"] [data-action="roll-attack"]').click()
     page.wait_for_timeout(500)
@@ -1562,7 +1571,7 @@ def test_attack_annotates_spent_die_with_result(page, live_server_url):
     _create_roller(page, live_server_url, "ActionDieAttackTooltip")
     page.evaluate("window._trackingBridge.setActionDice([2, 4, 6]);")
     page.wait_for_timeout(100)
-    page.locator('[data-roll-key="attack"]').click()
+    open_melee_attack(page)
     page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=5000)
     page.locator('[data-modal="attack"] [data-action="roll-attack"]').click()
     page.wait_for_timeout(500)
@@ -1589,7 +1598,7 @@ def test_attack_tooltip_updates_when_conviction_spent_on_damage(page, live_serve
     # Seed an action die so the attack has one to auto-spend.
     page.evaluate("window._trackingBridge.setActionDice([5]);")
     page.wait_for_timeout(100)
-    page.locator('[data-roll-key="attack"]').click()
+    open_melee_attack(page)
     page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=5000)
     # TN 5 is trivially low, guaranteeing a hit so damage roll is available.
     page.locator('[data-modal="attack"] select:visible').first.select_option("5")
@@ -2541,7 +2550,7 @@ def test_post_roll_attack_bonus_reprerenders_attack_card(page, live_server_url):
     _install_roll_image_post_capture(page)
     # Open the attack modal and roll. Akodo Bushi has a Katana so the
     # Attack tile is rollable straight from a fresh setup.
-    page.locator('[data-roll-key="attack"]').click()
+    open_melee_attack(page)
     page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=3000)
     page.locator('[data-action="roll-attack"]').click()
     page.wait_for_function(
@@ -2666,7 +2675,7 @@ def test_discordant_skill_roll_opens_no_void_menu(page, live_server_url):
 
 def test_discordant_attack_modal_hides_void_shows_note(page, live_server_url):
     _create_discordant(page, live_server_url, "DiscAttack")
-    page.locator('[data-roll-key="attack"]').click()
+    open_melee_attack(page)
     page.wait_for_selector('[data-modal="attack"]', state="visible", timeout=5000)
     # The explanatory note is shown...
     note = page.locator('[data-testid="discordant-no-void-attack"]')
@@ -2680,7 +2689,7 @@ def test_non_discordant_attack_modal_keeps_void(page, live_server_url):
     """Control: without Discordant, the attack void stepper is present and the
     note absent - proves the gating is conditional, not always-on."""
     _create_roller(page, live_server_url, "PlainAttack")
-    page.locator('[data-roll-key="attack"]').click()
+    open_melee_attack(page)
     page.wait_for_selector('[data-modal="attack"]', state="visible", timeout=5000)
     assert page.locator('[data-modal="attack"] label:has-text("Void points:")').is_visible()
     assert page.locator('[data-testid="discordant-no-void-attack"]').count() == 0 \

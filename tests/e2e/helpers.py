@@ -252,3 +252,16 @@ def save_tracking(page, **fields):
         await t.save();
         await t.whenSaved();
     }}""")
+
+
+def open_melee_attack(page):
+    """Click the sheet's Attack row and pick "Melee Attack" from its choice
+    menu (the row offers melee and archery, plus athletics for a Togashi)."""
+    page.locator('[data-roll-key="attack"]').click()
+    page.locator('[data-attack-choice="attack"]').click()
+
+
+def open_archery_attack(page):
+    """Click the sheet's Attack row and pick "Archery Attack"."""
+    page.locator('[data-roll-key="attack"]').click()
+    page.locator('[data-attack-choice="archery"]').click()

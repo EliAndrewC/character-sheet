@@ -9,6 +9,7 @@ onto the card, and that Kakita 5th Dan's damage has a Copy button at all.
 """
 
 import pytest
+from tests.e2e.helpers import open_melee_attack
 
 from tests.e2e.dice_control import force_dice
 
@@ -33,7 +34,7 @@ def _adds_up(card):
 
 
 def _attack(page):
-    page.locator('[data-roll-key="attack"]').click()
+    open_melee_attack(page)
     page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=10000)
     modal = page.locator('[data-modal="attack"]')
     modal.locator('select:visible').first.select_option("5")

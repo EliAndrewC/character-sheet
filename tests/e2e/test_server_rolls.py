@@ -3,6 +3,7 @@
 import json
 
 import pytest
+from tests.e2e.helpers import open_melee_attack
 
 from tests.e2e.test_rolls import _create_roller, _wait_for_roll_result
 
@@ -301,7 +302,7 @@ def test_the_attack_and_its_damage_are_the_servers(page, live_server_url):
     answers = []
     page.on("response", lambda r: answers.append(r) if r.url.endswith("/roll") else None)
     acts = _acts(page)
-    page.locator('[data-roll-key="attack"]').click()
+    open_melee_attack(page)
     page.wait_for_selector('[data-modal="attack"]', state="visible", timeout=5000)
     page.locator('[data-modal="attack"] select:visible').first.select_option("5")
     force_dice(page, [9])
@@ -336,7 +337,7 @@ def test_a_failed_attack_request_offers_retry(page, live_server_url):
         else:
             route.continue_()
     page.route("**/roll", handler)
-    page.locator('[data-roll-key="attack"]').click()
+    open_melee_attack(page)
     page.wait_for_selector('[data-modal="attack"]', state="visible", timeout=5000)
     page.locator('[data-modal="attack"] [data-action="roll-attack"]').click()
     page.locator('[data-testid="attack-retry"]').wait_for(state="visible", timeout=5000)

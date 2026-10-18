@@ -1,6 +1,7 @@
 """E2E: Attack modal - opens for attack types, probability table, damage roll."""
 
 import pytest
+from tests.e2e.helpers import open_melee_attack
 from playwright.sync_api import expect
 from tests.e2e.helpers import select_school, click_plus, apply_changes, start_new_character
 
@@ -41,7 +42,7 @@ def test_attack_opens_attack_modal(page, live_server_url):
     """Clicking attack opens the attack modal, not the dice roller."""
     _create_attacker(page, live_server_url, "AtkModal")
     _wait_alpine(page)
-    page.locator('[data-roll-key="attack"]').click()
+    open_melee_attack(page)
     page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=5000)
     assert page.locator('[data-modal="attack"] h3.text-accent').text_content().strip() != ""
 
@@ -74,7 +75,7 @@ def test_attack_modal_shows_probability_table(page, live_server_url):
     """The attack modal shows a probability table with Hit % column."""
     _create_attacker(page, live_server_url, "AtkProb")
     _wait_alpine(page)
-    page.locator('[data-roll-key="attack"]').click()
+    open_melee_attack(page)
     page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=5000)
     modal = page.locator('[data-modal="attack"]')
     modal.locator('th:text("Hit %")').wait_for(state="visible", timeout=5000)
@@ -87,7 +88,7 @@ def test_attack_modal_shows_attack_roll_rk_column(page, live_server_url):
     """The attack probability table shows an 'Attack Roll' column with the (r)k(k) value per void level."""
     _create_attacker(page, live_server_url, "AtkRK")
     _wait_alpine(page)
-    page.locator('[data-roll-key="attack"]').click()
+    open_melee_attack(page)
     page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=5000)
     modal = page.locator('[data-modal="attack"]')
     modal.locator('th:text("Attack Roll")').wait_for(state="visible", timeout=5000)
@@ -104,7 +105,7 @@ def test_attack_modal_tn_dropdown(page, live_server_url):
     """The TN dropdown shows common values."""
     _create_attacker(page, live_server_url, "AtkTN")
     _wait_alpine(page)
-    page.locator('[data-roll-key="attack"]').click()
+    open_melee_attack(page)
     page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=5000)
     modal = page.locator('[data-modal="attack"]')
     assert modal.locator('option[value="20"]').count() > 0
@@ -150,7 +151,7 @@ def test_attack_roll_shows_hit_or_miss(page, live_server_url):
     """Rolling an attack shows HIT or MISSED."""
     _create_attacker(page, live_server_url, "AtkRoll")
     _wait_alpine(page)
-    page.locator('[data-roll-key="attack"]').click()
+    open_melee_attack(page)
     page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=5000)
     # Use a low TN to increase hit chance
     page.locator('[data-modal="attack"] select:visible').first.select_option("5")
@@ -173,7 +174,7 @@ def test_attack_hit_shows_damage_roll_button(page, live_server_url):
     """When attack hits, a Make Damage Roll button appears."""
     _create_attacker(page, live_server_url, "AtkDmg")
     _wait_alpine(page)
-    page.locator('[data-roll-key="attack"]').click()
+    open_melee_attack(page)
     page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=5000)
     # TN 5 should almost always hit
     page.locator('[data-modal="attack"] select:visible').first.select_option("5")
@@ -195,7 +196,7 @@ def test_attack_damage_roll_produces_result(page, live_server_url):
     """After a hit, clicking Make Damage Roll shows a damage total."""
     _create_attacker(page, live_server_url, "AtkDmgResult")
     _wait_alpine(page)
-    page.locator('[data-roll-key="attack"]').click()
+    open_melee_attack(page)
     page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=5000)
     page.locator('[data-modal="attack"] select:visible').first.select_option("5")
     page.locator('[data-modal="attack"] [data-action="roll-attack"]').click()
@@ -289,7 +290,7 @@ def test_attack_dice_animation_visible(page, live_server_url):
     _wait_alpine(page)
     # Re-enable animations for this specific test
     page.evaluate("if (window._diceRoller) window._diceRoller.prefs.dice_animation_enabled = true")
-    page.locator('[data-roll-key="attack"]').click()
+    open_melee_attack(page)
     page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=5000)
     page.locator('[data-modal="attack"] [data-action="roll-attack"]').click()
     page.wait_for_function(
@@ -309,7 +310,7 @@ def test_attack_modal_warns_when_no_initiative(page, live_server_url):
     character has no action dice at all (never rolled initiative)."""
     _create_attacker(page, live_server_url, "AtkNoInit")
     _wait_alpine(page)
-    page.locator('[data-roll-key="attack"]').click()
+    open_melee_attack(page)
     page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=5000)
     warning = page.locator('[data-testid="attack-init-warning-no-init"]')
     warning.wait_for(state="visible", timeout=5000)
@@ -337,7 +338,7 @@ def test_attack_modal_warns_when_out_of_action_dice(page, live_server_url):
             {value: 5, spent: true},
         ];
     }""")
-    page.locator('[data-roll-key="attack"]').click()
+    open_melee_attack(page)
     page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=5000)
     warning = page.locator('[data-testid="attack-init-warning-out-of-dice"]')
     warning.wait_for(state="visible", timeout=5000)
@@ -360,7 +361,7 @@ def test_attack_modal_hides_warning_when_dice_available(page, live_server_url):
             {value: 5, spent: true},
         ];
     }""")
-    page.locator('[data-roll-key="attack"]').click()
+    open_melee_attack(page)
     page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=5000)
     assert not page.locator('[data-testid="attack-init-warning-no-init"]').is_visible()
     assert not page.locator('[data-testid="attack-init-warning-out-of-dice"]').is_visible()
@@ -371,7 +372,7 @@ def test_attack_modal_warning_button_triggers_initiative(page, live_server_url):
     modal and opens/rolls initiative."""
     _create_attacker(page, live_server_url, "AtkWarnInit")
     _wait_alpine(page)
-    page.locator('[data-roll-key="attack"]').click()
+    open_melee_attack(page)
     page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=5000)
     page.locator('[data-testid="attack-init-warning-no-init"]'
                  ' button[data-action="roll-initiative-from-warning"]').click()
@@ -407,7 +408,7 @@ def test_attack_modal_warning_reflects_athletics_attack_name(page, live_server_u
 
 
 def _open_attack_modal(page):
-    page.locator('[data-roll-key="attack"]').click()
+    open_melee_attack(page)
     page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=5000)
 
 

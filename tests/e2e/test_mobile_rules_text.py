@@ -102,10 +102,8 @@ def test_skill_tap_opens_menu_with_view_rules_text(page, live_server_url):
 
 
 def test_attack_tap_opens_menu_with_roll_and_view_rules(page, live_server_url):
-    """Tapping the Attack tile on a touch device opens a menu with a
-    'Roll Attack' row (which opens the existing attack modal) plus the
-    'View rules text' row. Desktop still jumps straight into the attack
-    modal on click, so this is a touch-only behavior."""
+    """Tapping the Attack tile on a touch device opens the attack-choice menu
+    (Melee Attack / Archery Attack) with the 'View rules text' row below."""
     sheet_url = _create_character(page, live_server_url, "MobileAttack")
     _open_sheet_with_touch_stub(page, sheet_url)
 
@@ -113,13 +111,13 @@ def test_attack_tap_opens_menu_with_roll_and_view_rules(page, live_server_url):
     menu = page.locator('[data-roll-menu="root"]')
     menu.wait_for(state="visible")
 
-    # Two rows: the mobile-attack Roll button and the rules-text row.
-    roll_btn = menu.locator('[data-mobile-attack-roll]')
+    roll_btn = menu.locator('[data-attack-choice="attack"]')
     rules_btn = menu.locator('[data-action="view-rules-text"]')
     assert roll_btn.is_visible()
+    assert menu.locator('[data-attack-choice="archery"]').is_visible()
     assert rules_btn.is_visible()
 
-    # "Roll Attack" should open the attack modal that desktop sees.
+    # "Melee Attack" should open the attack modal that desktop sees.
     roll_btn.click()
     attack_modal = page.locator('[data-modal="attack"]')
     attack_modal.wait_for(state="visible", timeout=3000)

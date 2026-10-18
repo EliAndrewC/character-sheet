@@ -93,7 +93,7 @@ Full cover makes a hit impossible. That is the GM saying "you can't", not an inp
 | A5 | **The TN is assembled on the server from its parts** (`base_tn` or `unseen`, `distance`, `evasion`, `cover`), and the card lists each part. The modal mirrors the sum only to draw its probability table, and both sides are pinned to `tests/shared/archery_cases.json`. | The same pattern as the attack modal today. The hit is judged on the server. |
 | A6 | **Hold and extra-action bonuses are computed on the server** from the die indices and the phase the modal sends (the player picks the current phase, as Shinjo's input does). The server checks every extra die: unspent, not athletics-only, value <= phase. A live roll spends them and sets `archery_last_arrow_phase`, which joins `PER_ROUND_STATE_KEYS` so new initiative clears it. | These dice set the bonus, so the server cannot take the browser's word for them. A simulated (non-editor) roll changes nothing. |
 | A7 | **"Moving while firing"**: a modal checkbox drops the hold bonus. Any other penalty for being in motion is the existing pre-roll "Extra bonus" with a negative amount. | The rules leave it to the GM. These are the two knobs the rules name. |
-| A8 | **Offered to every character** with attack >= 1: "Archery Attack" on every action die that is not athletics-only, and an **Archery** row under Attack in Combat Skills (formula, roll menu and statistics badge). No bow is tracked. | GM, Q7: anyone can shoot. |
+| A8 | **Offered to every character** with attack >= 1: "Archery Attack" on every action die that is not athletics-only, and an **Archery Attack** choice in the Combat Skills Attack row's menu, beside Melee Attack (GM, 2026-10-18; it began as a separate Archery row). No bow is tracked. | GM, Q7: anyone can shoot. |
 | A9 | **The serious wounds ride the damage answer** (`serious_wounds: 1 or 2`, and `failed_parry` removes 1). The card reads "10k6 (table roll 7, 30%) - 23 light wounds + 2 serious wounds". **Nothing is written to the target**, as with every other attack: the defender enters their own wounds. | The same as CLAUDE.md's rule for NPC attacks. |
 | A10 | **The damage odds are shown before the damage roll**: the hit panel lists the shifted band table for this excess (from the server's attack answer), plus any raises past 45. | The variance is the point of the rules, so the player should see it. |
 | A11 | **Not modelled for arrows** (section 7): anything that changes a damage dice count from a weapon / ring / excess pool, or depends on double attack's +20 TN. | An arrow has no such pool and no +20. |
@@ -208,7 +208,7 @@ Full cover makes a hit impossible. That is the GM saying "you can't", not an inp
   (`skill_rank` = attack).
 - The fight log records an NPC archer's attack and damage, including the serious wounds. The combat
   page's NPC roll overlay gets it for free, because it is the sheet's own modal.
-- Roll statistics: the Archery row's badge and chart use the base formula. Hold, extra actions and
+- Roll statistics: the archery chart uses the base formula (the Archery row and its badge were folded into the Attack row's Melee / Archery menu on 2026-10-18). Hold, extra actions and
   TN parts are situational, so they appear as notes, like P3 in `probability-design/design.md`.
 - Discord: none. Combat is excluded from the commands by construction.
 
@@ -274,7 +274,7 @@ Full cover makes a hit impossible. That is the GM saying "you can't", not an inp
 - [x] `tests/test_archery.py`
 
 ### Phase 4 - Sheet
-- [x] Entry points: action-die menu "Archery Attack", Combat Skills "Archery" row (formula, tooltip, statistics badge)
+- [x] Entry points: action-die menu "Archery Attack", Combat Skills Attack row menu: "Melee Attack" / "Archery Attack" (with each formula)
 - [x] Archery mode of the attack modal: TN parts with the live total, phase picker (never before the die or the last arrow) with the hold, Shinjo's bonus, extra-die checkboxes, "Moving while firing"; the probability table at the composed TN and pre-roll flats, without the melee damage columns
 - [x] Hit panel: exceeded-by + serious wounds, band table, raises, ability excess, failed-parry box (hidden for an unseen target, with the no-parry note); damage result with "+ N serious wounds"
 - [x] Hidden for arrows: weapon inputs, Otaku trade, Ikoma floor note, W9, the parry-skill input. Matsu's near miss cannot fire (it is keyed to double attack)
@@ -282,7 +282,7 @@ Full cover makes a hit impossible. That is the GM saying "you can't", not an inp
 
 ### Phase 5 - Cards, history, statistics
 - [x] Card titles "Archery" / "Arrow Damage"; the damage card's footer and the history payload carry the serious wounds; its extras name the band, d10 and odds
-- [x] Statistics badge and chart on the Archery row, with an archery note
+- [x] Statistics chart for archery, with an archery note
 
 ### Phase 6 - Clicktests
 - [x] `archery` mark; `tests/e2e/test_archery.py`: row and TN parts, hit / bands / failed parry / damage, hold + extra dice + reset + moving, unseen, NPC archer from the combat page, non-editor
@@ -293,4 +293,5 @@ Full cover makes a hit impossible. That is the GM saying "you can't", not an inp
 ### Phase 7 - Land
 - [x] CLAUDE.md: a short "Archery attacks" section and `archery-design/` in the structure list
 - [x] `school-features/*.md`: an Archery note for Kakita, Hida, Bayushi, Shinjo, Matsu, Otaku, Yogo, Kuni, Brotherhood
+- [x] Attack row opens a Melee Attack / Archery Attack menu instead of a separate Archery row (GM, 2026-10-18)
 - [x] Commit, push, deploy (`scripts/deploy.sh`, 2026-10-17), verified live: a published sheet renders the Archery row and the die-menu item, `roll_math.js` serves the archery twins, `/api/rolls` answers 200

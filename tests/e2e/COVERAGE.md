@@ -138,8 +138,8 @@ The three failures were:
 
 ## Archery (archery-design/design.md)
 
-- [x] Combat Skills "Archery" row with the stacked formula (Akodo: attack + double attack dice) opens the attack modal in archery mode -> `test_archery.py::test_archery_row_opens_the_archery_modal`
-- [x] Target's TN, "Can't see the arrow" (base 5, TN input disabled), Distance, Evasion and Cover build the TN live; the table hides the melee damage columns -> `test_archery.py::test_archery_row_opens_the_archery_modal`
+- [x] No separate Archery row: the Attack row's menu offers "Archery Attack" with the stacked formula (Akodo: attack + double attack dice), which opens the attack modal in archery mode -> `test_archery.py::test_attack_row_offers_archery`
+- [x] Target's TN, "Can't see the arrow" (base 5, TN input disabled), Distance, Evasion and Cover build the TN live; the table hides the melee damage columns -> `test_archery.py::test_attack_row_offers_archery`
 - [x] Hit panel: exceeded-by line with the automatic serious wounds (2 with double attack), the shifted damage table, failed parry takes one serious wound back -> `test_archery.py::test_arrow_hit_damage_table_and_serious_wounds`
 - [x] Damage roll: the d10 picks the band (10k8 on a 10), "+ N serious wound(s)" on the result -> `test_archery.py::test_arrow_hit_damage_table_and_serious_wounds`
 - [x] Action-die menu "Archery Attack"; phase picker shows the hold bonus; extra-action checkboxes (only dice that have come up); dice 1 + 2 in phase 5 = +12; extra die spent; last-arrow phase stored -> `test_archery.py::test_hold_bonus_extra_actions_and_reset`
@@ -571,7 +571,7 @@ The three failures were:
 - [x] 4th Dan die's athletics_only + mantis_4th_dan flags survive a page reload -> `test_school_abilities.py::test_mantis_4th_dan_die_flags_survive_reload`
 - [x] Regular Mantis action-die menu hides Athletics Attack/Parry/Predeclared Parry -> `test_school_abilities.py::test_mantis_regular_die_menu_hides_athletics_options`
 - [x] Mantis 4th Dan die menu shows only Athletics variants + Mantis 3rd Dan (no regular combat) -> `test_school_abilities.py::test_mantis_4th_dan_die_menu_shows_only_athletics_and_3rd_dan`
-- [x] Mantis Attack skill menu skips the athletics choice and opens the attack modal directly -> `test_school_abilities.py::test_mantis_attack_skill_menu_no_athletics_choice`
+- [x] Mantis Attack skill menu offers melee and archery but no athletics attack -> `test_school_abilities.py::test_mantis_attack_skill_menu_no_athletics_choice`
 - [x] Mantis Parry skill menu has no Athletics Parry row -> `test_school_abilities.py::test_mantis_parry_skill_menu_no_athletics_row`
 - [x] Togashi Attack skill menu still shows the athletics choice -> `test_school_abilities.py::test_togashi_attack_skill_menu_shows_athletics_choice`
 - [x] Togashi Parry skill menu still shows the Athletics Parry row -> `test_school_abilities.py::test_togashi_parry_skill_menu_shows_athletics_row`
@@ -913,7 +913,7 @@ The Suzume family of the Sparrow clan is drawn from Crane Doji Artisans and merc
 - [x] Clicking Athletics (Attack) in the picker opens the attack modal with a doubled-TN (5+10*P) dropdown → `test_rolls.py::test_athletics_picker_attack_opens_attack_modal`
 - [x] Clicking Athletics (Parry) in the picker rolls the athletics:parry formula → `test_rolls.py::test_athletics_picker_parry_rolls_athletics_parry`
 - [x] Clicking Attack with athletics available opens a choice menu (Roll Attack / Athletics Attack) → `test_rolls.py::test_attack_button_shows_athletics_choice_when_athletics_available`
-- [x] Clicking Attack without athletics goes straight to the attack modal (no choice menu) → `test_rolls.py::test_attack_button_no_choice_menu_for_non_athletics_character`
+- [x] Clicking Attack opens a choice menu (Melee Attack / Archery Attack, no athletics attack without it); Melee opens the attack modal → `test_rolls.py::test_attack_button_offers_melee_and_archery`
 - [x] Selecting Athletics Attack from the choice menu opens the modal with the doubled-TN dropdown → `test_rolls.py::test_attack_choice_athletics_opens_modal_with_doubled_tn`
 - [x] Parry modal shows an Athletics-parry toggle when athletics-everywhere is available; toggling re-titles the modal → `test_rolls.py::test_parry_modal_shows_athletics_toggle`
 - [x] Parry modal has no Athletics toggle for characters without athletics-everywhere → `test_rolls.py::test_parry_modal_no_athletics_toggle_for_non_athletics_character`
@@ -1633,7 +1633,7 @@ python3 -m pytest tests/e2e/ -m "skills or rings" --browser chromium
 | `roll_stats` | Roll statistics (average badges, statistics modal) and the /probabilities page | `test_roll_stats.py`, `test_probabilities.py` |
 | `telemetry` | Client diagnostics: error reports, dead-tab detection, memory samples, new-version banner | `test_telemetry.py` |
 | `combat` | GM combat tracker, generated NPCs, public combat page, combat rolls view | `test_combat.py` |
-| `archery` | Archery attacks: the Archery row, the attack modal's archery mode, arrow damage and serious wounds | `test_archery.py` |
+| `archery` | Archery attacks: the Attack row's Archery Attack choice, the attack modal's archery mode, arrow damage and serious wounds | `test_archery.py` |
 | `server_rolls` | Rolls the server makes for the sheet: server dice, error + Retry, simulate mode | `test_server_rolls.py` |
 | `pcp` | Player Character Points (confirm modal, reroll/free-raise/reroll-10s, void refresh, XP category, undo, read-only) | `test_pcp.py` |
 | `status_display` | Status section on sheet | `test_sheet_display.py`, `test_sheet_advanced.py` |
@@ -1675,7 +1675,7 @@ Marks are defined in `pytest.ini`. When adding a new test file, tag it with `pyt
 - [x] No zero-width truncated labels on sheet → `test_responsive.py::test_no_zero_width_labels_on_sheet`
 - [x] Dan badge text stays horizontally centered when wrapped at phone width → `test_responsive.py::test_dan_badge_text_centered`
 - [x] Skill tap on touch opens menu with View rules text option that opens rules modal showing the canonical upstream rules text → `test_mobile_rules_text.py::test_skill_tap_opens_menu_with_view_rules_text`
-- [x] Attack tap on touch opens menu with Roll Attack and View rules text rows → `test_mobile_rules_text.py::test_attack_tap_opens_menu_with_roll_and_view_rules`
+- [x] Attack tap on touch opens the Melee / Archery choice menu with the View rules text row → `test_mobile_rules_text.py::test_attack_tap_opens_menu_with_roll_and_view_rules`
 - [x] Parry menu on touch includes appended View rules text row → `test_mobile_rules_text.py::test_parry_menu_includes_view_rules_text_on_touch`
 - [x] Advantage tap toggles inline tooltip via tap-to-toggle (no menu) → `test_mobile_rules_text.py::test_advantage_tap_shows_inline_tooltip`
 - [x] No "?" indicator on touch tooltip-trigger ::after pseudo → `test_mobile_rules_text.py::test_no_question_mark_after_pseudo_element`

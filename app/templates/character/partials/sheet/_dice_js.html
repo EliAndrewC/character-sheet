@@ -1367,14 +1367,15 @@
                     return;
                 }
 
-                // Attack (regular) with athletics available: show a choice menu
-                // so the player can pick regular vs athletics attack. Only the
-                // Togashi Ise Zumi school treats athletics as a standard attack
-                // variant this way; other schools access Athletics attack via
-                // the Athletics skill directly (or via an athletics-only die).
+                // The Attack row opens a choice menu: melee or archery (anyone
+                // can shoot, so there is no separate Archery row), plus the
+                // athletics attack for the Togashi Ise Zumi, the one school
+                // that treats athletics as a standard attack variant (others
+                // reach it via the Athletics skill or an athletics-only die).
                 if (key === 'attack'
-                        && this.formulas['athletics:attack']
-                        && this.schoolAbilities.athletics_combat_everywhere) {
+                        && (this.formulas.archery
+                            || (this.formulas['athletics:attack']
+                                && this.schoolAbilities.athletics_combat_everywhere))) {
                     const pos = this._computeRollMenuPos(el);
                     this.rollMenuKey = key;
                     this.rollMenuTitle = f.label;

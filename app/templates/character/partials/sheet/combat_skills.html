@@ -34,38 +34,10 @@
                 <div class="tooltip-content absolute left-0 top-full z-10 mt-1 p-3 bg-ink text-parchment text-xs rounded shadow-lg max-w-sm">
                     <p class="font-medium mb-1">Attack (Fire)</p>
                     <p>Roll Attack + Fire to hit. TN to hit = 5 + 5 * defender's Parry skill. Extra damage die for every 5 points exceeding the TN.</p>
+                    <p class="mt-1">Choose a melee or an archery attack. Archery stacks every attack type's bonuses, plus your iaijutsu and +1 per phase an action was held; a hit deals an automatic serious wound (2 with double attack) and 10k2-10k8 damage.</p>
                     <p class="mt-1 text-gold">You roll: {{ _atk_rolled }}k{{ _atk_kept }}{% if _atk_flat %} + {{ _atk_flat }}{% endif %}</p>
                 </div>
             </div>
-            {# Archery (rules/03-combat.md; archery-design/design.md): anyone can
-               shoot. The arrow stacks every attack type's school bonuses, so
-               its dice can differ from the Attack row's. #}
-            {% set _arc_f = roll_formulas.get('archery') %}
-            {% if _arc_f %}
-            <div class="bg-parchment rounded-lg p-3 tooltip-trigger relative cursor-pointer hover:ring-2 hover:ring-accent/40"
-                 data-roll-key="archery" data-testid="archery-row">
-                <div class="flex items-center justify-between gap-4">
-                    <span class="font-medium">Archery</span>
-                    <div class="flex items-center gap-3">
-                        <span class="text-sm text-ink/60" data-testid="archery-formula">
-                            {{ _arc_f.rolled }}k{{ _arc_f.kept }}{% if _arc_f.flat %} + {{ _arc_f.flat }}{% endif %}
-                        </span>
-                        {{ roll_avg('archery') }}
-                        <div class="flex gap-0.5">
-                            {% for i in range(1, 6) %}
-                            <div class="w-4 h-4 rounded-full border {{ 'bg-accent border-accent' if i <= character.attack else 'border-ink/30' }}"></div>
-                            {% endfor %}
-                        </div>
-                        <span aria-hidden="true" class="w-4 h-4 invisible"></span>
-                    </div>
-                </div>
-                <div class="tooltip-content absolute left-0 top-full z-10 mt-1 p-3 bg-ink text-parchment text-xs rounded shadow-lg max-w-sm">
-                    <p class="font-medium mb-1">Archery (Fire)</p>
-                    <p>Shoot a bow with the Attack skill. Every attack type's bonuses stack, plus your iaijutsu and +1 per phase an action was held (since your last arrow). TN = 5 + 5 * Parry (5 if the target can't see it), +5 to +20 for distance. A hit deals an automatic serious wound (2 with double attack) and 10k2-10k8 damage, more likely 10k8 the further you beat the TN.</p>
-                    <p class="mt-1 text-gold">You roll: {{ _arc_f.rolled }}k{{ _arc_f.kept }}{% if _arc_f.flat %} + {{ _arc_f.flat }}{% endif %}</p>
-                </div>
-            </div>
-            {% endif %}
             {% set _par_f = roll_formulas.get('parry', {}) %}
             {% set _par_rolled = _par_f.get('rolled', character.parry + ring_map['Air']) %}
             {% set _par_kept   = _par_f.get('kept',   ring_map['Air']) %}

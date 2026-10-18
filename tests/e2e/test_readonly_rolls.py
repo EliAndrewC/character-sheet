@@ -15,6 +15,7 @@ Roll-interaction tests land in later phases (Phase 2+).
 """
 
 import pytest
+from tests.e2e.helpers import open_melee_attack
 
 from tests.e2e.helpers import (
     create_and_apply, select_school, click_plus, apply_changes,
@@ -318,7 +319,7 @@ def test_non_editor_spends_vp_on_attack_does_not_change_vp(
     page_nonadmin.wait_for_selector("h1")
     assert page_nonadmin.evaluate("window._trackingBridge.voidPoints") == starting_vp
 
-    page_nonadmin.locator('[data-roll-key="attack"]').click()
+    open_melee_attack(page_nonadmin)
     page_nonadmin.wait_for_selector('[data-modal="attack"]', state='visible', timeout=5000)
     modal = page_nonadmin.locator('[data-modal="attack"]')
     banner = modal.locator('[data-testid="readonly-roll-banner"]')
@@ -773,7 +774,7 @@ def test_non_editor_ally_conviction_no_persist(
     # Open the attack modal, force TN=5 so the hit block renders
     # reliably (the priest-ally spend UI lives inside the HIT branch),
     # and roll.
-    page_nonadmin.locator('[data-roll-key="attack"]').click()
+    open_melee_attack(page_nonadmin)
     page_nonadmin.wait_for_selector('[data-modal="attack"]', state='visible', timeout=5000)
     modal = page_nonadmin.locator('[data-modal="attack"]')
     # Banner visible inside attack modal.
@@ -1260,7 +1261,7 @@ def test_non_editor_akodo_4th_dan_post_roll_vp_does_not_change_vp(
     page_nonadmin.wait_for_selector("h1")
     assert page_nonadmin.evaluate("window._trackingBridge.voidPoints") == starting_vp
 
-    page_nonadmin.locator('[data-roll-key="attack"]').click()
+    open_melee_attack(page_nonadmin)
     page_nonadmin.wait_for_selector('[data-modal="attack"]', state='visible', timeout=5000)
     modal = page_nonadmin.locator('[data-modal="attack"]')
     modal.locator('[data-action="roll-attack"]').click()
