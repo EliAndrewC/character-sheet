@@ -633,7 +633,13 @@
             duelVoidSelected: 0,
             // Attack modal
             atkModalOpen: false,
-            atkPhase: 'pre',  // 'pre' | 'rolling' | 'result' | 'damage-rolling' | 'damage-result'
+            atkPhase: 'pre',  // 'pre' | 'rolling' | 'result' | 'arrow-rolling' | 'arrow-result' | 'damage-rolling' | 'damage-result'
+            // An arrow's damage table roll (archery-design A12): the server's
+            // answer for that 1-die session, and the attack session the
+            // damage roll is made on afterwards.
+            atkArrowTable: null,
+            atkArrowAttackSessionId: null,
+            atkArrowTableBusy: false,
             atkKey: '',
             atkFormula: null,
             atkProbs: {},
@@ -4374,6 +4380,8 @@
                 // cap tracks spends within this attack only.
                 this.togashiRaisesSpentThisRoll = 0;
                 this.atkFailedParry = false;
+                this.atkArrowTable = null;
+                this.atkArrowAttackSessionId = null;
                 this.atkIsawaTnTrade = false;
                 this.atkOtakuTradeDice = false;
                 this.atkArcheryUnseen = false;
@@ -4926,6 +4934,88 @@
                 if (this.schoolAbilities?.bayushi_vp_damage) ability += 10 * (f.void_spent || 0);
                 const raw = Math.max(0, (this.atkExcess || 0) - 5 * (this.atkWaveManRaises || 0));
                 return {...window.L7RRollMath.arrowDamageBands(raw + ability), ability};
+            },
+            // The table's rows for display: the base odds beside the odds
+            // this hit rolls on (``odds`` defaults to the hit panel's).
+            archeryTableRows(odds) {
+                const base = window.L7RRollMath.arrowDamageBands(0).odds;
+                const now = odds || this.archeryBands().odds;
+                return [2, 4, 6, 8].map((k, i) => ({k, base: 10 * base[i], now: 10 * now[i]}));
+            },
+            archeryTableShifted(odds) {
+                return this.archeryTableRows(odds).some(r => r.base !== r.now);
+            },
+            // The first of an arrow's two damage rolls: one d10 on the table,
+            // a session of its own (Lucky or a PCP may reroll it).
+            async rollArrowTable() {
+                if (!this.atkHit || !this.atkIsArchery()) return;
+                this.atkArrowAttackSessionId = this._serverSessionId;
+                this.atkArrowTable = null;
+                this.atkPhase = 'arrow-rolling';
+                const ok = await this._act('arrow_table', {tn: this.atkTN});
+                const table = ok && this._lastAct ? this._lastAct.arrow_table : null;
+                if (!table) { this.atkPhase = 'result'; return; }
+                await this._animateArrowTable(table.dice);
+                this.atkArrowTable = table;
+                this.atkPhase = 'arrow-result';
+            },
+            _animateArrowTable(dice) {
+                const playSound = this.prefs.dice_sound_enabled && window.L7RDice
+                    ? (n) => window.L7RDice.playDiceSound(n) : null;
+                return window.L7RDice.animateDice(dice, false, this.prefs.dice_animation_enabled,
+                    playSound, 'dice-animation-atk');
+            },
+            arrowTableD10() { return this.atkArrowTable?.payload?.arrow_d10 || 0; },
+            arrowTableBand() { return this.atkArrowTable?.payload?.arrow_band || 0; },
+            arrowTableRerolled() { return !!this.atkArrowTable?.payload?.lucky; },
+            canLuckyArrowTable() {
+                const t = window._trackingBridge;
+                if (!t || !this.atkArrowTable || this.arrowTableRerolled() || this.luckyUsedThisRoll) return false;
+                return (t.perAdventure || []).some(a => a.id === 'lucky_used') && !t.getToggle('lucky_used');
+            },
+            canPcpArrowTable() {
+                return !!this.atkArrowTable && !this.arrowTableRerolled() && !this.atkArrowTableBusy;
+            },
+            useLuckyArrowTable() {
+                if (this.canLuckyArrowTable()) this._rerollArrowTable('lucky_reroll');
+            },
+            requestPcpRerollArrowTable() {
+                if (!this.canPcpArrowTable()) return;
+                this.openPcpConfirm('reroll', () => this._rerollArrowTable('pcp_reroll'));
+            },
+            // Reroll the table's d10 on its own session. Only the table's
+            // fields change: the attack's total and history row stay as they are.
+            async _rerollArrowTable(action) {
+                const t = window._trackingBridge;
+                if (!t || !this.atkArrowTable || this.atkArrowTableBusy) return;
+                this.atkArrowTableBusy = true;
+                this.rerollError = '';
+                let data = null, ok = false;
+                try {
+                    const resp = await fetch('/characters/' + t._charId + '/roll/' + this.atkArrowTable.session_id + '/act', {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({action: action, args: {}}),
+                    });
+                    data = await resp.json().catch(() => null);
+                    ok = resp.ok;
+                } catch (e) { data = null; }
+                if (!ok) {
+                    this.rerollError = (data && data.error) || 'Could not reach the server - nothing was rerolled.';
+                    this.atkArrowTableBusy = false;
+                    return;
+                }
+                if (data.tracking && t.canEdit && this._serverSessionMode === 'live') t.adoptServerState(data.tracking, false);
+                if (data.pcp && t._adoptPcp) t._adoptPcp(data.pcp);
+                const pair = data.payload?.lucky;
+                this.atkPhase = 'arrow-rolling';
+                if (pair && pair.reroll?.kept?.length) {
+                    await this._animateArrowTable(pair.reroll.kept.map(c => ({
+                        value: c.parts.reduce((a, b) => a + b, 0), parts: c.parts})));
+                }
+                this.atkArrowTable = {...this.atkArrowTable, dice: data.dice, payload: data.payload};
+                this.atkPhase = 'arrow-result';
+                this.atkArrowTableBusy = false;
             },
             archerySeriousWounds() {
                 return 1 + (this.atkFormula?.archery_double_attack_sw || 0) - (this.atkFailedParry ? 1 : 0);
@@ -5635,6 +5725,7 @@
                 this.atkRaisesSpent = 0;
                 this.atkConvictionSpent = 0;
                 this.atkFailedParry = false;
+                this.atkArrowTable = null;
                 this.atkIsawaTnTrade = (data.payload?.bonuses || []).some(b => b.label.startsWith('Isawa'));
                 this._adoptAttackOutcome(data.attack);
 
@@ -5788,8 +5879,14 @@
                 this.pcpRaisesSpentThisRoll = 0;
                 this.pcpTensRerolledThisRoll = false;
                 this.luckyRollPair = null;
+                // An arrow's damage is made on the attack session, after the
+                // table roll's session had the modal's attention.
+                if (this.atkIsArchery() && this.atkArrowAttackSessionId) {
+                    this._serverSessionId = this.atkArrowAttackSessionId;
+                }
                 // The server rolls the damage (one assembler, 5.8) as a
                 // session of its own, and records it.
+                const back = this.atkIsArchery() ? 'arrow-result' : 'result';
                 this.atkPhase = 'damage-rolling';
                 const ok = await this._act('damage', {
                     tn: this.atkTN,
@@ -5801,7 +5898,7 @@
                     wave_man_recover: !!this.atkWaveManRecover,
                 });
                 const dmg = ok && this._lastAct ? this._lastAct.damage : null;
-                if (!dmg) { this.atkPhase = 'result'; return; }
+                if (!dmg) { this.atkPhase = back; return; }
                 this._serverSessionId = dmg.session_id;
                 this._serverSessionKind = 'damage';
                 this.formula = { ...dmg.formula };

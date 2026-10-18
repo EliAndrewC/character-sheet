@@ -97,6 +97,7 @@ Full cover makes a hit impossible. That is the GM saying "you can't", not an inp
 | A9 | **The serious wounds ride the damage answer** (`serious_wounds: 1 or 2`, and `failed_parry` removes 1). The card reads "10k6 (table roll 7, 30%) - 23 light wounds + 2 serious wounds". **Nothing is written to the target**, as with every other attack: the defender enters their own wounds. | The same as CLAUDE.md's rule for NPC attacks. |
 | A10 | **The damage odds are shown before the damage roll**: the hit panel lists the shifted band table for this excess (from the server's attack answer), plus any raises past 45. | The variance is the point of the rules, so the player should see it. |
 | A11 | **Not modelled for arrows** (section 7): anything that changes a damage dice count from a weapon / ring / excess pool, or depends on double attack's +20 TN. | An arrow has no such pool and no +20. |
+| A12 | **An arrow's damage is two rolls.** The hit panel shows the damage table as the base odds beside this hit's (one column and a "no change" line when the TN was beaten by less than 5). "Roll on the Damage Table" rolls the d10 as a session of its own (`archery:table`, action `arrow_table` on the attack; not a history row - the damage row carries the d10 and any reroll), the row it picks is lit, and only **Lucky or a PCP may reroll it** (the higher d10 stands; no raises, Conviction or other bonuses). "Make 10kN Damage Roll" then rolls the damage on the attack session as before. | GM, 2026-10-18: the table roll is a real step and should be seen. |
 
 ## 4. GM answers (2026-10-17)
 
@@ -294,4 +295,5 @@ Full cover makes a hit impossible. That is the GM saying "you can't", not an inp
 - [x] CLAUDE.md: a short "Archery attacks" section and `archery-design/` in the structure list
 - [x] `school-features/*.md`: an Archery note for Kakita, Hida, Bayushi, Shinjo, Matsu, Otaku, Yogo, Kuni, Brotherhood
 - [x] Attack row opens a Melee Attack / Archery Attack menu instead of a separate Archery row (GM, 2026-10-18)
+- [x] A12 (GM, 2026-10-18): base vs this-hit odds in the hit panel; the table roll as its own step (`arrow_table`, `archery:table` session) with the lit row, Lucky / PCP reroll only, then the damage; `_arrow_damage` refuses until the table is rolled; unit tests (`TestArrowDamageTable`), clicktests (`test_no_shift_and_lucky_reroll_of_the_table`, `test_pcp_reroll_of_the_table`)
 - [x] Commit, push, deploy (`scripts/deploy.sh`, 2026-10-17), verified live: a published sheet renders the Archery row and the die-menu item, `roll_math.js` serves the archery twins, `/api/rolls` answers 200

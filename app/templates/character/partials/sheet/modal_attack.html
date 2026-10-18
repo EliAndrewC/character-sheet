@@ -1,4 +1,34 @@
 {% from "character/partials/sheet/_macros.html" import precepts_pool_block, pcp_kebab %}
+{% macro arrow_table_rows(odds, lit, tid) %}
+{# The arrow's damage table: the base odds beside the odds this hit rolls on
+   (each 5 over the TN moves 10% to 10k8). With no shift, one column and a
+   line saying so. ``lit`` is the row a table roll picked (or null). #}
+<table class="text-xs mt-1" data-testid="{{ tid }}-table">
+    <thead>
+        <tr class="text-ink/60">
+            <th class="pr-3 text-left font-normal">Damage</th>
+            <th class="pr-3 text-right font-normal" x-text="archeryTableShifted({{ odds }}) ? 'Base' : 'Chance'"></th>
+            <th x-show="archeryTableShifted({{ odds }})" class="text-right font-normal">This hit</th>
+        </tr>
+    </thead>
+    <tbody>
+        <template x-for="r in archeryTableRows({{ odds }})" :key="r.k">
+            <tr :data-testid="'{{ tid }}-band-' + r.k"
+                :class="{{ lit }} === r.k ? 'bg-gold/30 font-bold' : ''"
+                :data-lit="{{ lit }} === r.k ? '1' : null">
+                <td class="pr-3 font-mono" x-text="'10k' + r.k"></td>
+                <td class="pr-3 text-right" :class="archeryTableShifted({{ odds }}) ? 'text-ink/50' : ''"
+                    :data-testid="'{{ tid }}-base-' + r.k" x-text="r.base + '%'"></td>
+                <td x-show="archeryTableShifted({{ odds }})" class="text-right"
+                    :data-testid="'{{ tid }}-now-' + r.k" x-text="r.now + '%'"></td>
+            </tr>
+        </template>
+    </tbody>
+</table>
+<div x-show="!archeryTableShifted({{ odds }})" x-cloak class="text-xs text-ink/60" data-testid="{{ tid }}-no-shift">
+    No change from the base odds: the hit did not beat the TN by 5 or more.
+</div>
+{% endmacro %}
         <div x-show="atkModalOpen" x-cloak
              class="fixed inset-0 z-50 flex items-center justify-center bg-ink/60"
              data-modal="attack">
@@ -11,6 +41,7 @@
                             {'label': 'Spend PCP for a free raise', 'can': "atkPhase === 'result' && canSpendPcpRaise()", 'click': 'requestPcpRaiseAttack()', 'action': 'pcp-raise-attack'},
                             {'label': 'Spend PCP to reroll 10s', 'can': "atkPhase === 'result' && canPcpRerollTensAttack()", 'click': 'requestPcpRerollTensAttack()', 'action': 'pcp-reroll-tens-attack'},
                             {'label': 'Spend PCP to reroll damage', 'can': "atkPhase === 'damage-result' && canUsePcpReroll()", 'click': 'requestPcpRerollDamage()', 'action': 'pcp-reroll-damage'},
+                            {'label': 'Spend PCP to reroll the table roll', 'can': "atkPhase === 'arrow-result' && canPcpArrowTable()", 'click': 'requestPcpRerollArrowTable()', 'action': 'pcp-reroll-arrow-table'},
                         ]) }}
                         <button type="button" @click="atkModalOpen = false"
                                 class="text-ink/60 hover:text-ink text-2xl leading-none px-2">&times;</button>
@@ -503,7 +534,7 @@
                 </div>
 
                 {# ── ROLLING ── #}
-                <div x-show="atkPhase === 'rolling' || atkPhase === 'damage-rolling' || hidaRerollPhase === 'rerolling'" x-cloak>
+                <div x-show="atkPhase === 'rolling' || atkPhase === 'arrow-rolling' || atkPhase === 'damage-rolling' || hidaRerollPhase === 'rerolling'" x-cloak>
                     <div id="dice-animation-atk"
                          class="min-h-[80px] flex flex-wrap gap-3 items-start justify-center"></div>
                 </div>
@@ -515,7 +546,7 @@
                     <button type="button" @click="retryServerAttack()" data-testid="attack-retry"
                             class="btn-primary px-4 py-2 rounded text-sm font-medium">Retry</button>
                 </div>
-                <div x-show="rerollError && (atkPhase === 'result' || atkPhase === 'damage-result')" x-cloak
+                <div x-show="rerollError && (atkPhase === 'result' || atkPhase === 'arrow-result' || atkPhase === 'damage-result')" x-cloak
                      data-testid="attack-reroll-error"
                      class="bg-red-50 border border-red-300 rounded p-2 text-xs text-red-800" x-text="rerollError"></div>
                 <div x-show="atkPhase === 'result'" x-cloak class="space-y-3">
@@ -770,16 +801,7 @@
                            10k8; past 45, each 5 is a free raise). #}
                         <div x-show="atkIsArchery()" x-cloak class="text-sm mb-2" data-testid="archery-bands">
                             <span class="font-medium">Arrow damage (one d10 picks the row):</span>
-                            <table class="text-xs mt-1">
-                                <tbody>
-                                    <template x-for="(t, i) in archeryBands().odds" :key="i">
-                                        <tr x-show="t > 0" :data-testid="'archery-band-' + [2, 4, 6, 8][i]">
-                                            <td class="pr-3 font-mono" x-text="'10k' + [2, 4, 6, 8][i]"></td>
-                                            <td class="text-right" x-text="(10 * t) + '%'"></td>
-                                        </tr>
-                                    </template>
-                                </tbody>
-                            </table>
+                            {{ arrow_table_rows('archeryBands().odds', 'null', 'archery') }}
                             <div x-show="archeryBands().raises > 0" x-cloak class="text-xs text-ink/70"
                                  data-testid="archery-band-raises">
                                 + <span x-text="5 * archeryBands().raises"></span> from
@@ -1029,9 +1051,15 @@
                             </span>
                         </label>
 
-                        <button type="button" @click="rollDamage()" data-action="roll-damage"
+                        <button type="button" x-show="!atkIsArchery()" @click="rollDamage()" data-action="roll-damage"
                                 class="mt-3 btn-primary px-4 py-2 rounded text-sm font-medium">
                             Make Damage Roll
+                        </button>
+                        {# An arrow's damage is two rolls: the table first (archery-design A12). #}
+                        <button type="button" x-show="atkIsArchery()" x-cloak @click="rollArrowTable()"
+                                data-action="roll-arrow-table"
+                                class="mt-3 btn-primary px-4 py-2 rounded text-sm font-medium">
+                            Roll on the Damage Table
                         </button>
                     </div>
 
@@ -1240,6 +1268,36 @@
                     </button>
                     {% set context_hint = "The 'Make Damage Roll' button above uses the kept total." %}
                     {% include "character/partials/sheet/_lucky_pair_banner.html" %}
+                </div>
+
+                {# ── ARROW DAMAGE TABLE ── the d10 and the row it lit; Lucky or
+                   a PCP may reroll it (nothing else applies to a table roll). #}
+                <div x-show="atkPhase === 'arrow-result'" x-cloak class="space-y-3" data-testid="arrow-table-result">
+                    <div class="text-sm">
+                        <span class="text-ink/60">Table roll (d10):</span>
+                        <span class="font-mono font-bold text-lg" data-testid="arrow-table-d10" x-text="arrowTableD10()"></span>
+                        <span class="text-ink/60">- lights</span>
+                        <span class="font-mono font-bold" data-testid="arrow-table-band" x-text="'10k' + arrowTableBand()"></span>
+                    </div>
+                    <div class="bg-ink/5 rounded p-3 text-sm">
+                        {{ arrow_table_rows('atkArrowTable?.payload?.arrow_band_odds', 'arrowTableBand()', 'arrow-table') }}
+                        <div x-show="(atkArrowTable?.payload?.arrow_raises || 0) > 0" x-cloak class="text-xs text-ink/70 mt-1">
+                            + <span x-text="5 * (atkArrowTable?.payload?.arrow_raises || 0)"></span> on the damage from free raises
+                            (beat the TN by more than 45)
+                        </div>
+                    </div>
+                    <div x-show="arrowTableRerolled()" x-cloak class="text-xs text-gold" data-testid="arrow-table-rerolled"
+                         x-text="'Rerolled with ' + (atkArrowTable?.payload?.lucky?.source === 'lucky' ? 'Lucky' : 'a Player Character Point') + ': the higher roll stands.'"></div>
+                    <button x-show="canLuckyArrowTable()" x-cloak type="button" @click="useLuckyArrowTable()"
+                            data-action="lucky-arrow-table"
+                            class="btn-gold px-4 py-2 rounded text-sm font-medium">
+                        Use Lucky to reroll the table roll
+                    </button>
+                    <button type="button" @click="rollDamage()" data-action="roll-arrow-damage"
+                            :disabled="atkArrowTableBusy"
+                            class="btn-primary px-4 py-2 rounded text-sm font-medium disabled:opacity-30">
+                        Make <span x-text="'10k' + arrowTableBand()"></span> Damage Roll
+                    </button>
                 </div>
 
                 {# ── DAMAGE RESULT ── #}

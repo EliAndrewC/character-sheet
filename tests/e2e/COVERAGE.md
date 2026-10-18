@@ -141,11 +141,14 @@ The three failures were:
 - [x] No separate Archery row: the Attack row's menu offers "Archery Attack" with the stacked formula (Akodo: attack + double attack dice), which opens the attack modal in archery mode -> `test_archery.py::test_attack_row_offers_archery`
 - [x] Target's TN, "Can't see the arrow" (base 5, TN input disabled), Distance, Evasion and Cover build the TN live; the table hides the melee damage columns -> `test_archery.py::test_attack_row_offers_archery`
 - [x] Hit panel: exceeded-by line with the automatic serious wounds (2 with double attack), the shifted damage table, failed parry takes one serious wound back -> `test_archery.py::test_arrow_hit_damage_table_and_serious_wounds`
-- [x] Damage roll: the d10 picks the band (10k8 on a 10), "+ N serious wound(s)" on the result -> `test_archery.py::test_arrow_hit_damage_table_and_serious_wounds`
+- [x] Hit panel table: base odds beside this hit's odds -> `test_archery.py::test_arrow_hit_damage_table_and_serious_wounds`; less than 5 over: one column and the "no change" line -> `test_archery.py::test_no_shift_and_lucky_reroll_of_the_table`
+- [x] "Roll on the Damage Table": the d10, the lit row, "Make 10kN Damage Roll"; no Lucky button without Lucky; the damage uses the lit row (10k8 on a 10), "+ N serious wound(s)" on the result -> `test_archery.py::test_arrow_hit_damage_table_and_serious_wounds`
+- [x] Lucky rerolls the table roll (higher stands, Lucky spent, button gone, the damage follows and says so) -> `test_archery.py::test_no_shift_and_lucky_reroll_of_the_table`
+- [x] PCP menu on the table step: reroll only (no free raise); the reroll lights the new row and spends a PCP -> `test_archery.py::test_pcp_reroll_of_the_table`
 - [x] Action-die menu "Archery Attack"; phase picker shows the hold bonus; extra-action checkboxes (only dice that have come up); dice 1 + 2 in phase 5 = +12; extra die spent; last-arrow phase stored -> `test_archery.py::test_hold_bonus_extra_actions_and_reset`
 - [x] Second arrow: phases before the last arrow are not offered, hold counts from the last arrow, "Moving while firing" drops it -> `test_archery.py::test_hold_bonus_extra_actions_and_reset`
 - [x] Unseen target: no failed-parry box, the no-parry / no-discretionary-wound-check note -> `test_archery.py::test_unseen_target_cannot_parry`
-- [x] NPC archer from the combat page overlay: the Target picker seeds the base TN; the fight log records hit, damage and serious wounds -> `test_archery.py::test_npc_archer_from_the_combat_page`
+- [x] NPC archer from the combat page overlay (table roll, then damage): the Target picker seeds the base TN; the fight log records hit, damage and serious wounds -> `test_archery.py::test_npc_archer_from_the_combat_page`
 - [x] Non-editor test-drive: the arrow simulates; the owner's dice and last-arrow phase are untouched -> `test_archery.py::test_a_non_editor_arrow_changes_nothing`
 - [x] Archery inputs fit inside the modal at phone width -> `test_responsive.py::test_archery_modal_fits_at_phone_width`
 

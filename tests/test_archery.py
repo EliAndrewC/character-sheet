@@ -176,6 +176,14 @@ def _arrow(client, cid, headers=PLAYER, **archery):
                        headers=headers)
 
 
+def _arrow_damage(client, cid, sid, d10, dice, **args):
+    """The two damage rolls of an arrow: the table roll (``d10``), then the
+    damage (``dice``)."""
+    t = _act(client, cid, sid, "arrow_table", headers={**PLAYER, "X-Test-Dice": d10})
+    assert t.status_code == 200, t.json()
+    return _act(client, cid, sid, "damage", headers={**PLAYER, "X-Test-Dice": dice}, **args)
+
+
 class _Char:
     def __init__(self, dice=(), state=None):
         self.action_dice = [dict(d) for d in dice]
@@ -279,7 +287,7 @@ class TestArcherySession:
         cid = _school(client, "akodo_bushi", ring_fire=3)
         sid = _arrow(client, cid, base_tn=5, headers=scripted("9")).json()["session_id"]
         # The first scripted die is the table roll: 7 against the shifted odds.
-        dmg = _act(client, cid, sid, "damage", headers=scripted("7,5")).json()["damage"]
+        dmg = _arrow_damage(client, cid, sid, "7", "5").json()["damage"]
         f = dmg["formula"]
         assert f["arrow_damage"] and f["rolled"] == 10 and f["arrow_d10"] == 7
         assert f["arrow_serious_wounds"] == 2
@@ -296,7 +304,7 @@ class TestArcherySession:
         # 1 is 10k2.
         cid = _school(client, "akodo_bushi")
         sid = _arrow(client, cid, base_tn=0, headers=scripted("4")).json()["session_id"]
-        dmg = _act(client, cid, sid, "damage", headers=scripted("1,5")).json()["damage"]
+        dmg = _arrow_damage(client, cid, sid, "1", "5").json()["damage"]
         assert dmg["formula"]["arrow_band_odds"] == [3, 3, 3, 1]
         assert dmg["formula"]["kept"] == 2
         assert "10k2 arrow (table roll 1: 30% chance)" in dmg["payload"]["extras"]
@@ -311,7 +319,7 @@ class TestArcherySession:
         excess = data["attack"]["excess"]
         assert excess >= 60
         raises = excess // 5 - 9
-        dmg = _act(client, cid, data["session_id"], "damage", headers=scripted("1,5")).json()["damage"]
+        dmg = _arrow_damage(client, cid, data["session_id"], "1", "5").json()["damage"]
         assert dmg["formula"]["arrow_band_odds"] == [0, 0, 0, 10]
         assert dmg["formula"]["kept"] == 8
         assert f"+{5 * raises} from {raises} free raises (beat the TN by more than 45)" in dmg["payload"]["extras"]
@@ -319,12 +327,12 @@ class TestArcherySession:
     def test_failed_parry_takes_back_one_serious_wound(self, client, scripted):
         cid = _school(client, "kitsuki_magistrate")  # no double attack: 1 serious wound
         sid = _arrow(client, cid, headers=scripted("9")).json()["session_id"]
-        dmg = _act(client, cid, sid, "damage", failed_parry=True, headers=scripted("5")).json()["damage"]
+        dmg = _arrow_damage(client, cid, sid, "5", "5", failed_parry=True).json()["damage"]
         assert dmg["payload"]["serious_wounds"] == 0
         assert any("failed parry" in e for e in dmg["payload"]["extras"])
         cid2 = _school(client, "akodo_bushi")
         sid2 = _arrow(client, cid2, headers=scripted("9")).json()["session_id"]
-        dmg2 = _act(client, cid2, sid2, "damage", failed_parry=True, headers=scripted("5")).json()["damage"]
+        dmg2 = _arrow_damage(client, cid2, sid2, "5", "5", failed_parry=True).json()["damage"]
         assert dmg2["payload"]["serious_wounds"] == 1
 
     def test_no_dice_trade_on_an_arrow(self, client, scripted):
@@ -338,22 +346,22 @@ class TestArcherySession:
         sid = client.post(f"/characters/{cid}/roll",
                           json={"roll_key": "archery", "void": 1, "archery": {"base_tn": 0}},
                           headers=scripted("4")).json()
-        dmg = _act(client, cid, sid["session_id"], "damage", headers=scripted("1,5")).json()["damage"]
+        dmg = _arrow_damage(client, cid, sid["session_id"], "1", "5").json()["damage"]
         assert "+10 excess from abilities" in dmg["payload"]["extras"]
 
     def test_flat_damage_bonuses_and_mantis(self, client, scripted):
         cid = _school(client, "kakita_duelist", dan=4)
         sid = _arrow(client, cid, headers=scripted("9")).json()["session_id"]
-        dmg = _act(client, cid, sid, "damage", headers=scripted("5")).json()["damage"]
+        dmg = _arrow_damage(client, cid, sid, "5", "5").json()["damage"]
         assert "+5 from 4th Dan (iaijutsu)" in dmg["payload"]["extras"]
         mantis = _school(client, "mantis_wave_treader", dan=5,
                          adventure_state={"mantis_posture_history": ["offensive"]})
         msid = _arrow(client, mantis, headers=scripted("9")).json()["session_id"]
-        mdmg = _act(client, mantis, msid, "damage", headers=scripted("5")).json()["damage"]
+        mdmg = _arrow_damage(client, mantis, msid, "5", "5").json()["damage"]
         assert any("offensive posture" in e for e in mdmg["payload"]["extras"])
         hiruma = _school(client, "hiruma_scout", adventure_state={"hiruma_banked_attack_bonus": 4})
         hsid = _arrow(client, hiruma, headers=scripted("9")).json()["session_id"]
-        hdmg = _act(client, hiruma, hsid, "damage", headers=scripted("5")).json()["damage"]
+        hdmg = _arrow_damage(client, hiruma, hsid, "5", "5").json()["damage"]
         assert "+4 from Hiruma 3rd Dan (after a parry)" in hdmg["payload"]["extras"]
 
     def test_hida_rerolls_two_x(self, client, scripted):
@@ -368,7 +376,7 @@ class TestArcherySession:
     def test_a_patch_keeps_the_arrow_fields(self, client, scripted):
         cid = _school(client, "akodo_bushi")
         sid = _arrow(client, cid, headers=scripted("9")).json()["session_id"]
-        dmg = _act(client, cid, sid, "damage", headers=scripted("7,5")).json()["damage"]
+        dmg = _arrow_damage(client, cid, sid, "7", "5").json()["damage"]
         r = client.patch(f"/characters/{cid}/rolls/{dmg['history_id']}", headers=PLAYER,
                          json={"payload": {"title": "Arrow Damage", "total": 99, "serious_wounds": 0}})
         assert r.status_code == 200
@@ -382,6 +390,94 @@ class TestArcherySession:
         client.patch(f"/characters/{cid}/rolls/{pd['history_id']}", headers=PLAYER,
                      json={"payload": {"title": "Damage", "total": 3}})
         assert "serious_wounds" not in _row(client, pd["history_id"])
+
+
+class TestArrowDamageTable:
+    """GM, archery-design A12: an arrow's damage is two rolls - the table
+    roll (a d10 that Lucky or a PCP may reroll, nothing else) and then the
+    damage the row it lit names."""
+
+    def test_damage_waits_for_the_table(self, client, scripted):
+        cid = _school(client, "akodo_bushi")
+        sid = _arrow(client, cid, headers=scripted("9")).json()["session_id"]
+        r = _act(client, cid, sid, "damage")
+        assert r.status_code == 400 and "damage table first" in r.json()["error"]
+
+    def test_the_table_roll_is_a_session_of_its_own(self, client, scripted):
+        cid = _school(client, "akodo_bushi")
+        sid = _arrow(client, cid, base_tn=0, headers=scripted("4")).json()["session_id"]
+        t = _act(client, cid, sid, "arrow_table", headers=scripted("8")).json()["arrow_table"]
+        assert t["session_id"] != sid and t["history_id"] is None
+        p = t["payload"]
+        assert p["arrow_d10"] == 8 and p["arrow_band"] == 6
+        assert p["arrow_band_odds"] == p["arrow_base_odds"] == [3, 3, 3, 1]
+        assert t["formula"]["arrow_table"] and t["formula"]["reroll_tens"] is False
+        assert "already" in _act(client, cid, sid, "arrow_table").json()["error"]
+        s = client._test_session_factory()
+        assert not s.query(RollHistory).filter(RollHistory.roll_key == "archery:table").count()
+        s.close()
+
+    def test_only_an_arrow_hit_rolls_the_table(self, client, scripted):
+        cid = _school(client, "akodo_bushi")
+        plain = client.post(f"/characters/{cid}/roll", json={"roll_key": "attack", "tn": 5},
+                            headers=scripted("9")).json()["session_id"]
+        assert "only an arrow" in _act(client, cid, plain, "arrow_table").json()["error"]
+        miss = _arrow(client, cid, base_tn=60, headers=scripted("1")).json()["session_id"]
+        assert "only a hit" in _act(client, cid, miss, "arrow_table").json()["error"]
+        sid = _arrow(client, cid, headers=scripted("9")).json()["session_id"]
+        assert "whole number" in _act(client, cid, sid, "arrow_table", tn="x").json()["error"]
+        assert _act(client, cid, sid, "arrow_table", tn=5).status_code == 200
+
+    def test_nothing_but_a_reroll_changes_the_table(self, client, scripted):
+        cid = _school(client, "akodo_bushi", advantages=["lucky"])
+        sid = _arrow(client, cid, headers=scripted("9")).json()["session_id"]
+        tid = _act(client, cid, sid, "arrow_table", headers=scripted("2")).json()["arrow_table"]["session_id"]
+        for action in ("raise", "pcp_free_raise", "pcp_reroll_tens", "togashi_4th"):
+            r = _act(client, cid, tid, action)
+            assert r.status_code == 400 and "only Lucky or a Player Character Point" in r.json()["error"]
+
+    def test_lucky_rerolls_the_table_and_the_damage_follows(self, client, scripted):
+        cid = _school(client, "akodo_bushi", advantages=["lucky"])
+        sid = _arrow(client, cid, base_tn=0, headers=scripted("4")).json()["session_id"]
+        tid = _act(client, cid, sid, "arrow_table", headers=scripted("2")).json()["arrow_table"]["session_id"]
+        # A 10 does not explode on the table.
+        r = _act(client, cid, tid, "lucky_reroll", headers=scripted("10")).json()
+        assert r["payload"]["arrow_d10"] == 10 and r["payload"]["arrow_band"] == 8
+        assert r["payload"]["lucky"]["kept"] == "reroll"
+        assert r["tracking"]["adventure_state"]["lucky_used"] is True
+        assert "already been rerolled" in _act(client, cid, tid, "pcp_reroll").json()["error"]
+        dmg = _act(client, cid, sid, "damage", headers=scripted("5")).json()["damage"]
+        assert dmg["formula"]["kept"] == 8 and dmg["formula"]["arrow_d10"] == 10
+        assert "table roll rerolled with Lucky: 2, then 10; the 10 stands" in dmg["payload"]["extras"]
+        assert "already been rolled" in _act(client, cid, tid, "pcp_reroll").json()["error"]
+
+    def test_a_lower_reroll_keeps_the_first_die(self, client, scripted):
+        cid = _school(client, "akodo_bushi")
+        sid = _arrow(client, cid, base_tn=0, headers=scripted("4")).json()["session_id"]
+        tid = _act(client, cid, sid, "arrow_table", headers=scripted("8")).json()["arrow_table"]["session_id"]
+        r = _act(client, cid, tid, "pcp_reroll", headers=scripted("1")).json()
+        assert r["payload"]["arrow_d10"] == 8 and r["payload"]["lucky"]["kept"] == "original"
+        assert r["pcp"]
+        dmg = _act(client, cid, sid, "damage", headers=scripted("5")).json()["damage"]
+        assert ("table roll rerolled with a Player Character Point: 8, then 1; the 8 stands"
+                in dmg["payload"]["extras"])
+
+    def test_simulated_lucky_once_across_both_rolls(self, client, scripted):
+        """A non-editor's walk-through spends nothing, so the table session
+        remembers that the attack already took Lucky."""
+        cid = _school(client, "akodo_bushi", advantages=["lucky"])
+        sid = _arrow(client, cid, headers=scripted("9", base=OTHER)).json()
+        assert sid["mode"] == "simulate"
+        assert _act(client, cid, sid["session_id"], "lucky_reroll",
+                    headers=scripted("9", base=OTHER)).status_code == 200
+        t = _act(client, cid, sid["session_id"], "arrow_table",
+                 headers=scripted("3", base=OTHER)).json()["arrow_table"]
+        r = _act(client, cid, t["session_id"], "lucky_reroll", headers=scripted("9", base=OTHER))
+        assert r.status_code == 400 and "Lucky has already been used" in r.json()["error"]
+        s = client._test_session_factory()
+        from app.models import Character
+        assert not (s.get(Character, cid).adventure_state or {}).get("lucky_used")
+        s.close()
 
 
 def test_statistics_cover_the_arrow():
@@ -441,7 +537,7 @@ def test_gm_api_reports_an_arrows_serious_wounds(client, scripted, monkeypatch):
     monkeypatch.setenv(gm_api.TOKEN_ENV_VAR, "t0ken")
     cid = _school(client, "akodo_bushi")
     sid = _arrow(client, cid, headers=scripted("9")).json()["session_id"]
-    dmg = _act(client, cid, sid, "damage", headers=scripted("5")).json()["damage"]
+    dmg = _arrow_damage(client, cid, sid, "5", "5").json()["damage"]
     rows = client.get("/api/rolls?since=2000-01-01T00:00:00Z",
                       headers={"Authorization": "Bearer t0ken"}).json()["rolls"]
     by_key = {r["roll_key"]: r for r in rows}

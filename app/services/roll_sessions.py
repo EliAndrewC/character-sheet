@@ -577,6 +577,8 @@ def act(db: Session, session: RollSession, character: Character, action: str,
             "raise", "togashi_raise", "wc_vp", "matsu_bank", "wc_excess", "pcp_free_raise"):
         raise RollRefused("only Conviction may be spent on an iaijutsu strike's wound check")
 
+    if (session.formula or {}).get("arrow_table"):
+        _arrow_table_guard(session, action)
     if action in REROLLS:
         extra = REROLLS[action](db, session, character, args, rng or random.SystemRandom())
         actions = list(session.actions or [])
@@ -621,6 +623,8 @@ def act(db: Session, session: RollSession, character: Character, action: str,
         raise RollRefused(f"unknown action {action!r}")
 
     session.actions = actions
+    if (session.formula or {}).get("arrow_table"):
+        _arrow_table_state(session)
     if _is_attack(session):
         _attack_state(character, session)
     if session.roll_key == "wound_check":
@@ -1490,26 +1494,112 @@ def _posture_damage_flats(character, flags) -> list:
     return extra_flats
 
 
-def _arrow_damage(db, session, character, data, flags, args, out, rng):
-    """An arrow's damage (rules/03-combat.md, archery-design 2.3): a d10 picks
-    10k2 / 10k4 / 10k6 / 10k8 from odds shifted by how far the attack beat its
-    TN - plus 5 per damage die an ability grants - with a free raise for each
-    further 5 once 10k8 is certain; and the automatic serious wounds (1, plus
-    1 with the double attack knack; a failed parry takes back the first)."""
-    if args.get("trade"):
-        raise RollRefused("an arrow has no damage dice to trade")
+def _arrow_excess(session, data, out) -> Dict[str, Any]:
+    """The odds an arrow's damage table is rolled on (archery-design 2.3):
+    how far the attack beat its TN - the Wave Man's W1 raises get it to the
+    TN and no further - plus 5 per damage die an ability grants (Bayushi: 10
+    per void point)."""
     f = session.formula or {}
-    rng = rng or random.SystemRandom()
-    # The Wave Man's W1 raises get the arrow to the TN and no further.
     raw_excess = max(0, out["excess"] - 5 * out["wave_man_raises"])
     ability = int(f.get("archery_damage_excess") or 0)
     if damage_flags(data).get("bayushi_vp_damage"):
         ability += 10 * int(f.get("void_spent") or 0)
-    bands = cm.arrow_damage_bands(raw_excess + ability)
-    d10 = rng.randint(1, 10)
+    return dict(cm.arrow_damage_bands(raw_excess + ability), ability=ability)
+
+
+def _arrow_table(db, session, character, args, rng):
+    """The first of an arrow's two damage rolls (GM, archery-design A12): one
+    d10 on the odds table, as a session of its own so Lucky or a PCP can
+    reroll it (nothing else can: it is a table roll, not a total). The damage
+    roll that follows reads its die."""
+    _attack_only(session, "the damage table")
+    if (session.formula or {}).get("attack_variant") != "archery":
+        raise RollRefused("only an arrow rolls on the damage table")
+    if args.get("tn") is not None:
+        try:
+            session.formula = dict(session.formula, attack_tn=max(0, int(args["tn"])))
+        except (TypeError, ValueError):
+            raise RollRefused("tn must be a whole number") from None
+    out = _attack_state(character, session)
+    if not out["hit"]:
+        raise RollRefused("only a hit rolls damage")
+    _once(session, "arrow_table", "the damage table roll")
+    bands = _arrow_excess(session, character.to_dict(), out)
+    tformula = {
+        "arrow_table": True, "label": "Arrow Damage Table", "rolled": 1, "kept": 1, "flat": 0,
+        "reroll_tens": False, "is_damage_roll": True, "bonuses": [], "void_spent": 0,
+        "void_overflow_bonus": 0, "arrow_band_odds": bands["odds"],
+        "arrow_base_odds": list(cm.ARROW_BASE_ODDS), "arrow_raises": bands["raises"],
+        "arrow_ability_excess": bands["ability"],
+    }
+    dice = roll_dice(1, 1, False, rng or random.SystemRandom())["in_order"]
+    scored = score_roll(character.to_dict(), tformula, dice, [])
+    choices = session.choices or {}
+    child = RollSession(
+        id=secrets.token_hex(16), character_id=character.id, viewer_discord_id=session.viewer_discord_id,
+        mode=session.mode, roll_key=session.roll_key + ":table", formula=tformula, dice=dice,
+        payload=dict(scored, title=tformula["label"]), actions=[],
+        # Not recorded: the damage row carries the table roll.
+        choices={"base_total": scored["total"], "record": False, "parent": session.id,
+                 "parent_lucky": _flag(session, "lucky")},
+        history_id=None,
+    )
+    _arrow_table_state(child)
+    db.add(child)
+    db.flush()
+    _add_flag(session, "arrow_table", session_id=child.id)
+    return {"arrow_table": _answer(child, character)}
+
+
+def _arrow_table_guard(session: RollSession, action: str) -> None:
+    if action not in ("lucky_reroll", "pcp_reroll"):
+        raise RollRefused("only Lucky or a Player Character Point can change the damage table "
+                          "roll (a reroll; it takes no raises)")
+    if (session.choices or {}).get("locked"):
+        raise RollRefused("the arrow's damage has already been rolled")
+    if action == "lucky_reroll" and (session.choices or {}).get("parent_lucky"):
+        raise RollRefused("Lucky has already been used this adventure")
+
+
+def _arrow_table_state(session: RollSession) -> None:
+    """The row the table roll's d10 picks, on the session's payload."""
+    f = session.formula or {}
+    d10 = int((session.dice or [{}])[0].get("value") or 1)
+    band = cm.arrow_band_for_d10(f["arrow_band_odds"], d10)
+    session.payload = dict(session.payload or {}, arrow_d10=d10, arrow_band=band,
+                           arrow_band_odds=f["arrow_band_odds"],
+                           arrow_base_odds=f["arrow_base_odds"], arrow_raises=f["arrow_raises"])
+
+
+def _arrow_damage(db, session, character, data, flags, args, out, rng):
+    """An arrow's damage (rules/03-combat.md, archery-design 2.3): the d10 of
+    the table roll before it picks 10k2 / 10k4 / 10k6 / 10k8 from odds shifted
+    by the excess, with a free raise for each further 5 once 10k8 is certain;
+    and the automatic serious wounds (1, plus 1 with the double attack knack;
+    a failed parry takes back the first)."""
+    if args.get("trade"):
+        raise RollRefused("an arrow has no damage dice to trade")
+    flag = next((a for a in session.actions or [] if a["kind"] == "arrow_table"), None)
+    table = db.get(RollSession, flag["session_id"]) if flag else None
+    if table is None:
+        raise RollRefused("roll the arrow's damage table first")
+    f = session.formula or {}
+    tf = table.formula or {}
+    bands = {"odds": tf["arrow_band_odds"], "raises": tf["arrow_raises"]}
+    ability = int(tf.get("arrow_ability_excess") or 0)
+    d10 = int(table.dice[0]["value"])
     kept = cm.arrow_band_for_d10(bands["odds"], d10)
+    table.choices = dict(table.choices or {}, locked=True)
     chance = 10 * bands["odds"][cm.ARROW_BANDS.index(kept)]
     parts = [f"10k{kept} arrow (table roll {d10}: {chance}% chance)"]
+    pair = (table.payload or {}).get("lucky")
+    if pair:
+        who = "Lucky" if pair["source"] == "lucky" else "a Player Character Point"
+        # The dice, not the totals: a Shosuro 5th Dan's total adds its lowest
+        # three dice, which on a 1k1 is the die again.
+        first, second = (sum(pair[k]["kept"][0]["parts"]) for k in ("original", "reroll"))
+        parts.append(f"table roll rerolled with {who}: {first}, then {second}; the "
+                     f"{max(first, second)} stands")
     if ability:
         parts.append(f"+{ability} excess from abilities")
     flat = int(f.get("damage_flat_bonus") or 0)
@@ -1583,6 +1673,7 @@ REROLLS.update({
     "post_bonus": _post_bonus,
     "courtier_vp": _courtier_vp,
     "hida_reroll": _hida_reroll,
+    "arrow_table": _arrow_table,
     "damage": _damage,
 })
 UNDOABLE.update({"akodo_bank": _akodo_bank, "bayushi_raise": _bayushi_raise})

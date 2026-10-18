@@ -83,9 +83,25 @@ def test_arrow_hit_damage_table_and_serious_wounds(page, live_server_url):
     expect(bands.locator('[data-testid="archery-band-8"]')).to_contain_text("20%")
     m.locator('[data-testid="atk-failed-parry"]').check()
     expect(m.locator('[data-testid="archery-hit"]')).to_contain_text("1 automatic serious wound")
-    # The table roll is the first die: 10 picks 10k8.
-    force_dice(page, [10, 4])
-    m.locator('[data-action="roll-damage"]').click()
+    # The base odds stand beside this hit's (one shift: 10% from 10k2 to 10k8).
+    expect(bands.locator('[data-testid="archery-base-8"]')).to_have_text("10%")
+    expect(bands.locator('[data-testid="archery-now-8"]')).to_have_text("20%")
+    expect(bands.locator('[data-testid="archery-no-shift"]')).to_be_hidden()
+    # First the table roll: a d10 of its own, the row it picks lit.
+    force_dice(page, [10])
+    m.locator('[data-action="roll-arrow-table"]').click()
+    page.wait_for_function("() => window._diceRoller.atkPhase === 'arrow-result'", timeout=10000)
+    table = m.locator('[data-testid="arrow-table-result"]')
+    expect(table.locator('[data-testid="arrow-table-d10"]')).to_have_text("10")
+    expect(table.locator('[data-testid="arrow-table-band-8"]')).to_have_attribute("data-lit", "1")
+    expect(table.locator('[data-testid="arrow-table-band-2"]')).not_to_have_attribute("data-lit", "1")
+    expect(table.locator('[data-testid="arrow-table-now-8"]')).to_have_text("20%")
+    # Not Lucky: no Lucky button.
+    expect(table.locator('[data-action="lucky-arrow-table"]')).to_be_hidden()
+    # Then the damage the row names.
+    expect(table.locator('[data-action="roll-arrow-damage"]')).to_contain_text("Make 10k8 Damage Roll")
+    force_dice(page, [4])
+    table.locator('[data-action="roll-arrow-damage"]').click()
     page.wait_for_function("() => window._diceRoller.atkPhase === 'damage-result'", timeout=10000)
     restore_dice(page)
     expect(m.locator('[data-testid="arrow-serious-wounds"]')).to_have_text("+ 1 serious wound")
@@ -161,7 +177,8 @@ def test_npc_archer_from_the_combat_page(page, live_server_url):
     frame.locator('[data-testid="atk-target"]').select_option(str(pc["id"]))
     expect(frame.locator('[data-testid="archery-base-tn"]')).to_have_value("10")  # 5 + 5 x parry 1
     frame.locator('[data-action="roll-attack"]').click()
-    frame.locator('[data-action="roll-damage"]').click()
+    frame.locator('[data-action="roll-arrow-table"]').click()
+    frame.locator('[data-action="roll-arrow-damage"]').click()
     frame.locator('[data-testid="arrow-serious-wounds"]').wait_for()
     frame.locator('button:visible', has_text="Close").last.click()
     restore_dice(page)
@@ -196,3 +213,65 @@ def test_a_non_editor_arrow_changes_nothing(page, page_nonadmin, live_server_url
     dice = page.evaluate("window._trackingBridge.actionDice")
     assert [d["spent"] for d in dice] == [False, False]
     assert not page.evaluate("window._trackingBridge.adventureState.archery_last_arrow_phase")
+
+
+def test_no_shift_and_lucky_reroll_of_the_table(page, live_server_url):
+    """A hit by less than 5 shows the base odds alone, saying nothing
+    shifted; a Lucky character may reroll the table roll (the higher d10
+    stands), and the damage follows the rerolled row."""
+    create_and_apply(page, live_server_url, "ArcheryLucky", advantages=["lucky"])
+    open_archery_attack(page)
+    m = _modal(page)
+    m.wait_for(state="visible", timeout=5000)
+    # 5k2 of 3s keeps 6 against base 0 + 5 for distance: 1 over, no shift.
+    m.locator('[data-testid="archery-base-tn"]').fill("0")
+    force_dice(page, [3])
+    _roll(page)
+    bands = m.locator('[data-testid="archery-bands"]')
+    expect(bands.locator('[data-testid="archery-no-shift"]')).to_be_visible()
+    expect(bands.locator('[data-testid="archery-now-2"]')).to_be_hidden()
+    expect(bands.locator('[data-testid="archery-base-8"]')).to_have_text("10%")
+    force_dice(page, [2])
+    m.locator('[data-action="roll-arrow-table"]').click()
+    page.wait_for_function("() => window._diceRoller.atkPhase === 'arrow-result'", timeout=10000)
+    table = m.locator('[data-testid="arrow-table-result"]')
+    expect(table.locator('[data-testid="arrow-table-band-2"]')).to_have_attribute("data-lit", "1")
+    force_dice(page, [10])
+    table.locator('[data-action="lucky-arrow-table"]').click()
+    expect(table.locator('[data-testid="arrow-table-d10"]')).to_have_text("10")
+    expect(table.locator('[data-testid="arrow-table-band-8"]')).to_have_attribute("data-lit", "1")
+    expect(table.locator('[data-testid="arrow-table-rerolled"]')).to_contain_text("Lucky")
+    expect(table.locator('[data-action="lucky-arrow-table"]')).to_be_hidden()
+    assert page.evaluate("window._trackingBridge.getToggle('lucky_used')")
+    force_dice(page, [4])
+    table.locator('[data-action="roll-arrow-damage"]').click()
+    page.wait_for_function("() => window._diceRoller.atkPhase === 'damage-result'", timeout=10000)
+    restore_dice(page)
+    expect(m).to_contain_text("table roll rerolled with Lucky: 2, then 10; the 10 stands")
+    assert page.evaluate("window._diceRoller.formula.kept") == 8
+
+
+def test_pcp_reroll_of_the_table(page, live_server_url):
+    """The table roll's PCP reroll sits in the modal's PCP menu (a reroll
+    only: no free raise or 10s reroll is offered there)."""
+    create_and_apply(page, live_server_url, "ArcheryPcp")
+    open_archery_attack(page)
+    m = _modal(page)
+    m.wait_for(state="visible", timeout=5000)
+    m.locator('[data-testid="archery-base-tn"]').fill("0")
+    force_dice(page, [3])
+    _roll(page)
+    force_dice(page, [1])
+    m.locator('[data-action="roll-arrow-table"]').click()
+    page.wait_for_function("() => window._diceRoller.atkPhase === 'arrow-result'", timeout=10000)
+    m.locator('[data-action="pcp-menu"]:visible').click()
+    expect(page.locator('[data-action="pcp-raise-attack"]:visible')).to_have_count(0)
+    force_dice(page, [9])
+    page.locator('[data-action="pcp-reroll-arrow-table"]:visible').click()
+    page.locator('[data-action="pcp-confirm-accept"]').click()
+    table = m.locator('[data-testid="arrow-table-result"]')
+    expect(table.locator('[data-testid="arrow-table-d10"]')).to_have_text("9")
+    expect(table.locator('[data-testid="arrow-table-band-6"]')).to_have_attribute("data-lit", "1")
+    expect(table.locator('[data-testid="arrow-table-rerolled"]')).to_contain_text("Player Character Point")
+    restore_dice(page)
+    assert page.evaluate("window._trackingBridge.pcpCount") == 1

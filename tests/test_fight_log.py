@@ -65,6 +65,11 @@ def test_an_npc_arrow_is_logged_with_its_serious_wounds(client, world):
     npc, pc = world["npc"], world["pc"]
     hit = _roll(client, npc, roll_key="archery", archery={"base_tn": 5}, target_id=pc.id).json()
     assert hit["attack"]["hit"] is True
+    table = client.post(f"/characters/{npc.id}/roll/{hit['session_id']}/act",
+                        json={"action": "arrow_table", "args": {}}, headers={"X-Test-Dice": "5"})
+    assert table.status_code == 200
+    # The table roll moves nothing in the log; the damage joins the entry.
+    assert "damage" not in _actions(world)[0].detail
     dmg = client.post(f"/characters/{npc.id}/roll/{hit['session_id']}/act",
                       json={"action": "damage", "args": {}},
                       headers={"X-Test-Dice": "5,5,5,5,5,5,5,5,5,5"}).json()
