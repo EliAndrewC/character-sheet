@@ -72,6 +72,15 @@ Status: **built and deployed** (2026-09-28). All phases done, including the GM's
 | D33 | **One fight at a time per group.** Starting a new encounter ends the current one, after a confirmation. When none is active, the public page says "No fight in progress". |
 | D34 | **Players do not see NPC rolls at all**, only spent action dice as they are spent and "?" dice for actions known from earlier rounds (2026-10-05). A roll shown on its own stayed up when the GM unspent its die; the spent dice already say how many actions were taken. The fight log stays on the GM's tracker. |
 
+### Round 5 (2026-10-26): a PC's attack target and weapon
+
+| # | decision |
+|---|---|
+| D35 | **During a fight a PC's attack opens on "who are you attacking?"** (the attack modal's target step), because players kept typing the wrong TN. The list shows a TN only where players know it (the NPC was attacked: a PC picked it as a target, it has wounds, or it parried); an unknown TN is never sent to the browser, nor the Parry behind it. Choosing an NPC whose TN is not known reveals it to everyone (`EncounterNpc.tn_revealed`) and, by the rules, commits the PC to the attack. The modal says so; the app does not enforce it ("Change target" still works), because the GM trusts the players and would allow a take-back anyway. |
+| D36 | **The server judges a targeted attack against the NPC's real TN**, whatever the request says (`combat_targets.lock_target`): 5 + 5 x Parry, 5 + 10 x Parry for an athletics attack, and an arrow's base TN (distance, evasion and cover stay the player's). The damage action's after-the-roll TN correction is ignored for such an attack. A simulated (read-only) roll reveals nothing. "Not one of these - enter the TN myself" keeps the old inputs for anyone the tracker does not have. |
+| D37 | **A melee or athletics attack lists only NPCs within the PC's striking distance** (`Encounter.reach`), and names the rest as out of reach; **an arrow may target any NPC still fighting.** List-only: the server does not refuse an out-of-reach target. The list follows the lines even while the GM has hidden them from view. |
+| D38 | **The GM sets each PC's weapon dice for the fight** (PC kebab > Weapon damage; `Encounter.weapons`). The PC's attack modal shows them disabled ("Set by the GM for this fight") and the server rolls damage with them whatever the request says. A new fight starts with the previous fight's weapons. Duel and Kakita 5th Dan damage keep their own inputs. |
+
 ## 3. What exists today
 
 ### Simulator (`/host-l7r-repo/simulator`, GitHub `claude-guided-l7r-combat-simulator`, public)
@@ -265,6 +274,7 @@ Each phase ends with tests green at 100% coverage in every repo it touches, targ
 - Round 2: exact vs base XP (D13), clamp (D14), sheet migration (D15), returning NPCs (D17), missing schools (D18), NPC attacks (D19), keep-LW vs take-SW (D20), records (D21), player visibility (D22, D23), card detail (D23 / 4.5).
 - Round 3: git (D24), stub schools (D25), names (D26), public combat page (D27), real names (D28), roll totals only (D29), every visible PC (D30), new round (D31).
 - Round 4: PCs on the public page (D32), one fight at a time (D33).
+- Round 5: a PC's attack target (D35-D37) and weapon (D38).
 
 
 ## Addendum (2026-10-05): NPC rolls on the sheet's own roller

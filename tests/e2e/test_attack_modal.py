@@ -442,7 +442,7 @@ def test_extra_bonus_does_not_persist_between_modal_opens(page, live_server_url)
     _open_attack_modal(page)
     page.locator('[data-testid="atk-extra-bonus-toggle"]').check()
     # Close the modal by clicking the X.
-    page.locator('[data-modal="attack"] button.text-ink\\/60').click()
+    page.locator('[data-modal="attack"] button:has-text("×")').click()
     page.wait_for_timeout(150)
     _open_attack_modal(page)
     toggle = page.locator('[data-testid="atk-extra-bonus-toggle"]')

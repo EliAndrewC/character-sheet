@@ -253,12 +253,16 @@ def _migrate_add_columns():
         cursor.execute("ALTER TABLE encounters ADD COLUMN reach TEXT DEFAULT '[]'")
     if enc_cols and "show_reach" not in enc_cols:  # pragma: no cover
         cursor.execute("ALTER TABLE encounters ADD COLUMN show_reach BOOLEAN DEFAULT 1")
+    if enc_cols and "weapons" not in enc_cols:  # pragma: no cover
+        cursor.execute("ALTER TABLE encounters ADD COLUMN weapons TEXT DEFAULT '{}'")
 
     # Encounter NPCs table migrations
     cursor.execute("PRAGMA table_info(encounter_npcs)")
     enc_npc_cols = {row[1] for row in cursor.fetchall()}
     if enc_npc_cols and "spent_by_round" not in enc_npc_cols:  # pragma: no cover
         cursor.execute("ALTER TABLE encounter_npcs ADD COLUMN spent_by_round TEXT DEFAULT '{}'")
+    if enc_npc_cols and "tn_revealed" not in enc_npc_cols:  # pragma: no cover
+        cursor.execute("ALTER TABLE encounter_npcs ADD COLUMN tn_revealed BOOLEAN DEFAULT 0")
 
     # Roll History: roll_label was dropped in favour of deriving the display
     # label from payload.title at read time (see

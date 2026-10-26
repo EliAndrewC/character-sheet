@@ -49,8 +49,63 @@
                 </div>
                 {% include 'character/partials/read_only_roll_banner.html' %}
 
+                {# ── TARGET (a PC in its group's fight: combat_targets) ── #}
+                <div x-show="atkPhase === 'target'" x-cloak class="space-y-3" data-testid="atk-fight-step">
+                    <p x-show="atkFightBusy && !atkFight" class="text-sm text-ink/60">Checking the fight...</p>
+                    <template x-if="atkFight">
+                    <div class="space-y-3">
+                        <label class="block text-sm font-medium" for="atk-fight-target">Who are you attacking?</label>
+                        <select id="atk-fight-target" x-model="atkFightPick" data-testid="atk-fight-target"
+                                class="w-full border rounded px-2 py-1.5 text-sm">
+                            <option value="">- Choose a target -</option>
+                            <template x-for="t in atkFightTargets()" :key="t.id">
+                                <option :value="t.id" :selected="String(atkFightPick) === String(t.id)"
+                                        x-text="t.name + (atkFightTn(t) === null ? ' (TN not yet known)' : ' (TN ' + atkFightTn(t) + ')')"></option>
+                            </template>
+                        </select>
+                        <p x-show="!atkFightTargets().length" x-cloak data-testid="atk-fight-none-in-reach"
+                           class="text-sm text-orange-700 bg-orange-50 border border-orange-200 rounded p-2">
+                            Nobody is marked as within your striking distance. Ask the GM to mark who you can strike on the combat page.
+                        </p>
+                        <p x-show="atkFightOutOfReach().length" x-cloak class="text-xs text-ink/60" data-testid="atk-fight-out-of-reach"
+                           x-text="'Out of your striking distance: ' + atkFightOutOfReach().map(t => t.name).join(', ') + '.'"></p>
+                        <p class="text-xs text-ink/60">
+                            The TN to hit is shown for anyone who has already been attacked in this fight.
+                            Nobody else's TN is known yet.
+                        </p>
+                        <div x-show="atkFightPicked() && atkFightTn(atkFightPicked()) === null" x-cloak data-testid="atk-fight-reveal-note"
+                             class="text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded p-2">
+                            Nobody has attacked <b x-text="atkFightPicked()?.name"></b> yet, so their TN is not known.
+                            Choosing them reveals it to you, and by the rules that commits you to this attack:
+                            once you have seen the TN, you may not take the attack back.
+                        </div>
+                        <p x-show="atkFightError" x-cloak class="text-sm text-red-700" x-text="atkFightError"></p>
+                        <div class="flex flex-wrap items-center justify-between gap-2">
+                            <button type="button" @click="atkSkipTarget()" data-testid="atk-fight-skip"
+                                    class="text-xs text-ink/60 underline hover:text-ink">Not one of these - enter the TN myself</button>
+                            <button type="button" @click="atkConfirmTarget()" :disabled="!atkFightPicked() || atkFightBusy"
+                                    data-testid="atk-fight-confirm"
+                                    class="btn-primary px-4 py-2 rounded text-sm font-medium disabled:opacity-40"
+                                    x-text="atkFightPicked() ? 'Attack ' + atkFightPicked().name : 'Attack'"></button>
+                        </div>
+                    </div>
+                    </template>
+                </div>
+
                 {# ── PRE-ROLL ── #}
                 <div x-show="atkPhase === 'pre'" class="space-y-4">
+                    <div x-show="atkTargetLocked" x-cloak data-testid="atk-locked-target"
+                         class="flex flex-wrap items-center justify-between gap-2 text-sm bg-parchment rounded p-2">
+                        <span>Attacking <b x-text="atkTargetLocked?.name"></b>:
+                            <span x-show="!atkIsArchery()">TN <b data-testid="atk-locked-tn" x-text="atkTN"></b></span>
+                            <span x-show="atkIsArchery()" x-cloak>base TN <b x-text="atkTargetLocked?.tn"></b></span></span>
+                        <button type="button" @click="atkChangeTarget()" data-testid="atk-change-target"
+                                class="text-xs text-ink/60 underline hover:text-ink">Change target</button>
+                    </div>
+                    <div x-show="!atkTargetLocked && atkFight?.targets?.length" x-cloak class="text-xs">
+                        <button type="button" @click="atkChangeTarget()" data-testid="atk-choose-target"
+                                class="text-ink/60 underline hover:text-ink">Choose a target from the fight</button>
+                    </div>
                     {# Missing-action-dice warning. Rolls can still happen without
                        any unspent action dice (e.g. an attack outside a combat
                        round), but players who forgot to roll initiative get an
@@ -95,7 +150,7 @@
                             <div>
                                 <label class="block text-sm font-medium mb-1">Target's TN</label>
                                 <input type="number" x-model.number="atkArcheryBaseTn" min="0" max="200" step="5"
-                                       :disabled="atkArcheryUnseen" data-testid="archery-base-tn"
+                                       :disabled="atkArcheryUnseen || !!atkTargetLocked" data-testid="archery-base-tn"
                                        class="w-full border rounded px-2 py-1.5 text-sm disabled:opacity-40">
                                 <div class="text-xs text-ink/50 mt-1">5 + 5 &times; their Parry</div>
                                 <label class="flex items-center gap-2 text-xs mt-1 cursor-pointer">
@@ -176,7 +231,12 @@
                     </div>
                     </template>
                     <div x-show="!atkIsArchery()" class="grid grid-cols-2 gap-4">
-                        <div>
+                        <div x-show="atkTargetLocked" x-cloak>
+                            <label class="block text-sm font-medium mb-1">Opponent's Base TN</label>
+                            <div class="text-sm py-1.5"><b x-text="atkTN"></b>
+                                <span class="text-xs text-ink/60" x-text="'(' + (atkTargetLocked?.name || '') + ')'"></span></div>
+                        </div>
+                        <div x-show="!atkTargetLocked">
                             <label class="block text-sm font-medium mb-1">
                                 Opponent's Base TN
                                 <span x-show="atkIsDoubleAttack()" x-cloak class="text-xs text-ink/60 font-normal">(+20 for double attack)</span>
@@ -214,15 +274,18 @@
                             <label class="block text-sm font-medium mb-1">Base weapon damage</label>
                             <div class="flex gap-1">
                                 <input type="number" x-model.number="atkWeaponRolled" min="0" max="10"
-                                       class="w-16 border rounded px-2 py-1.5 text-sm text-center" placeholder="R">
+                                       :disabled="!!atkWeaponLocked" data-testid="atk-weapon-rolled"
+                                       class="w-16 border rounded px-2 py-1.5 text-sm text-center disabled:opacity-60" placeholder="R">
                                 <span class="self-center text-sm font-mono">k</span>
                                 <input type="number" x-model.number="atkWeaponKept" min="1" max="10"
-                                       class="w-16 border rounded px-2 py-1.5 text-sm text-center" placeholder="K">
+                                       :disabled="!!atkWeaponLocked" data-testid="atk-weapon-kept"
+                                       class="w-16 border rounded px-2 py-1.5 text-sm text-center disabled:opacity-60" placeholder="K">
                             </div>
+                            <div x-show="atkWeaponLocked" x-cloak class="text-xs text-ink/60 mt-1" data-testid="atk-weapon-locked">Set by the GM for this fight</div>
                             {% if character.school == 'brotherhood_of_shinsei_monk' %}
-                            <div class="text-xs text-ink/50 mt-1">Default 1k3 (unarmed - Brotherhood special ability)</div>
+                            <div x-show="!atkWeaponLocked" class="text-xs text-ink/50 mt-1">Default 1k3 (unarmed - Brotherhood special ability)</div>
                             {% elif school and school.category not in ('bushi', 'counterattack', 'duelist', 'investigator') %}
-                            <div class="text-xs text-ink/50 mt-1">Default 3k2 (non-bushi)</div>
+                            <div x-show="!atkWeaponLocked" class="text-xs text-ink/50 mt-1">Default 3k2 (non-bushi)</div>
                             {% endif %}
                         </div>
                     </div>
@@ -1068,7 +1131,7 @@
                        higher pool die can turn a narrow miss into a hit. #}
                     {{ precepts_pool_block('attack', 'atk-p') }}
 
-                    {# MISS — display the effective TN, which is the +20
+                    {# MISS - display the effective TN, which is the +20
                        elevated TN on a double attack. Showing the base TN
                        here would contradict the hit/miss calculation. #}
                     <div x-show="!atkHit" x-cloak class="bg-red-50 border border-red-300 rounded p-3">

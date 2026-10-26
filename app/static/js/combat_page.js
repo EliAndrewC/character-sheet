@@ -240,6 +240,9 @@
       toggleReach: async function (pc, npc, on) {
         await this.post("/reach", { pc_id: pc, npc_id: npc, on: on });
       },
+      setWeapon: async function (pc, rolled, kept) {
+        await this.post("/weapon", { pc_id: pc.id, rolled: rolled, kept: kept });
+      },
       setShowReach: async function (visible) {
         this.closeLineMenu();
         await this.post("/reach-visible", { visible: visible });

@@ -2,7 +2,8 @@
 
 ``GET /groups/{group_id}/combat`` is public (D27): the GM, logged in, gets the
 tracker; everyone else gets the public view. Everything that changes state is
-admin-only and answers JSON.
+admin-only and answers JSON, except a player's own attack target
+(``/fight/{pc_id}``, ``combat_targets``), which needs only edit access to that PC.
 
 Write routes follow the house rule for read-modify-write atomicity: this
 router prefetches the body (``prefetch_body``), so a handler runs from its
@@ -20,6 +21,7 @@ from sqlalchemy.orm import Session
 from app.database import get_db, prefetch_body
 from app.models import Character, Encounter, GamingGroup, User
 from app.services import combat_actions as actions
+from app.services import combat_targets
 from app.services import combat_view
 from app.services import npc_generator as gen
 from app.services import npcs
@@ -106,6 +108,7 @@ async def start(group_id: int, request: Request, db: Session = Depends(get_db)):
     try:
         encounter = npcs.start_encounter(db, group.id, str(body.get("name") or ""),
                                          replace=bool(body.get("replace")))
+        combat_targets.seed_weapons(db, encounter)
     except npcs.EncounterConflict as exc:
         return JSONResponse(
             {"error": "fight_in_progress", "message": f"{exc} is still going. End it first?"},
@@ -224,6 +227,26 @@ async def reach_visible(group_id: int, request: Request, db: Session = Depends(g
     body = await _body(request)
     encounter.show_reach = bool(body.get("visible"))
     npcs.touch(encounter)
+    db.commit()
+    return {"status": "ok"}
+
+
+@router.post("/groups/{group_id}/combat/weapon")
+async def weapon(group_id: int, request: Request, db: Session = Depends(get_db)):
+    """``{"pc_id", "rolled", "kept"}``: the weapon dice that PC's attacks
+    roll damage with in this fight; ``rolled: null`` clears it."""
+    _, group, err = _load(db, group_id, request)
+    if err:
+        return err
+    encounter = _active(db, group)
+    if encounter is None:
+        return _error("No fight in progress", 409)
+    body = await _body(request)
+    try:
+        combat_targets.set_weapon(db, encounter, body.get("pc_id"), body.get("rolled"), body.get("kept"),
+                                  [pc.id for pc in combat_view.visible_pcs(db, group)])
+    except ValueError as exc:
+        return _error(str(exc))
     db.commit()
     return {"status": "ok"}
 
@@ -540,6 +563,48 @@ def roller(group_id: int, who_id: int, request: Request, die: Optional[int] = No
         ] if who.is_npc else [],
     )
     return _templates().TemplateResponse(request=request, name="combat_npc_roller.html", context=context)
+
+
+def _fight_pc(db: Session, group_id: int, pc_id: int, request: Request):
+    """``(group, pc, error)`` for a PC's own fight routes: a visible PC of
+    the group, and the GM or anyone who can edit it."""
+    group = _group_or_404(db, group_id)
+    pc = db.get(Character, pc_id)
+    if group is None or pc is None or pc.id not in {c.id for c in combat_view.visible_pcs(db, group)}:
+        return None, None, _error("Not in the fight", 404)
+    if _gm_id(request) is None and not _can_edit(db, npcs.viewer_id(request), pc):
+        return None, None, _error("Not yours to attack with", 403)
+    return group, pc, None
+
+
+@router.get("/groups/{group_id}/combat/fight/{pc_id}")
+def fight(group_id: int, pc_id: int, request: Request, db: Session = Depends(get_db)):
+    """The attack modal's "who are you attacking?" step: the fight's NPCs
+    (TNs only where players know them) and the PC's weapon, or
+    ``{"fight": null}`` when there is no fight."""
+    _, pc, err = _fight_pc(db, group_id, pc_id, request)
+    if err:
+        return err
+    return {"fight": combat_targets.for_pc(db, pc)}
+
+
+@router.post("/groups/{group_id}/combat/fight/{pc_id}/reveal")
+async def reveal(group_id: int, pc_id: int, request: Request, db: Session = Depends(get_db)):
+    """``{"npc_id"}``: the PC attacks this NPC, so its TN is known from now
+    on (an operation: never a conflict). Answers the TN."""
+    _, pc, err = _fight_pc(db, group_id, pc_id, request)
+    if err:
+        return err
+    encounter = combat_targets.pc_encounter(db, pc)
+    if encounter is None:
+        return _error("No fight in progress", 409)
+    body = await _body(request)
+    try:
+        target = combat_targets.reveal(db, encounter, body.get("npc_id"))
+    except LookupError as exc:
+        return _error(str(exc), 404)
+    db.commit()
+    return {"target": target}
 
 
 @router.get("/groups/{group_id}/combat/state")

@@ -112,13 +112,23 @@ def build_attack(character: Any, formula: Dict[str, Any], choices: Dict[str, Any
     flags = attack_flags(data)
     state = character.adventure_state or {}
     f = dict(formula)
+    # A PC's target in the group's fight: its real TN, set by the server
+    # (combat_targets.lock_target), replaces whatever the modal sent.
+    locked = choices.get("target_numbers") if isinstance(choices.get("target_numbers"), dict) else None
     if f.get("attack_variant") == "archery":
-        tn = _archery(character, f, choices.get("archery") or {})
+        archery = choices.get("archery") or {}
+        if locked and isinstance(archery, dict):
+            archery = dict(archery, base_tn=locked["tn"])
+        tn = _archery(character, f, archery)
+    elif locked:
+        tn = locked["athletics_tn"] if f.get("is_athletics_attack") else locked["tn"]
     else:
         tn = _int(choices, "tn")
         if tn is None:
             raise ValueError("the attack needs a TN")
     f["attack_tn"] = tn
+    if locked:
+        f["attack_target_locked"] = True
     # Mantis Wave-Treader Special: +5 in an offensive posture.
     if current_posture(state) == "offensive":
         _bonus(f, "offensive posture", 5)

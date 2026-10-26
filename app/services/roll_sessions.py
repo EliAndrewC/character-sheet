@@ -1436,7 +1436,8 @@ def _damage(db, session, character, args, rng):
     and take Conviction), built by the one damage assembler, recorded as
     ``<attack key>:damage``."""
     _attack_only(session, "damage")
-    if args.get("tn") is not None:
+    # A PC's target in a fight fixed the TN (combat_targets): not correctable.
+    if args.get("tn") is not None and not (session.formula or {}).get("attack_target_locked"):
         # The TN may be corrected after the roll; the hit is judged at it.
         try:
             session.formula = dict(session.formula, attack_tn=max(0, int(args["tn"])))

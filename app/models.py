@@ -909,6 +909,10 @@ class Encounter(Base):
     # switch for drawing them (players get no pairs while it is off).
     reach: Mapped[Optional[List[List[int]]]] = mapped_column(JSON, default=list)
     show_reach: Mapped[bool] = mapped_column(default=True)
+    # The weapon each PC fights with, as the GM set it: {str(pc_id):
+    # [rolled, kept]}. A PC's attack damage uses it instead of the modal's
+    # inputs. Seeded from the group's previous fight (combat_targets).
+    weapons: Mapped[Optional[Dict[str, List[int]]]] = mapped_column(JSON, default=dict)
 
     npcs: Mapped[List["EncounterNpc"]] = relationship(
         back_populates="encounter", cascade="all, delete-orphan",
@@ -940,6 +944,9 @@ class EncounterNpc(Base):
     # in that round, noted whenever its dice are replaced (fight_log). The
     # public view shows "?" dice for the most it spent in an earlier round.
     spent_by_round: Mapped[Optional[Dict[str, int]]] = mapped_column(JSON, default=dict)
+    # A PC has picked this NPC as an attack's target (combat_targets): its
+    # TN to be hit is now known to the players.
+    tn_revealed: Mapped[bool] = mapped_column(default=False)
 
     encounter: Mapped["Encounter"] = relationship(back_populates="npcs")
     character: Mapped["Character"] = relationship()

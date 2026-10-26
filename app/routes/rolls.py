@@ -23,7 +23,7 @@ from app.services.auth import (
     get_admin_ids,
     get_all_editors,
 )
-from app.services import fight_log, roll_sessions
+from app.services import combat_targets, fight_log, roll_sessions
 from app.services.roll_descriptions import label_for_roll
 from app.services.rolls_history import (
     coerce_action_die_spent,
@@ -425,6 +425,7 @@ async def make_roll(request: Request, char_id: int, db: Session = Depends(get_db
     if live:
         grants = (owner.granted_account_ids or []) if owner else []
         record, is_owner_roll = should_record_roll(viewer, character, grants)
+    combat_targets.lock_target(db, character, body, live)
     if live and str(body.get("roll_key") or "").startswith("initiative"):
         fight_log.note_dice_replaced(db, character)  # the new dice replace this round's
     try:
@@ -471,8 +472,10 @@ async def act_on_roll(request: Request, char_id: int, session_id: str,
     if (not user and action in roll_sessions.REROLLS
             and not roll_sessions.anonymous_allowed(_client_address(request))):
         return JSONResponse({"error": "Too many rolls - try again in a minute"}, status_code=429)
+    args = body.get("args") if isinstance(body.get("args"), dict) else {}
+    combat_targets.lock_weapon(db, character, session, action, args)
     try:
-        result = roll_sessions.act(db, session, character, action, body.get("args") or {},
+        result = roll_sessions.act(db, session, character, action, args,
                                    rng=_test_rng(request))
     except roll_sessions.RollRefused as exc:
         return JSONResponse({"error": str(exc), "tracking": roll_sessions.tracking_snapshot(character)},

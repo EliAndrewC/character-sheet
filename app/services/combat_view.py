@@ -85,6 +85,26 @@ def _sides(db: Session, group: GamingGroup):
     return encounter, pcs, links
 
 
+def _tn_known(link: Any, own_actions: List[EncounterAction]) -> bool:
+    """Players learn an NPC's TN once someone has attacked it: a PC picked
+    it as a target (``tn_revealed``), it has wounds from this fight (a
+    returning NPC is healed) or it has parried."""
+    npc = link.character
+    return bool(link.tn_revealed) \
+        or (npc.current_light_wounds or 0) + (npc.current_serious_wounds or 0) > 0 \
+        or any(a.kind == "parry" for a in own_actions)
+
+
+def tn_known(db: Session, encounter: Encounter, link: Any) -> bool:
+    """Whether players know this NPC's TN in ``encounter``."""
+    own = (db.query(EncounterAction)
+           .filter(EncounterAction.encounter_id == encounter.id,
+                   EncounterAction.character_id == link.character_id,
+                   EncounterAction.kind == "parry")
+           .all())
+    return _tn_known(link, own)
+
+
 def _public_pc(pc: Character, mine: bool) -> Dict[str, Any]:
     out = {
         "id": pc.id,
@@ -112,10 +132,6 @@ def public_state(db: Session, group: GamingGroup, mine: Optional[Set[int]] = Non
         npc = link.character
         mine = [a for a in actions if a.character_id == npc.id]
         spent = [d.get("value") for d in npc.action_dice or [] if d.get("spent")]
-        # Players learn an NPC's TN once someone has attacked it: it has
-        # wounds from this fight (a returning NPC is healed) or has parried.
-        attacked = (npc.current_light_wounds or 0) + (npc.current_serious_wounds or 0) > 0 \
-            or any(a.kind == "parry" for a in mine)
         out_npcs.append({
             "id": npc.id,
             "name": npc.name,
@@ -128,7 +144,7 @@ def public_state(db: Session, group: GamingGroup, mine: Optional[Set[int]] = Non
             # takes its action back, which a roll shown on its own would not.
             "spent_dice": spent,
             "unknown_dice": max(0, fight_log.known_actions(link, current) - len(spent)),
-            "tn_to_be_hit": tn_to_be_hit(npc) if attacked else None,
+            "tn_to_be_hit": tn_to_be_hit(npc) if _tn_known(link, mine) else None,
             "impaired": is_impaired(npc.to_dict()),  # shown as an orange SW count
         })
     return {
@@ -202,6 +218,8 @@ def gm_state(db: Session, group: GamingGroup) -> Dict[str, Any]:
             "total_xp": (npc.starting_xp or 0) + (npc.earned_xp or 0),
             "combat_share": g.get("combat_share"),
         })
+    from app.services.combat_targets import weapon_for
+
     return {
         "rev": _rev(encounter, pcs + [link.character for link in links]),
         "gm": True,
@@ -210,7 +228,7 @@ def gm_state(db: Session, group: GamingGroup) -> Dict[str, Any]:
             {"id": encounter.id, "name": encounter.name, "round": encounter.current_round}
             if encounter else None
         ),
-        "pcs": [_combatant(pc) for pc in pcs],
+        "pcs": [{**_combatant(pc), "weapon": list(weapon_for(encounter, pc.id) or []) or None} for pc in pcs],
         "npcs": out_npcs,
         "actions": [_gm_action(a, names) for a in _actions(db, encounter)],
         "reach": npcs.current_reach(encounter, [pc.id for pc in pcs], [link.character_id for link in links]),

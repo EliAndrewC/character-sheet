@@ -660,6 +660,19 @@
             // TN and names them in the fight log. Empty on a sheet.
             combatTargets: [],
             atkTargetId: null,
+            // A PC in its group's fight (app/services/combat_targets.py): the
+            // attack modal opens on "who are you attacking?" (atkPhase
+            // 'target'), and the target's TN and the GM's weapon for this PC
+            // are fixed. The group id is null outside a group, for an NPC and
+            // for a viewer who cannot edit (nothing to reveal for them).
+            _fightGroupId: {{ character.gaming_group_id if (viewer_can_edit and character.gaming_group_id and not character.is_npc and not character.is_hidden) else 'null' }},
+            _atkFightSeq: 0,
+            atkFight: null,          // the fight's targets and this PC's weapon
+            atkFightPick: '',        // the NPC chosen in the target step
+            atkFightBusy: false,
+            atkFightError: '',
+            atkTargetLocked: null,   // {id, name, tn, athletics_tn} once chosen
+            atkWeaponLocked: null,   // [rolled, kept], set by the GM
             // Attack result state
             atkHit: false,
             atkNearMiss: false,
@@ -4351,6 +4364,111 @@
                 this.atkShowCustomTN = !listed.includes(this.atkTN);
             },
 
+            // --- The fight's target step ---
+
+            // On opening an attack: ask the server about the PC's fight. No
+            // fight (or no answer) is the ordinary modal; a fight with NPCs
+            // in it starts on the target step. The GM's weapon is fixed
+            // either way (an arrow has no weapon dice).
+            async _atkStartFight() {
+                this.atkFight = null;
+                this.atkFightPick = '';
+                this.atkFightError = '';
+                this.atkTargetLocked = null;
+                this.atkWeaponLocked = null;
+                if (!this._fightGroupId || this.combatTargets.length) return;
+                const seq = ++this._atkFightSeq;
+                this.atkPhase = 'target';
+                this.atkFightBusy = true;
+                let fight = null;
+                try {
+                    const resp = await fetch('/groups/' + this._fightGroupId + '/combat/fight/{{ character.id }}');
+                    fight = resp.ok ? ((await resp.json()).fight || null) : null;
+                } catch (e) { fight = null; }
+                if (seq !== this._atkFightSeq || this.atkPhase !== 'target') return;
+                this.atkFightBusy = false;
+                this.atkFight = fight;
+                if (fight && fight.weapon && !this.atkIsArchery()) {
+                    this.atkWeaponLocked = fight.weapon;
+                    this.atkWeaponRolled = fight.weapon[0];
+                    this.atkWeaponKept = fight.weapon[1];
+                }
+                if (!fight || !fight.targets.length) this.atkPhase = 'pre';
+            },
+
+            // Who this attack may be aimed at: anyone for an arrow, only
+            // those the GM marked within striking distance otherwise.
+            atkFightTargets() {
+                const all = this.atkFight?.targets || [];
+                return this.atkIsArchery() ? all : all.filter(t => t.reachable);
+            },
+            atkFightOutOfReach() {
+                if (this.atkIsArchery()) return [];
+                return (this.atkFight?.targets || []).filter(t => !t.reachable);
+            },
+            atkFightTn(t) {
+                if (!t || t.tn === null || t.tn === undefined) return null;
+                return this.atkIsAthleticsAttack() ? t.athletics_tn : t.tn;
+            },
+            atkFightPicked() {
+                return this.atkFightTargets().find(t => String(t.id) === String(this.atkFightPick)) || null;
+            },
+
+            // Attack the chosen NPC. An unknown TN is revealed first (to
+            // everyone, on the combat page too); the server judges the roll
+            // against the real TN whatever this tab sends.
+            async atkConfirmTarget() {
+                const t = this.atkFightPicked();
+                if (!t || this.atkFightBusy) return;
+                this.atkFightError = '';
+                if (t.tn === null || t.tn === undefined) {
+                    this.atkFightBusy = true;
+                    let revealed = null;
+                    try {
+                        const resp = await fetch('/groups/' + this._fightGroupId + '/combat/fight/{{ character.id }}/reveal', {
+                            method: 'POST', headers: {'Content-Type': 'application/json'},
+                            body: JSON.stringify({npc_id: t.id}),
+                        });
+                        revealed = resp.ok ? (await resp.json()).target : null;
+                    } catch (e) { revealed = null; }
+                    this.atkFightBusy = false;
+                    if (!revealed) {
+                        this.atkFightError = 'Could not reach the server to look up the TN - try again.';
+                        return;
+                    }
+                    t.tn = revealed.tn;
+                    t.athletics_tn = revealed.athletics_tn;
+                }
+                this.atkTargetLocked = {id: t.id, name: t.name, tn: t.tn, athletics_tn: t.athletics_tn};
+                this.atkTargetId = t.id;
+                if (this.atkIsArchery()) {
+                    this.atkArcheryBaseTn = t.tn;
+                } else {
+                    this.atkTN = this.atkFightTn(t);
+                    const listed = this.atkIsAthleticsAttack() ? [5, 15, 25, 35, 45, 55] : [5, 10, 15, 20, 25, 30];
+                    this.atkShowCustomTN = !listed.includes(this.atkTN);
+                    this.atkDefaultParrySkill();
+                }
+                this.atkPhase = 'pre';
+            },
+
+            // Not attacking anyone in the tracker: the ordinary TN inputs.
+            atkSkipTarget() {
+                this.atkTargetLocked = null;
+                this.atkTargetId = null;
+                this.atkPhase = 'pre';
+            },
+
+            // Back to the target step. The rules say an attack whose TN was
+            // revealed cannot be taken back; that is the players' to honour.
+            atkChangeTarget() {
+                this.atkTargetLocked = null;
+                this.atkTargetId = null;
+                this.atkFightPick = '';
+                this.atkFightError = '';
+                this.atkPhase = 'target';
+            },
+
             openAttackModal(key, preSpentDieIndex = null) {
                 const f = this.formulas[key];
                 if (!f) return;
@@ -4441,6 +4559,7 @@
                 this.atkDefaultParrySkill(f);
                 this.atkShowCustomTN = false;
                 this.atkModalOpen = true;
+                this._atkStartFight();
             },
 
             // The parry skill a failed parry defaults to, read off the TN the

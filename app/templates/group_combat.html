@@ -164,6 +164,24 @@
                                     <button type="button" @click="open = false; openRoller(pc, null, $event, 'initiative')" :data-testid="'pc-init-' + pc.id"
                                             class="block w-full text-left px-4 py-2 hover:bg-parchment">Roll initiative</button>
                                     {{ can_strike('pc', 'npcs', 'pc.id', 'o.id', 'lg:left-full lg:ml-1') }}
+                                    {# The weapon this PC's attacks roll damage with in this
+                                       fight (combat_targets); their attack modal cannot change it. #}
+                                    <div class="px-4 py-2 border-t border-ink/10" @click.stop
+                                         x-data="{ r: pc.weapon ? pc.weapon[0] : 4, k: pc.weapon ? pc.weapon[1] : 2 }">
+                                        <div class="text-ink/70 mb-1">Weapon damage</div>
+                                        <div class="flex items-center gap-1">
+                                            <input type="number" x-model.number="r" min="0" max="10" :data-testid="'pc-weapon-rolled-' + pc.id"
+                                                   class="w-14 border rounded px-1 py-1 text-sm text-center" aria-label="Rolled">
+                                            <span class="font-mono">k</span>
+                                            <input type="number" x-model.number="k" min="1" max="10" :data-testid="'pc-weapon-kept-' + pc.id"
+                                                   class="w-14 border rounded px-1 py-1 text-sm text-center" aria-label="Kept">
+                                            <button type="button" @click="setWeapon(pc, r, k); open = false" :data-testid="'pc-weapon-set-' + pc.id"
+                                                    class="btn-primary text-xs px-2 py-1 rounded">Set</button>
+                                            <button type="button" x-show="pc.weapon" @click="setWeapon(pc, null, null); open = false"
+                                                    :data-testid="'pc-weapon-clear-' + pc.id"
+                                                    class="btn-ghost text-xs px-2 py-1 rounded">Clear</button>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                         </template>
@@ -213,6 +231,7 @@
                         {{ sw_count('pc', show_max=True) }}
                         <span><span class="text-ink/50">Void</span> <b x-text="voidText(pc)"></b></span>
                         <span><span class="text-ink/50">TN</span> <b x-text="pc.tn_to_be_hit"></b></span>
+                        <span x-show="pc.weapon" :data-testid="'pc-weapon-' + pc.id"><span class="text-ink/50">Weapon</span> <b x-text="pc.weapon ? pc.weapon[0] + 'k' + pc.weapon[1] : ''"></b></span>
                     </div>
                     </template>
                     <template x-if="gm && pc.bonuses.length">

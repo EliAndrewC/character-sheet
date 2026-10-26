@@ -671,3 +671,113 @@ def test_backport_panel_is_gm_only(page, page_anon, live_server_url):
     page_anon.wait_for_selector('[data-testid^="npc-card-"], [data-testid^="public-npc"]', timeout=10000)
     assert page_anon.locator('[data-testid="backport"]').count() == 0 or \
         not page_anon.locator('[data-testid="backport"]').is_visible()
+
+
+# ---------------------------------------------------------------------------
+# A PC's attack target and weapon (combat_targets)
+# ---------------------------------------------------------------------------
+
+def _pc_in_fight(page, live_server_url, wave_men=2):
+    """A group with one PC (the GM's own) in a fight with ``wave_men`` Wave
+    Men, the PC within striking distance of the first only."""
+    gid = _group_with_pc(page, live_server_url, "Striker")
+    _start_fight_with_wave_men(page, live_server_url, gid, count=wave_men)
+    state = _state(page, live_server_url, gid)
+    pc, npcs = state["pcs"][0], state["npcs"]
+    page.request.post(f"{live_server_url}/groups/{gid}/combat/reach",
+                      data={"pc_id": pc["id"], "npc_id": npcs[0]["id"], "on": True})
+    return gid, pc, npcs
+
+
+def test_a_pcs_attack_starts_by_choosing_a_target_whose_tn_it_locks(page, page_anon, live_server_url):
+    from tests.e2e.helpers import open_melee_attack
+
+    gid, pc, npcs = _pc_in_fight(page, live_server_url)
+    near, far = npcs
+    page.goto(f"{live_server_url}/characters/{pc['id']}")
+    open_melee_attack(page)
+    step = page.locator('[data-testid="atk-fight-step"]')
+    expect(step).to_be_visible()
+    picker = page.locator('[data-testid="atk-fight-target"]')
+    options = picker.locator("option").all_text_contents()
+    # Melee: only who the PC can reach, and no TN nobody has learned yet.
+    assert options == ["- Choose a target -", f"{near['name']} (TN not yet known)"]
+    expect(page.locator('[data-testid="atk-fight-out-of-reach"]')).to_contain_text(far["name"])
+    picker.select_option(str(near["id"]))
+    expect(page.locator('[data-testid="atk-fight-reveal-note"]')).to_contain_text("may not take the attack back")
+    page.locator('[data-testid="atk-fight-confirm"]').click()
+
+    expect(page.locator('[data-testid="atk-locked-target"]')).to_contain_text(near["name"])
+    expect(page.locator('[data-testid="atk-locked-tn"]')).to_have_text(str(near["tn_to_be_hit"]))
+    # Choosing it revealed the TN to everyone, on the combat page too.
+    public = page_anon.request.get(f"{live_server_url}/groups/{gid}/combat/state").json()
+    assert next(n for n in public["npcs"] if n["id"] == near["id"])["tn_to_be_hit"] == near["tn_to_be_hit"]
+    assert next(n for n in public["npcs"] if n["id"] == far["id"])["tn_to_be_hit"] is None
+
+    force_dice(page, [9, 9, 9, 9, 9])
+    page.locator('[data-action="roll-attack"]').click()
+    expect(page.locator('[data-modal="attack"]')).to_contain_text(f"vs TN {near['tn_to_be_hit']}")
+    restore_dice(page)
+
+    # A known TN is listed from then on; "Change target" goes back to the list.
+    page.goto(f"{live_server_url}/characters/{pc['id']}")
+    open_melee_attack(page)
+    expect(page.locator('[data-testid="atk-fight-target"] option').nth(1)).to_have_text(
+        f"{near['name']} (TN {near['tn_to_be_hit']})")
+    page.locator('[data-testid="atk-fight-target"]').select_option(str(near["id"]))
+    expect(page.locator('[data-testid="atk-fight-reveal-note"]')).to_be_hidden()
+    page.locator('[data-testid="atk-fight-confirm"]').click()
+    page.locator('[data-testid="atk-change-target"]').click()
+    expect(step).to_be_visible()
+    # "Not one of these" is the ordinary TN picker.
+    page.locator('[data-testid="atk-fight-skip"]').click()
+    expect(page.locator('[data-testid="atk-locked-target"]')).to_be_hidden()
+    expect(page.locator('[data-testid="atk-choose-target"]')).to_be_visible()
+
+
+def test_an_arrow_may_target_anyone_in_the_fight(page, live_server_url):
+    from tests.e2e.helpers import open_archery_attack
+
+    gid, pc, npcs = _pc_in_fight(page, live_server_url)
+    page.goto(f"{live_server_url}/characters/{pc['id']}")
+    open_archery_attack(page)
+    picker = page.locator('[data-testid="atk-fight-target"]')
+    expect(picker.locator("option")).to_have_count(3)  # the placeholder and both Wave Men
+    expect(page.locator('[data-testid="atk-fight-out-of-reach"]')).to_be_hidden()
+    picker.select_option(str(npcs[1]["id"]))
+    page.locator('[data-testid="atk-fight-confirm"]').click()
+    base = page.locator('[data-testid="archery-base-tn"]')
+    expect(base).to_be_disabled()
+    expect(base).to_have_value(str(npcs[1]["tn_to_be_hit"]))
+
+
+def test_the_gm_sets_a_pcs_weapon_for_the_fight(page, live_server_url):
+    from tests.e2e.helpers import open_melee_attack
+
+    gid, pc, npcs = _pc_in_fight(page, live_server_url, wave_men=1)
+    page.goto(f"{live_server_url}/groups/{gid}/combat")
+    page.locator(f'[data-testid="pc-menu-{pc["id"]}"]').click()
+    page.fill(f'[data-testid="pc-weapon-rolled-{pc["id"]}"]', "5")
+    page.fill(f'[data-testid="pc-weapon-kept-{pc["id"]}"]', "3")
+    page.locator(f'[data-testid="pc-weapon-set-{pc["id"]}"]').click()
+    expect(page.locator(f'[data-testid="pc-weapon-{pc["id"]}"]')).to_have_text("Weapon 5k3")
+
+    page.goto(f"{live_server_url}/characters/{pc['id']}")
+    open_melee_attack(page)
+    page.locator('[data-testid="atk-fight-target"]').select_option(str(npcs[0]["id"]))
+    page.locator('[data-testid="atk-fight-confirm"]').click()
+    rolled, kept = page.locator('[data-testid="atk-weapon-rolled"]'), page.locator('[data-testid="atk-weapon-kept"]')
+    expect(rolled).to_be_disabled()
+    expect(rolled).to_have_value("5")
+    expect(kept).to_have_value("3")
+    expect(page.locator('[data-testid="atk-weapon-locked"]')).to_be_visible()
+
+    # Cleared, the modal's own inputs are back.
+    page.goto(f"{live_server_url}/groups/{gid}/combat")
+    page.locator(f'[data-testid="pc-menu-{pc["id"]}"]').click()
+    page.locator(f'[data-testid="pc-weapon-clear-{pc["id"]}"]').click()
+    expect(page.locator(f'[data-testid="pc-weapon-{pc["id"]}"]')).to_be_hidden()
+    page.goto(f"{live_server_url}/characters/{pc['id']}")
+    open_melee_attack(page)
+    page.locator('[data-testid="atk-fight-skip"]').click()
+    expect(page.locator('[data-testid="atk-weapon-rolled"]')).to_be_enabled()
