@@ -12,6 +12,7 @@ from app.services import combat_view as cv
 from app.services import fight_log
 from app.services import npcs
 from app.services.per_adventure import per_adventure_abilities, remaining
+from tests.div_balance import assert_divs_balanced
 
 GM = "183026066498125825"
 PLAYER = {"X-Test-User": "test_user_1:player"}
@@ -392,8 +393,10 @@ def test_npc_roller_overlay_serves_the_sheets_roller(client, world):
     targets = re.search(r'id="combat-targets">(.*?)</script>', html, re.S).group(1)
     assert json.loads(targets) == [{"id": pc.id, "name": "Yudai", "parry": 3, "tn": ca.tn_to_be_hit(pc)}]
     assert "lwPlusModal = true" not in html
+    assert_divs_balanced(html, "NPC roll overlay")
     wounds = client.get(_url(world, f"/roller/{npc.id}?wounds=1")).text
     assert "Light Wounds" in wounds and "lwPlusModal = true" in wounds
+    assert_divs_balanced(wounds, "NPC roll overlay (wounds)")
 
 
 def test_npc_roller_overlay_is_the_gms_and_only_for_npcs_in_the_fight(client, world):

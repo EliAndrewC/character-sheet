@@ -146,7 +146,7 @@
 
 {% include 'character/partials/sheet/_roll_data.html' %}
 {% include 'character/partials/sheet/roller.html' %}
-{% if user_prefs.roll_stats_enabled %}{% include 'character/partials/sheet/roll_stats.html' %}{% endif %}
 
 </div>
+{% if user_prefs.roll_stats_enabled %}{% include 'character/partials/sheet/roll_stats.html' %}{% endif %}
 {% endblock %}
