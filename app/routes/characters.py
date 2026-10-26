@@ -2063,6 +2063,13 @@ async def track_op(request: Request, char_id: int, db: Session = Depends(get_db)
     if not isinstance(body, dict):
         return JSONResponse({"error": "Expected a JSON object"}, status_code=400)
     try:
+        if body.get("op") == "mantis_posture":
+            # In a fight, no posture for a phase the GM has not reached.
+            from app.services.combat_targets import posture_phase_refusal
+
+            refusal = posture_phase_refusal(db, character)
+            if refusal:
+                raise OpRefused(refusal)
         apply_op(character, str(body.get("op") or ""), body.get("args") or {})
     except OpRefused as exc:
         return JSONResponse({"error": str(exc), "tracking": tracking_snapshot(character)},

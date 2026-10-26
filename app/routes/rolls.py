@@ -426,6 +426,7 @@ async def make_roll(request: Request, char_id: int, db: Session = Depends(get_db
         grants = (owner.granted_account_ids or []) if owner else []
         record, is_owner_roll = should_record_roll(viewer, character, grants)
     combat_targets.lock_target(db, character, body, live)
+    combat_targets.lock_phase(db, character, body)
     combat_targets.lock_duel(db, character, body)
     if live and str(body.get("roll_key") or "").startswith("initiative"):
         fight_log.note_dice_replaced(db, character)  # the new dice replace this round's

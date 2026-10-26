@@ -53,8 +53,25 @@
         <div class="min-w-0">
             <h1 class="text-xl font-bold text-ink truncate" data-testid="combat-title"
                 x-text="state.encounter ? state.encounter.name : 'No fight in progress'"></h1>
-            <p x-show="state.encounter" class="text-sm text-ink/60" data-testid="combat-round"
-               x-text="state.encounter?.round ? 'Round ' + state.encounter.round : 'Not started - no round rolled yet'"></p>
+            <div x-show="state.encounter" class="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-ink/60">
+                <p data-testid="combat-round"
+                   x-text="state.encounter?.round ? 'Round ' + state.encounter.round : 'Not started - no round rolled yet'"></p>
+                {# The fight's phase: everyone sees it; only the GM moves it. #}
+                <div class="flex items-center gap-1" data-testid="combat-phase-box">
+                    <template x-if="gm">
+                        <button type="button" @click="movePhase(-1)" :disabled="busy || !state.encounter?.phase"
+                                data-testid="phase-back" title="Back one phase (a mistake)" aria-label="Back one phase"
+                                class="btn-ghost rounded px-1.5 leading-none disabled:opacity-30">&#9664;</button>
+                    </template>
+                    <span class="font-semibold text-ink" data-testid="combat-phase"
+                          x-text="'Phase ' + (state.encounter?.phase ?? 0)"></span>
+                    <template x-if="gm">
+                        <button type="button" @click="movePhase(1)" :disabled="busy || (state.encounter?.phase ?? 0) >= 10"
+                                data-testid="phase-next" title="Next phase" aria-label="Next phase"
+                                class="btn-ghost rounded px-1.5 leading-none disabled:opacity-30">&#9654;</button>
+                    </template>
+                </div>
+            </div>
         </div>
         <template x-if="gm">
             <div class="flex flex-wrap items-center gap-2">
@@ -254,6 +271,24 @@
                         <div class="text-xs text-ink/60 flex flex-wrap gap-x-3" :data-testid="'pc-bonuses-' + pc.id">
                             <template x-for="b in pc.bonuses" :key="b.id">
                                 <span x-text="bonusText(b)"></span>
+                            </template>
+                        </div>
+                    </template>
+                    {# This phase's posture (Mantis) / blessing (Priest): declared, so public. #}
+                    <template x-for="a in pc.phase_abilities || []" :key="a.kind">
+                        <div class="text-xs flex flex-wrap items-center gap-x-2 gap-y-1" :data-testid="'pc-phase-' + a.kind + '-' + pc.id">
+                            <span class="text-ink/60" x-text="a.label + ' this phase:'"></span>
+                            <b x-show="a.choice" class="text-ink" x-text="a.choice"></b>
+                            <span x-show="!a.choice" class="text-orange-700 font-medium">not yet chosen</span>
+                            <template x-if="a.kind === 'blessing' && (gm || pc.mine)">
+                                <select @change="setBlessing(pc, $event.target.value)" :disabled="busy"
+                                        :data-testid="'pc-blessing-' + pc.id" class="border rounded px-1 py-0.5 text-xs">
+                                    <option value="" :selected="!a.value">- choose -</option>
+                                    <option value="attack" :selected="a.value === 'attack'">attacks</option>
+                                    <option value="parry" :selected="a.value === 'parry'">parries</option>
+                                    <option value="damage" :selected="a.value === 'damage'">damage</option>
+                                    <option value="wound_check" :selected="a.value === 'wound_check'">wound checks</option>
+                                </select>
                             </template>
                         </div>
                     </template>

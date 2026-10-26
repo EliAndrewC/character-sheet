@@ -166,9 +166,10 @@ def test_public_state_is_the_allow_list(world):
     _act(world, kind="attack", label="Attack", total=20)
     state = cv.public_state(s, g)
     assert set(state) == {"rev", "group", "encounter", "pcs", "npcs", "reach", "duels"}
-    assert state["encounter"] == {"name": "Ambush", "round": 1}
+    assert state["encounter"] == {"name": "Ambush", "round": 1, "phase": 0}
     assert [p["name"] for p in state["pcs"]] == ["Yudai"]  # the hidden PC is not in the fight
-    assert set(state["pcs"][0]) == {"id", "name", "light_wounds", "serious_wounds", "action_dice", "impaired"}
+    assert set(state["pcs"][0]) == {"id", "name", "light_wounds", "serious_wounds", "action_dice", "impaired",
+                                     "phase_abilities"}
     (row,) = state["npcs"]
     assert set(row) == _PUBLIC_NPC_KEYS  # an NPC's rolls are not public, only its spent dice
 

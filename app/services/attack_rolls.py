@@ -188,11 +188,13 @@ def build_attack(character: Any, formula: Dict[str, Any], choices: Dict[str, Any
     x = flags["kakita_3rd_dan_defender_phase_bonus_x"]
     attacker = _int(choices, "attacker_phase", 0, 10)
     attacker = die if attacker is None else attacker
-    defender = _int(choices, "kakita_defender_phase", 0, 10)
+    # Phase 11: the defender has no action left this round (rules/04-schools.md).
+    defender = _int(choices, "kakita_defender_phase", 0, 11)
     if f.get("kakita_3rd_dan_defender_phase_bonus") and x and attacker is not None and defender is not None:
         bonus = x * max(0, defender - attacker)
         if bonus:
-            _bonus(f, f"Kakita 3rd Dan (die {attacker}, defender phase {defender}, X = {x})", bonus,
+            mine = "phase" if choices.get("attacker_phase_from_fight") else "die"
+            _bonus(f, f"Kakita 3rd Dan ({mine} {attacker}, defender phase {defender}, X = {x})", bonus,
                    "kakita-3rd-dan-breakdown")
             f.update(kakita_3rd_dan_bonus=bonus, kakita_3rd_dan_attacker_phase=attacker,
                      kakita_3rd_dan_defender_phase=defender, kakita_3rd_dan_x=x)

@@ -43,7 +43,8 @@ def test_targets_say_who_is_in_reach_and_hide_unknown_tns(fight):
     near, far = fight["npc"], fight["far"]
     t = _targets(fight)
     assert list(t) == [near.id, far.id]
-    assert t[near.id] == {"id": near.id, "name": near.name, "reachable": True, "tn": None, "athletics_tn": None}
+    assert t[near.id] == {"id": near.id, "name": near.name, "reachable": True, "tn": None, "athletics_tn": None,
+                       "next_phase": None}
     assert t[far.id]["reachable"] is False and t[far.id]["tn"] is None
 
 
@@ -390,3 +391,218 @@ def test_stance_is_only_for_the_evaluate_roll(duel):
     ct.add_stance(duel["s"], duel["pc"], "skill:etiquette", result)
     ct.add_stance(duel["s"], duel["pc"], ct.EVALUATE_STANCE_KEY, {"mode": "live"})
     assert "stance" not in result
+
+
+# ---------------------------------------------------------------------------
+# The phase
+# ---------------------------------------------------------------------------
+
+def test_the_gm_moves_the_phase_within_0_to_10_and_a_new_round_starts_at_0(fight):
+    from app.services import combat_actions as ca
+    from tests.test_combat_actions import ConstRng
+
+    s, enc = fight["s"], fight["enc"]
+    assert enc.current_phase == 0
+    assert ct.set_phase(s, enc, 1) == 1
+    assert ct.set_phase(s, enc, -5) == 0
+    assert ct.set_phase(s, enc, 40) == 10
+    for bad in ("1", True, None, 1.5):
+        with pytest.raises(ValueError):
+            ct.set_phase(s, enc, bad)
+    enc.phase_choices = {"1": {"10": "parry"}}
+    ca.new_round(s, enc, GM, rng=ConstRng(3))
+    assert enc.current_phase == 0 and enc.phase_choices == {}
+
+
+def test_phase_route_is_the_gms(client, fight):
+    r = client.post(_url(fight, "/phase"), json={"delta": 1})
+    assert r.status_code == 200 and r.json() == {"phase": 1}
+    assert client.post(_url(fight, "/phase"), json={"delta": "x"}).status_code == 400
+    assert client.post(_url(fight, "/phase"), json={"delta": 1}, headers=PLAYER).status_code == 403
+    state = client.get(_url(fight, "/state"), headers=PLAYER).json()
+    assert state["encounter"]["phase"] == 1
+    assert client.get(_fight_url(fight), headers=PLAYER).json()["fight"]["phase"] == 1
+    npcs.end_encounter(fight["s"], fight["enc"])
+    fight["s"].commit()
+    assert client.post(_url(fight, "/phase"), json={"delta": 1}).status_code == 409
+
+
+def test_next_phase_is_the_lowest_unspent_die_never_before_now(fight):
+    npc = fight["npc"]
+    npc.action_dice = [{"value": 3, "spent": True}, {"value": 7, "spent": False}, {"value": 5, "spent": False}]
+    assert ct.next_phase(npc, 2) == 5
+    assert ct.next_phase(npc, 6) == 6  # a held die can be used now
+    npc.action_dice = [{"value": 3, "spent": True}]
+    assert ct.next_phase(npc, 2) == ct.NO_ACTION_PHASE
+
+
+def _school(pc, school, dan):
+    from app.game_data import SCHOOLS
+
+    pc.school = school
+    pc.knacks = {k: dan for k in SCHOOLS[school].school_knacks}
+
+
+def test_a_kakita_3rd_dan_knows_when_targets_in_reach_act_next(fight):
+    s, pc, near, far = fight["s"], fight["pc"], fight["npc"], fight["far"]
+    near.action_dice = [{"value": 7, "spent": False}]
+    far.action_dice = [{"value": 4, "spent": False}]
+    assert _targets(fight)[near.id]["next_phase"] is None  # an Akodo does not
+    _school(pc, "kakita_duelist", 3)
+    t = _targets(fight)
+    assert t[near.id]["next_phase"] == 7
+    assert t[far.id]["next_phase"] is None  # out of striking range
+    assert t[far.id]["tn"] is None
+    _school(pc, "kakita_duelist", 2)
+    assert _targets(fight)[near.id]["next_phase"] is None
+
+
+def test_a_kitsuki_4th_dan_knows_everyones_next_action_and_tn(fight):
+    pc, far = fight["pc"], fight["far"]
+    far.action_dice = [{"value": 4, "spent": False}]
+    _school(pc, "kitsuki_magistrate", 4)
+    t = _targets(fight)[far.id]
+    assert t["next_phase"] == 4 and t["tn"] == tn_to_be_hit(far)
+    _school(pc, "kitsuki_magistrate", 3)
+    assert _targets(fight)[far.id]["tn"] is None
+
+
+def test_a_kakitas_attack_counts_from_the_fights_phase_and_the_targets_next_action(client, fight, scripted):
+    s, pc, near = fight["s"], fight["pc"], fight["npc"]
+    _school(pc, "kakita_duelist", 3)
+    pc.attack = 3
+    pc.action_dice = [{"value": 2, "spent": False}]
+    near.action_dice = [{"value": 8, "spent": False}]
+    fight["enc"].current_phase = 5
+    s.commit()
+    data = _attack(client, fight, target_id=near.id, die_value=2, kakita_defender_phase=1,
+                   headers=scripted("5")).json()
+    f = data["formula"]
+    assert f["kakita_3rd_dan_attacker_phase"] == 5 and f["kakita_3rd_dan_defender_phase"] == 8
+    assert f["kakita_3rd_dan_bonus"] == 3 * (8 - 5)
+    assert any(b["label"].startswith("Kakita 3rd Dan (phase 5") for b in f["bonuses"])
+    # The phase 0 interrupt names its phase, which stands.
+    zero = _attack(client, fight, target_id=near.id, die_value=2, attacker_phase=0,
+                   headers=scripted("5")).json()["formula"]
+    assert zero["kakita_3rd_dan_attacker_phase"] == 0
+    assert any(b["label"].startswith("Kakita 3rd Dan (die 0") for b in zero["bonuses"])
+
+
+def test_no_remaining_actions_counts_as_phase_11(client, fight, scripted):
+    pc, near = fight["pc"], fight["npc"]
+    _school(pc, "kakita_duelist", 3)
+    pc.attack = 2
+    near.action_dice = []
+    fight["enc"].current_phase = 4
+    fight["s"].commit()
+    f = _attack(client, fight, target_id=near.id, headers=scripted("5")).json()["formula"]
+    assert f["kakita_3rd_dan_defender_phase"] == 11 and f["kakita_3rd_dan_bonus"] == 2 * (11 - 4)
+
+
+def test_outside_a_fight_the_modals_phases_stand(client, fight, scripted):
+    pc = fight["pc"]
+    _school(pc, "kakita_duelist", 3)
+    pc.attack = 2
+    npcs.end_encounter(fight["s"], fight["enc"])
+    fight["s"].commit()
+    f = _attack(client, fight, die_value=3, kakita_defender_phase=11, attacker_phase_from_fight=True,
+                headers=scripted("5")).json()["formula"]
+    assert f["kakita_3rd_dan_attacker_phase"] == 3 and f["kakita_3rd_dan_bonus"] == 2 * 8
+    assert any(b["label"].startswith("Kakita 3rd Dan (die 3") for b in f["bonuses"])
+
+
+def test_shinjo_doji_and_arrows_use_the_fights_phase(client, fight, scripted):
+    from app.services.attack_rolls import build_attack
+
+    s, pc = fight["s"], fight["pc"]
+    fight["enc"].current_phase = 6
+    s.commit()
+    body = {"die_value": 2, "shinjo_phase": 9, "doji_phase": 3, "archery": {"phase": 1}}
+    ct.lock_phase(s, pc, body)
+    assert body["shinjo_phase"] == 6 and body["doji_phase"] == 6 and body["archery"]["phase"] == 6
+    unticked = {"doji_phase": 0}
+    ct.lock_phase(s, pc, unticked)
+    assert unticked["doji_phase"] == 0  # Doji 4th Dan's box was not ticked
+    # An arrow: the held die counts to the fight's phase.
+    pc.action_dice = [{"value": 2, "spent": False}]
+    s.commit()
+    data = client.post(f"/characters/{pc.id}/roll", headers=scripted("5"), json={
+        "roll_key": "archery", "archery": {"base_tn": 20, "phase": 3, "die_index": 0}}).json()
+    held = [b for b in data["formula"]["bonuses"] if b["label"].startswith("held")]
+    assert held and held[0]["amount"] == 4  # phase 6 - die 2
+
+
+# ---------------------------------------------------------------------------
+# Per-phase abilities: Mantis posture, Priest blessing
+# ---------------------------------------------------------------------------
+
+def test_a_mantis_posture_waits_for_the_fights_phase(client, fight):
+    s, pc = fight["s"], fight["pc"]
+    _school(pc, "mantis_wave_treader", 1)
+    s.commit()
+
+    def posture():
+        return client.post(f"/characters/{pc.id}/track/op", headers=PLAYER,
+                           json={"op": "mantis_posture", "args": {"type": "offensive"}})
+
+    refused = posture()
+    assert refused.status_code == 400 and "phase 0" in refused.json()["error"]
+    assert "tracking" in refused.json()
+    client.post(_url(fight, "/phase"), json={"delta": 1})
+    assert posture().status_code == 200
+    assert "phase 2" in posture().json()["error"]
+    s.expire_all()
+    assert cv.public_state(s, fight["g"])["pcs"][0]["phase_abilities"] == [
+        {"kind": "posture", "label": "Posture", "choice": "offensive"}]
+    client.post(_url(fight, "/phase"), json={"delta": 1})
+    s.expire_all()
+    assert cv.gm_state(s, fight["g"])["pcs"][0]["phase_abilities"][0]["choice"] is None
+    npcs.end_encounter(s, fight["enc"])
+    s.commit()
+    assert posture().status_code == 200  # outside a fight: as before
+
+
+def test_no_mantis_posture_at_phase_0_and_nothing_for_other_schools(fight):
+    s, pc, enc = fight["s"], fight["pc"], fight["enc"]
+    assert ct.phase_abilities(enc, pc) == []
+    _school(pc, "mantis_wave_treader", 1)
+    assert ct.phase_abilities(enc, pc) == []  # phase 0 has no posture
+    assert ct.phase_abilities(None, pc) == []
+
+
+def test_a_priests_blessing_is_kept_per_phase(client, fight):
+    s, pc, enc = fight["s"], fight["pc"], fight["enc"]
+    _school(pc, "priest", 1)
+    s.commit()
+    url = _fight_url(fight, "/blessing")
+    assert ct.phase_abilities(enc, pc) == [
+        {"kind": "blessing", "label": "Blessing", "choice": None, "value": None}]
+    assert client.post(url, json={"kind": "wound_check"}, headers=PLAYER).status_code == 200
+    s.expire_all()
+    assert cv.public_state(s, fight["g"])["pcs"][0]["phase_abilities"] == [
+        {"kind": "blessing", "label": "Blessing", "choice": "wound checks", "value": "wound_check"}]
+    client.post(_url(fight, "/phase"), json={"delta": 1})
+    s.expire_all()
+    assert ct.phase_abilities(fight["enc"], pc)[0]["choice"] is None  # a new phase, a new pick
+    client.post(_url(fight, "/phase"), json={"delta": -1})
+    s.expire_all()
+    assert ct.phase_abilities(fight["enc"], pc)[0]["value"] == "wound_check"
+    # Taken back.
+    assert client.post(url, json={"kind": None}, headers=PLAYER).status_code == 200
+    s.expire_all()
+    assert ct.phase_abilities(fight["enc"], pc)[0]["value"] is None
+    assert client.post(url, json={"kind": "luck"}, headers=PLAYER).status_code == 400
+    assert client.post(url, json={"kind": "attack"}, headers=OTHER).status_code == 403
+    npcs.end_encounter(s, fight["enc"])
+    s.commit()
+    assert client.post(url, json={"kind": "attack"}, headers=PLAYER).status_code == 409
+
+
+def test_only_a_priest_or_a_holder_of_the_ritual_blesses_a_phase(fight):
+    s, pc, enc = fight["s"], fight["pc"], fight["enc"]
+    with pytest.raises(ValueError, match="cannot bless"):
+        ct.set_blessing(s, enc, pc, "attack")
+    pc.school, pc.knacks, pc.profession = "", {}, "profession"
+    pc.profession_abilities = {ct.BLESSING_ABILITY: 1}
+    ct.set_blessing(s, enc, pc, "parry")
+    assert ct.phase_abilities(enc, pc)[0]["choice"] == "parries"

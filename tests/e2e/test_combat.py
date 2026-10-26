@@ -850,3 +850,130 @@ def test_a_can_strike_flyout_stays_open_while_the_pointer_crosses_to_it(page, li
     expect(flyout).to_be_visible()
     box.check()
     expect(box).to_be_checked()
+
+
+# ---------------------------------------------------------------------------
+# The fight's phase
+# ---------------------------------------------------------------------------
+
+def _school_pc_in_fight(page, live_server_url, name, school, knacks=None):
+    """A fresh group whose one PC is ``name`` of ``school`` (knack ranks
+    ``knacks``), in a fight with one Wave Man it can strike."""
+    from tests.e2e.test_school_abilities import _create_char
+
+    gname = "Fight-" + uuid.uuid4().hex[:8]
+    page.goto(f"{live_server_url}/admin/groups")
+    page.fill('input[name="name"][placeholder*="Friday"]', gname)
+    page.locator('form[action="/admin/groups/new"] button[type="submit"]').click()
+    page.wait_for_load_state("networkidle")
+    _create_char(page, live_server_url, name, school, knack_overrides=knacks)
+    sheet = page.url
+    page.goto(sheet + "/edit")
+    page.wait_for_selector('select[name="gaming_group_id"]')
+    page.locator('select[name="gaming_group_id"]').select_option(label=gname)
+    page.wait_for_timeout(400)
+    page.goto(live_server_url)
+    page.locator('[data-testid="group-link"]', has_text=gname).first.click()
+    page.wait_for_url(re.compile(r".*/groups/\d+$"))
+    gid = int(page.url.rstrip("/").split("/")[-1])
+    _start_fight_with_wave_men(page, live_server_url, gid, count=1)
+    state = _state(page, live_server_url, gid)
+    pc, npc = state["pcs"][0], state["npcs"][0]
+    page.request.post(f"{live_server_url}/groups/{gid}/combat/reach",
+                      data={"pc_id": pc["id"], "npc_id": npc["id"], "on": True})
+    return gid, pc, npc
+
+
+def _set_dice(page, live_server_url, char_id, dice):
+    """Save action dice on a character (the sheet bridge's test-setup save)."""
+    import json as _json
+
+    page.goto(f"{live_server_url}/characters/{char_id}")
+    page.wait_for_function("() => window._trackingBridge")
+    page.evaluate(f"""async () => {{
+        const t = window._trackingBridge;
+        t.actionDice = {_json.dumps(dice)};
+        await t.save();
+        await t.whenSaved();
+    }}""")
+
+
+def _phase(page, live_server_url, gid, delta):
+    page.request.post(f"{live_server_url}/groups/{gid}/combat/phase", data={"delta": delta})
+
+
+def test_the_gm_moves_the_phase_and_players_see_it(page, page_anon, live_server_url):
+    gid, pc, npcs = _pc_in_fight(page, live_server_url, wave_men=1)
+    page.goto(f"{live_server_url}/groups/{gid}/combat")
+    phase = page.locator('[data-testid="combat-phase"]')
+    expect(phase).to_have_text("Phase 0")
+    expect(page.locator('[data-testid="phase-back"]')).to_be_disabled()
+    page.locator('[data-testid="phase-next"]').click()
+    page.locator('[data-testid="phase-next"]').click()
+    expect(phase).to_have_text("Phase 2")
+    page.locator('[data-testid="phase-back"]').click()
+    expect(phase).to_have_text("Phase 1")
+    page_anon.goto(f"{live_server_url}/groups/{gid}/combat")
+    expect(page_anon.locator('[data-testid="combat-phase"]')).to_have_text("Phase 1")
+    assert page_anon.locator('[data-testid="phase-next"]').count() == 0
+    page.locator('[data-testid="new-round-btn"]').click()
+    expect(phase).to_have_text("Phase 0")
+
+
+def test_a_kakita_attacks_in_the_fights_phase_knowing_the_targets_next_action(page, live_server_url):
+    from tests.e2e.helpers import open_melee_attack
+
+    gid, pc, npc = _school_pc_in_fight(page, live_server_url, "PhaseKakita", "kakita_duelist",
+                                       knacks={"double_attack": 3, "iaijutsu": 3, "lunge": 3})
+    _set_dice(page, live_server_url, npc["id"], [{"value": 8, "spent": False}])
+    _set_dice(page, live_server_url, pc["id"], [{"value": 2, "spent": False}])
+    for _ in range(5):
+        _phase(page, live_server_url, gid, 1)
+
+    page.goto(f"{live_server_url}/characters/{pc['id']}")
+    open_melee_attack(page)
+    page.locator('[data-testid="atk-fight-target"]').select_option(str(npc["id"]))
+    page.locator('[data-testid="atk-fight-confirm"]').click()
+    kakita = page.locator('[data-testid="kakita-3rd-dan-bonus"]')
+    expect(kakita).to_contain_text("Kakita 3rd Dan: phase")
+    expect(page.locator('[data-testid="kakita-3rd-dan-attacker-phase"]')).to_have_text("5")
+    expect(page.locator('[data-testid="kakita-3rd-dan-known-phase"]')).to_have_text("8")
+    expect(page.locator('[data-action="kakita-3rd-dan-defender-phase"]')).to_be_hidden()
+    expect(page.locator('[data-testid="kakita-3rd-dan-bonus-display"]')).to_contain_text("+3")  # X = attack 1
+
+    force_dice(page, [9, 9, 9, 9, 9])
+    page.locator('[data-action="roll-attack"]').click()
+    expect(page.locator('[data-testid="kakita-3rd-dan-breakdown"]')).to_contain_text("phase 5, defender phase 8")
+    restore_dice(page)
+
+
+def test_a_mantis_waits_for_the_gms_phase_and_the_combat_page_shows_the_posture(page, page_anon, live_server_url):
+    gid, pc, npc = _school_pc_in_fight(page, live_server_url, "PhaseMantis", "mantis_wave_treader")
+    page.goto(f"{live_server_url}/characters/{pc['id']}")
+    page.locator('[data-action="mantis-posture-offensive"]').click()
+    expect(page.get_by_text("your posture for phase 1 can be chosen once the GM reaches it")).to_be_visible()
+    expect(page.locator('[data-action="mantis-posture-offensive"]')).to_contain_text("for Phase 1")
+
+    _phase(page, live_server_url, gid, 1)
+    page_anon.goto(f"{live_server_url}/groups/{gid}/combat")
+    line = page_anon.locator(f'[data-testid="pc-phase-posture-{pc["id"]}"]')
+    expect(line).to_contain_text("not yet chosen")
+    page.reload()
+    page.locator('[data-action="mantis-posture-offensive"]').click()
+    expect(page.locator('[data-action="mantis-posture-offensive"]')).to_contain_text("for Phase 2")
+    expect(line).to_contain_text("Posture this phase: offensive", timeout=10000)  # the page polls
+
+
+def test_a_priest_blesses_the_current_phase_on_the_combat_page(page, page_anon, live_server_url):
+    gid, pc, npc = _school_pc_in_fight(page, live_server_url, "PhasePriest", "priest")
+    page.goto(f"{live_server_url}/groups/{gid}/combat")
+    line = page.locator(f'[data-testid="pc-phase-blessing-{pc["id"]}"]')
+    expect(line).to_contain_text("not yet chosen")
+    page.locator(f'[data-testid="pc-blessing-{pc["id"]}"]').select_option("wound_check")
+    expect(line).to_contain_text("Blessing this phase: wound checks")
+    page_anon.goto(f"{live_server_url}/groups/{gid}/combat")
+    anon_line = page_anon.locator(f'[data-testid="pc-phase-blessing-{pc["id"]}"]')
+    expect(anon_line).to_contain_text("wound checks")
+    assert page_anon.locator(f'[data-testid="pc-blessing-{pc["id"]}"]').count() == 0
+    page.locator('[data-testid="phase-next"]').click()
+    expect(line).to_contain_text("not yet chosen")

@@ -916,6 +916,14 @@ class Encounter(Base):
     # Who each PC is in an iaijutsu duel with, as the GM set it: {str(pc_id):
     # npc_id}. The PC's duel modal and Evaluate Stance roll use that NPC.
     duels: Mapped[Optional[Dict[str, int]]] = mapped_column(JSON, default=dict)
+    # The phase the fight is in (0-10), as the GM moves it: "New round"
+    # starts at 0 (Kakita's phase 0 is a real phase). Attacks made in the
+    # fight read it (combat_targets.lock_phase).
+    current_phase: Mapped[int] = mapped_column(default=0)
+    # The per-phase choices the combat page shows that live with the fight's
+    # clock rather than on a character: {str(pc_id): {str(phase): choice}}
+    # (a Priest's "Bless a combat phase"). Cleared by "New round".
+    phase_choices: Mapped[Optional[Dict[str, Dict[str, str]]]] = mapped_column(JSON, default=dict)
 
     npcs: Mapped[List["EncounterNpc"]] = relationship(
         back_populates="encounter", cascade="all, delete-orphan",

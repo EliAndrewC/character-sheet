@@ -24,6 +24,7 @@
   - WC modal: `wcProbRow` reads live posture and adds +5 to the probability flat. `rollWoundCheck` snapshots the posture into `formula.flat` and appends `"+5 from defensive posture"` to `formula.bonus_sources`. Pre-roll Bonuses row overlays the label live. (Phase 9 verified that this same flow also carries the 5th Dan defensive-count accumulator and the 3rd Dan defensive accumulator into both the probability table and the post-roll breakdown - see `_mantisLiveWcFlat` / `_mantisLiveWcLabels`.)
   - TN display (top derived stats): now has its own `x-data` with a `mantis-posture-changed.window` listener; bumps the displayed value by 5 and shows a "+5 defensive posture" label with a tooltip when defensive.
 - Storage: `adventure_state.mantis_posture_phase` and `adventure_state.mantis_posture_history`. No schema change.
+- **In a group fight (2026-10-26, combat-design D42):** the posture for phase N may not be declared before the GM's phase reaches N (the server refuses with the numbers, and the sheet takes the posture back), and the combat page shows this phase's posture, or "not yet chosen", in both views. The history still resets on the Mantis's own initiative roll, not the GM's "New round", so until they roll it shows the last round's posture for that phase (writing to a PC from the GM's round would break D19).
 
 ---
 

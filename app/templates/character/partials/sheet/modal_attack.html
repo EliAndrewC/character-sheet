@@ -194,7 +194,9 @@
                              class="text-xs text-ink/70 bg-parchment rounded p-2 space-y-2">
                             <div class="flex flex-wrap items-center gap-2">
                                 <span>Die <span class="font-mono" x-text="_archeryDie()?.value ?? ''"></span> fired in phase</span>
-                                <select x-model.number="atkShinjoPhase" data-action="archery-phase"
+                                <b x-show="atkFightPhase !== null" x-cloak data-testid="archery-fight-phase"
+                                   x-text="atkFightPhase" title="The fight's current phase, set by the GM"></b>
+                                <select x-show="atkFightPhase === null" x-model.number="atkShinjoPhase" data-action="archery-phase"
                                         class="border rounded px-1 py-0.5 text-xs">
                                     <template x-for="p in archeryPhases()" :key="p">
                                         <option :value="p" :selected="atkShinjoPhase === p" x-text="p"></option>
@@ -404,7 +406,9 @@
                         </label>
                         <div x-show="atkDojiUntouchedTarget" x-cloak class="flex items-center gap-2">
                             <label>Current phase:</label>
-                            <select x-model.number="atkDojiPhase"
+                            <b x-show="atkFightPhase !== null" x-cloak data-testid="doji-fight-phase"
+                               x-text="atkFightPhase" title="The fight's current phase, set by the GM"></b>
+                            <select x-show="atkFightPhase === null" x-model.number="atkDojiPhase"
                                     data-action="doji-4th-dan-phase"
                                     class="border rounded px-1 py-0.5 text-xs">
                                 <template x-for="p in [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]" :key="p">
@@ -428,7 +432,9 @@
                          data-testid="shinjo-phase-bonus"
                          class="text-xs text-ink/60 bg-parchment rounded p-2 flex flex-wrap items-center gap-2">
                         <span>Shinjo Bushi: die <span class="font-mono" x-text="_shinjoDieToSpend()?.value ?? ''"></span> spent at phase</span>
-                        <select x-model.number="atkShinjoPhase"
+                        <b x-show="atkFightPhase !== null" x-cloak data-testid="shinjo-fight-phase"
+                           x-text="atkFightPhase" title="The fight's current phase, set by the GM"></b>
+                        <select x-show="atkFightPhase === null" x-model.number="atkShinjoPhase"
                                 data-action="shinjo-phase"
                                 class="border rounded px-1 py-0.5 text-xs">
                             {# An action die "comes up" in its own phase, so
@@ -474,8 +480,12 @@
                                  && (_shinjoDieToSpend() || atkForceAttackerPhase !== null)" x-cloak
                          data-testid="kakita-3rd-dan-bonus"
                          class="text-xs text-ink/60 bg-parchment rounded p-2 flex flex-wrap items-center gap-2">
-                        <span>Kakita 3rd Dan: die <span class="font-mono" x-text="_kakita3rdDanAttackerPhase()"></span>, defender's next action in phase</span>
-                        <select x-model.number="atkKakitaDefenderPhase"
+                        <span><span x-text="'Kakita 3rd Dan: ' + (atkFightPhase !== null && atkForceAttackerPhase === null ? 'phase' : 'die')"></span>
+                            <span class="font-mono" data-testid="kakita-3rd-dan-attacker-phase" x-text="_kakita3rdDanAttackerPhase()"></span>, defender's next action in phase</span>
+                        <b x-show="atkKakitaLocked" x-cloak data-testid="kakita-3rd-dan-known-phase"
+                           x-text="atkKakitaDefenderPhase === 11 ? 'none left (11)' : atkKakitaDefenderPhase"
+                           title="You know your target's next action (Kakita 3rd Dan)"></b>
+                        <select x-show="!atkKakitaLocked" x-model.number="atkKakitaDefenderPhase"
                                 data-action="kakita-3rd-dan-defender-phase"
                                 :class="atkKakitaDefenderPhase === 0 ? 'border-accent ring-1 ring-accent' : ''"
                                 class="border rounded px-1 py-0.5 text-xs">

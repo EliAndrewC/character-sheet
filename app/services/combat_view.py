@@ -25,7 +25,7 @@ from app.services import npc_generator as gen
 from app.services import npcs
 from app.services import fight_log
 from app.services.combat_actions import tn_to_be_hit
-from app.services.combat_targets import current_duels, weapon_for
+from app.services.combat_targets import current_duels, phase_abilities, weapon_for
 from app.services.dice import dying_threshold, is_impaired
 from app.services.per_adventure import per_adventure_abilities, remaining
 from app.services.void_spend import void_limits, void_pools
@@ -106,7 +106,7 @@ def tn_known(db: Session, encounter: Encounter, link: Any) -> bool:
     return _tn_known(link, own)
 
 
-def _public_pc(pc: Character, mine: bool) -> Dict[str, Any]:
+def _public_pc(pc: Character, mine: bool, encounter: Optional[Encounter] = None) -> Dict[str, Any]:
     out = {
         "id": pc.id,
         "name": pc.name,
@@ -114,6 +114,8 @@ def _public_pc(pc: Character, mine: bool) -> Dict[str, Any]:
         "serious_wounds": pc.current_serious_wounds or 0,
         "action_dice": _dice(pc, spent=mine),
         "impaired": is_impaired(pc.to_dict()),
+        # This phase's posture / blessing: declared choices, public.
+        "phase_abilities": phase_abilities(encounter, pc),
     }
     if mine:
         out["mine"] = True
@@ -151,8 +153,9 @@ def public_state(db: Session, group: GamingGroup, mine: Optional[Set[int]] = Non
     return {
         "rev": _rev(encounter, pcs + [link.character for link in links]),
         "group": {"id": group.id, "name": group.name},
-        "encounter": {"name": encounter.name, "round": current} if encounter else None,
-        "pcs": [_public_pc(pc, pc.id in own_pcs) for pc in pcs],
+        "encounter": ({"name": encounter.name, "round": current, "phase": encounter.current_phase or 0}
+                      if encounter else None),
+        "pcs": [_public_pc(pc, pc.id in own_pcs, encounter) for pc in pcs],
         "npcs": out_npcs,
         # Who can strike whom, only while the GM shows the lines.
         "reach": (npcs.current_reach(encounter, [pc.id for pc in pcs], [link.character_id for link in links])
@@ -227,10 +230,12 @@ def gm_state(db: Session, group: GamingGroup) -> Dict[str, Any]:
         "gm": True,
         "group": {"id": group.id, "name": group.name},
         "encounter": (
-            {"id": encounter.id, "name": encounter.name, "round": encounter.current_round}
+            {"id": encounter.id, "name": encounter.name, "round": encounter.current_round,
+             "phase": encounter.current_phase or 0}
             if encounter else None
         ),
-        "pcs": [{**_combatant(pc), "weapon": list(weapon_for(encounter, pc.id) or []) or None} for pc in pcs],
+        "pcs": [{**_combatant(pc), "weapon": list(weapon_for(encounter, pc.id) or []) or None,
+                 "phase_abilities": phase_abilities(encounter, pc)} for pc in pcs],
         "npcs": out_npcs,
         "actions": [_gm_action(a, names) for a in _actions(db, encounter)],
         "reach": npcs.current_reach(encounter, [pc.id for pc in pcs], [link.character_id for link in links]),

@@ -27,6 +27,17 @@ fills in both numbers:
   (``stance``) - computed here, so the NPC's Fire and TN never reach the
   browser beyond what the roll reveals.
 
+* **The phase.** The GM moves the fight's clock (``Encounter.current_phase``,
+  0-10; "New round" starts at 0). An attack made in the fight reads it
+  (``lock_phase``): Kakita 3rd Dan counts from the current phase, not the
+  die's, Shinjo's and an arrow's hold bonus run to it, Doji 4th Dan adds it.
+  A Kakita 3rd Dan (or Kitsuki 4th Dan) knows when a target within striking
+  range acts next (``next_phase``), so that phase is filled in too. A
+  Mantis may not declare a posture for a phase the fight has not reached
+  (``posture_phase_refusal``), and a Priest's "Bless a combat phase" choice
+  is kept per phase on the fight (``set_blessing``). The combat page shows
+  both (``phase_abilities``).
+
 Melee reach is list-only: the server does not refuse an attack on an NPC
 out of reach (the GM trusts the players, and lines are often drawn late).
 """
@@ -92,6 +103,106 @@ def stance(npc: Character, total: int) -> Dict[str, Any]:
     }
 
 
+PHASES = (0, 10)
+NO_ACTION_PHASE = 11  # rules/04-schools.md: no action left, "considered to act in phase 11"
+BLESSINGS = {"attack": "attacks", "parry": "parries", "damage": "damage", "wound_check": "wound checks"}
+BLESSING_ABILITY = "priest_combat_rounding"
+
+
+def next_phase(npc: Character, current: int) -> int:
+    """When this NPC acts next: its lowest unspent die, but never before
+    the current phase (a held die can be used now); 11 with none left."""
+    left = [int(d.get("value") or 0) for d in npc.action_dice or [] if not d.get("spent")]
+    return max(current, min(left)) if left else NO_ACTION_PHASE
+
+
+def knows_next_actions(pc: Character) -> bool:
+    """Kakita 3rd Dan ("You know the next action of all potential targets
+    within striking range") and Kitsuki 4th Dan ("the Void, parry, and phase
+    of the next action of each character")."""
+    from app.services.void_spend import school_dan
+
+    dan = school_dan(pc.to_dict())
+    return (pc.school == "kakita_duelist" and dan >= 3) or knows_parry(pc)
+
+
+def knows_parry(pc: Character) -> bool:
+    """Kitsuki 4th Dan knows every character's parry, so every TN."""
+    from app.services.void_spend import school_dan
+
+    return pc.school == "kitsuki_magistrate" and school_dan(pc.to_dict()) >= 4
+
+
+def set_phase(db: Session, encounter: Encounter, delta: Any) -> int:
+    """The GM moves the fight's phase by ``delta`` (an operation, so two
+    clicks are two steps), kept within 0-10."""
+    if isinstance(delta, bool) or not isinstance(delta, int):
+        raise ValueError("delta must be a whole number")
+    encounter.current_phase = max(PHASES[0], min(PHASES[1], (encounter.current_phase or 0) + delta))
+    npcs.touch(encounter)
+    db.flush()
+    return encounter.current_phase
+
+
+def can_bless_phase(pc: Character) -> bool:
+    """A Priest has every ritual; a profession character holds it or not."""
+    from app.services.professions import holds_ability
+
+    return pc.school == "priest" or holds_ability(pc, BLESSING_ABILITY)
+
+
+def set_blessing(db: Session, encounter: Encounter, pc: Character, kind: Any) -> None:
+    """The Priest's pick for the fight's current phase, or ``None`` to take
+    it back (a mistake; the rules allow one pick per phase)."""
+    if not can_bless_phase(pc):
+        raise ValueError(f"{pc.name} cannot bless a combat phase")
+    if kind is not None and kind not in BLESSINGS:
+        raise ValueError("choose attack, parry, damage or wound_check")
+    choices = {k: dict(v) for k, v in (encounter.phase_choices or {}).items()}
+    mine = choices.get(str(pc.id), {})
+    if kind is None:
+        mine.pop(str(encounter.current_phase or 0), None)
+    else:
+        mine[str(encounter.current_phase or 0)] = kind
+    choices[str(pc.id)] = mine
+    encounter.phase_choices = choices
+    npcs.touch(encounter)
+    db.flush()
+
+
+def phase_abilities(encounter: Optional[Encounter], pc: Character) -> List[Dict[str, Any]]:
+    """The per-phase choices this PC makes, for the fight's current phase:
+    ``[{kind, label, choice}]``, ``choice`` None while not yet made. A Mantis
+    Wave-Treader's posture (phases 1-10) and a Priest's blessing."""
+    if encounter is None:
+        return []
+    phase = encounter.current_phase or 0
+    out = []
+    if pc.school == "mantis_wave_treader" and phase >= 1:
+        history = (pc.adventure_state or {}).get("mantis_posture_history") or []
+        out.append({"kind": "posture", "label": "Posture",
+                    "choice": history[phase - 1] if len(history) >= phase else None})
+    if can_bless_phase(pc):
+        pick = ((encounter.phase_choices or {}).get(str(pc.id)) or {}).get(str(phase))
+        out.append({"kind": "blessing", "label": "Blessing",
+                    "choice": BLESSINGS.get(pick), "value": pick})
+    return out
+
+
+def posture_phase_refusal(db: Session, pc: Character) -> Optional[str]:
+    """Why a Mantis may not declare its next posture yet: the fight has not
+    reached that phase. None when it may (or outside a fight)."""
+    encounter = pc_encounter(db, pc)
+    if encounter is None:
+        return None
+    want = int((pc.adventure_state or {}).get("mantis_posture_phase") or 1)
+    now = encounter.current_phase or 0
+    if want > now:
+        return (f"The fight is at phase {now}: your posture for phase {want} "
+                f"can be chosen once the GM reaches it.")
+    return None
+
+
 def for_pc(db: Session, pc: Character) -> Optional[Dict[str, Any]]:
     """The attack modal's target step for ``pc``, or None outside a fight."""
     from app.services.combat_view import tn_known
@@ -102,19 +213,25 @@ def for_pc(db: Session, pc: Character) -> Optional[Dict[str, Any]]:
     links = npcs.in_standing_order(encounter, "npcs", [lk for lk in encounter.npcs if lk.status == "fighting"],
                                    id_of=lambda lk: lk.character_id)
     reach = {p[1] for p in encounter.reach or [] if p[0] == pc.id}
+    phase = encounter.current_phase or 0
+    sees_next, sees_parry = knows_next_actions(pc), knows_parry(pc)
     targets = []
     for link in links:
-        known = tn_known(db, encounter, link)
+        reachable = link.character_id in reach
         entry = {"id": link.character_id, "name": link.character.name,
-                 "reachable": link.character_id in reach, "tn": None, "athletics_tn": None}
-        if known:
+                 "reachable": reachable, "tn": None, "athletics_tn": None, "next_phase": None}
+        if sees_parry or tn_known(db, encounter, link):
             entry.update(_numbers(link.character))
+        # Kakita 3rd Dan: targets within striking range; Kitsuki 4th Dan: anyone.
+        if sees_next and (reachable or sees_parry):
+            entry["next_phase"] = next_phase(link.character, phase)
         targets.append(entry)
     weapon = weapon_for(encounter, pc.id)
     duel = duel_link(encounter, pc.id)
     return {
         "group_id": encounter.gaming_group_id,
         "encounter": encounter.name,
+        "phase": phase,
         "weapon": list(weapon) if weapon else None,
         "targets": targets,
         "duel": {"id": duel.character_id, "name": duel.character.name, "tn": duel_tn(duel.character)}
@@ -211,6 +328,32 @@ def lock_target(db: Session, character: Character, body: Dict[str, Any], live: b
     body["target_numbers"] = _numbers(link.character)
     if live and not link.tn_revealed:
         reveal(db, encounter, link.character_id)
+
+
+def lock_phase(db: Session, character: Character, body: Dict[str, Any]) -> None:
+    """Before an attack by a PC in a fight: the phase it is made in is the
+    fight's. Kakita 3rd Dan counts from it (unless the request names one -
+    the phase 0 interrupt does), and from the target's next action when the
+    attacker may know it; Shinjo's and an arrow's hold bonus run to it;
+    Doji 4th Dan (sent only when its box is ticked) adds it."""
+    body.pop("attacker_phase_from_fight", None)  # only ever set here
+    encounter = pc_encounter(db, character)
+    if encounter is None:
+        return
+    phase = encounter.current_phase or 0
+    if body.get("attacker_phase") is None:
+        body["attacker_phase"] = phase
+        body["attacker_phase_from_fight"] = True
+    body["shinjo_phase"] = phase
+    if body.get("doji_phase"):
+        body["doji_phase"] = phase
+    if isinstance(body.get("archery"), dict):
+        body["archery"] = dict(body["archery"], phase=phase)
+    link = _link(encounter, body.get("target_id"))
+    if link is not None and knows_next_actions(character):
+        reach = {p[1] for p in encounter.reach or [] if p[0] == character.id}
+        if link.character_id in reach or knows_parry(character):
+            body["kakita_defender_phase"] = next_phase(link.character, phase)
 
 
 def lock_duel(db: Session, character: Character, body: Dict[str, Any]) -> None:

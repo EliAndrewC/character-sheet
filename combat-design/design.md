@@ -82,6 +82,15 @@ Status: **built and deployed** (2026-09-28). All phases done, including the GM's
 | D38 | **The GM sets each PC's weapon dice for the fight** (PC kebab > Weapon damage; `Encounter.weapons`). The PC's attack modal shows them disabled ("Set by the GM for this fight") and the server rolls damage with them whatever the request says. A new fight starts with the previous fight's weapons. Duel and Kakita 5th Dan damage keep their own inputs. |
 | D39 | **The GM marks whom a PC is in an iaijutsu duel with** (PC kebab > "In an iaijutsu duel with"; `Encounter.duels`; both views say "In an iaijutsu duel with ..." on both cards - the duel is public). The PC's duel modal then needs no opponent XP: it shows the NPC's starting TN (total XP / 10; the XP itself is not shown), and the server judges the strike against that TN plus 5 per focus the opponent declared, whatever TN the request says. The PC's Evaluate Stance roll answers what it revealed about that NPC, per the rule: Fire exactly when roll / 5 exceeds it, else "at least roll / 5"; the TN exactly when the roll exceeds it, else "at least the roll". The server computes it, so nothing beyond what the roll reveals reaches the browser; a test-drive (read-only) roll gets the general explanation. A downed opponent ends the duel. |
 
+### Round 6 (2026-10-26): the fight's phase
+
+| # | decision |
+|---|---|
+| D40 | **The GM sets the fight's current phase** (`Encounter.current_phase`, 0-10; header "Phase N" with back / next for the GM, read-only for players). "New round" starts it at 0 (Kakita's phase 0 is a real phase). Back exists for a mistaken click. An attack by a PC in the fight is made in that phase (`combat_targets.lock_phase`): Kakita 3rd Dan's attacker phase (unless the phase 0 interrupt names 0), Shinjo's and an arrow's hold, Doji 4th Dan's bonus. The sheet reads it when the attack modal opens (it does not poll) and shows it in place of the dropdowns; the server uses it whatever the request says. |
+| D41 | **Knowing the next action.** A Kakita 3rd Dan knows when a target within striking range acts next, so choosing one fills in Kakita's defender phase: the NPC's lowest unspent die, never earlier than the current phase (a held die can act now), 11 with none left. Out of striking range (an arrow), the picker stays. A Kitsuki 4th Dan knows every NPC's next action and parry, so every TN. Nobody else is sent an NPC's unspent dice (D34). |
+| D42 | **A Mantis may not declare a posture for a phase the fight has not reached** (refused on the server with the numbers; the sheet takes it back). The combat page shows each Mantis's posture for the current phase, or "not yet chosen", in both views. The posture history still resets on the Mantis's own initiative, not on "New round". |
+| D43 | **A Priest's "Bless a combat phase" pick is recorded per phase on the fight** (`Encounter.phase_choices`, cleared by "New round"): picked on the combat page by the Priest's player or the GM, shown in both views with "not yet chosen" until made, changeable or clearable within the phase. The rounding is not applied to rolls. |
+
 ## 3. What exists today
 
 ### Simulator (`/host-l7r-repo/simulator`, GitHub `claude-guided-l7r-combat-simulator`, public)
@@ -276,6 +285,7 @@ Each phase ends with tests green at 100% coverage in every repo it touches, targ
 - Round 3: git (D24), stub schools (D25), names (D26), public combat page (D27), real names (D28), roll totals only (D29), every visible PC (D30), new round (D31).
 - Round 4: PCs on the public page (D32), one fight at a time (D33).
 - Round 5: a PC's attack target (D35-D37) and weapon (D38); iaijutsu duels (D39).
+- Round 6: the fight's phase (D40-D43).
 
 
 ## Addendum (2026-10-05): NPC rolls on the sheet's own roller

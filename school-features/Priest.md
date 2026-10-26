@@ -12,7 +12,13 @@
 > You have all 10 rituals listed under the Priest profession.
 
 **Status:** Mostly narrative; three of the rituals are exposed mechanically.
-The remaining 7 stay narrative.
+The remaining 7 stay narrative. **"Bless a combat phase"** is now *recorded*
+(2026-10-26, combat-design D43): in a group fight the Priest (or a holder of
+the ritual) picks attacks / parries / damage / wound checks for the fight's
+current phase on the combat page, and both views show the pick or "not yet
+chosen". It is kept on the fight, not the character, so the GM's "New round"
+clears it. The rounding itself is not applied to anyone's rolls - the GM did
+not ask for that, and "you and all allies" would need its own party rules.
 
 **Since 2026-08-29 the ten rituals are also takeable individually by
 Profession characters** (see `profession-design/priest-and-pooling.md`). That

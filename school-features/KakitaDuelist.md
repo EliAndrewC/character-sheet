@@ -58,7 +58,7 @@
 
 > Your attacks of all types get a bonus of X for each phase before the target's next action occurs, where X is your attack skill.  If a target does not have an action remaining in this round, they are considered to act in phase 11.  You know the next action of all potential targets within striking range.
 
-**Status:** Fully implemented on the attack modal. The "you know the next action of everyone within striking range" information-display piece is player-knowledge and not modeled in the app.
+**Status:** Fully implemented on the attack modal. **In a group fight (2026-10-26, combat-design D40-D41)** the attack is made in the fight's phase (set by the GM), not the die's - a phase 3 die spent in phase 5 counts from 5 - and the "you know the next action of everyone within striking range" clause is modeled: choosing a target within striking range fills in its next action (its lowest unspent die, never earlier than the current phase, or 11 with none left) and the picker disappears. The server takes both numbers from the fight. The phase 0 interrupt keeps its own phase 0. A target out of striking range (an arrow) keeps the picker: the Kakita does not know it. "No remaining actions" (11) used to be clamped to 10 on the server, losing one X; fixed.
 
 **Implementation:**
 - Server: `app/services/dice.py` stamps `kakita_3rd_dan_defender_phase_bonus = True` on every attack-type formula (base attack, attack-variant knacks, athletics-attack, and the Phase-2 `knack:iaijutsu:attack`) for Kakita 3rd Dan+. `app/routes/pages.py` exposes `school_abilities.kakita_3rd_dan_defender_phase_bonus_x = attack_skill` (0 when not 3rd Dan+).

@@ -56,6 +56,7 @@
 
 **Status:** Fully implemented.
 - Ring raise (+1 to the chosen school ring, cost discount, max increase to 7) is fully implemented. Since the school ring is "Air or Water", the 4th Dan ring raise applies to whichever ring was chosen.
+- **In a group fight (2026-10-26, combat-design D40)** the "current phase" is the fight's, set by the GM, and replaces the dropdown; the box is still the player's to tick (whether the target has attacked them is not tracked).
 - First-attack-of-the-round bonus: attack-type formulas (attack, counterattack, double_attack, lunge, athletics:attack) get a `doji_4th_dan_untouched_target` flag server-side. The attack modal's pre-roll page shows a checkbox labeled "Target's current attack is their first against me this round" for Doji Artisan 4th Dan characters. The checkbox covers both rule cases: regular attacks where the target hasn't attacked yet, and counterattacks where the target's incoming attack is their first this round. Ticking it reveals a 1-10 phase dropdown; the picked phase becomes a flat bonus that feeds the probability chart (`atkHitChance` / `atkAvgAttackRoll`), is auto-applied to the roll via `formula.flat`, and surfaces in the post-roll breakdown as a labeled "+N from Doji 4th Dan (phase N, target's first attack against you this round)" line.
 
 ---

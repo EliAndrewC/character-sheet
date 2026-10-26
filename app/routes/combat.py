@@ -271,6 +271,44 @@ async def duel(group_id: int, request: Request, db: Session = Depends(get_db)):
     return {"status": "ok"}
 
 
+@router.post("/groups/{group_id}/combat/phase")
+async def phase(group_id: int, request: Request, db: Session = Depends(get_db)):
+    """``{"delta": 1}`` / ``{"delta": -1}``: the GM moves the fight's phase
+    (0-10). Only the GM."""
+    _, group, err = _load(db, group_id, request)
+    if err:
+        return err
+    encounter = _active(db, group)
+    if encounter is None:
+        return _error("No fight in progress", 409)
+    body = await _body(request)
+    try:
+        now = combat_targets.set_phase(db, encounter, body.get("delta"))
+    except ValueError as exc:
+        return _error(str(exc))
+    db.commit()
+    return {"phase": now}
+
+
+@router.post("/groups/{group_id}/combat/fight/{pc_id}/blessing")
+async def blessing(group_id: int, pc_id: int, request: Request, db: Session = Depends(get_db)):
+    """``{"kind": "wound_check"}`` (or null): a Priest's "Bless a combat
+    phase" pick for the fight's current phase. The GM or the PC's editor."""
+    _, pc, err = _fight_pc(db, group_id, pc_id, request)
+    if err:
+        return err
+    encounter = combat_targets.pc_encounter(db, pc)
+    if encounter is None:
+        return _error("No fight in progress", 409)
+    body = await _body(request)
+    try:
+        combat_targets.set_blessing(db, encounter, pc, body.get("kind"))
+    except ValueError as exc:
+        return _error(str(exc))
+    db.commit()
+    return {"status": "ok"}
+
+
 @router.post("/groups/{group_id}/combat/npcs/{npc_id}/status")
 async def set_status(group_id: int, npc_id: int, request: Request, db: Session = Depends(get_db)):
     _, group, err = _load(db, group_id, request)

@@ -681,6 +681,8 @@
             atkFightError: '',
             atkTargetLocked: null,   // {id, name, tn, athletics_tn} once chosen
             atkWeaponLocked: null,   // [rolled, kept], set by the GM
+            atkFightPhase: null,     // the fight's current phase, set by the GM
+            atkKakitaLocked: false,  // the target's next action is known (Kakita 3rd Dan)
             // Attack result state
             atkHit: false,
             atkNearMiss: false,
@@ -4410,6 +4412,8 @@
                 this.atkFightError = '';
                 this.atkTargetLocked = null;
                 this.atkWeaponLocked = null;
+                this.atkFightPhase = null;
+                this.atkKakitaLocked = false;
                 if (!this._fightGroupId || this.combatTargets.length) return;
                 const seq = ++this._atkFightSeq;
                 this.atkPhase = 'target';
@@ -4422,6 +4426,14 @@
                 if (seq !== this._atkFightSeq || this.atkPhase !== 'target') return;
                 this.atkFightBusy = false;
                 this.atkFight = fight;
+                if (fight) {
+                    // The phase the attack is made in is the fight's (the
+                    // server uses it too): Shinjo's and an arrow's hold,
+                    // Doji 4th Dan, Kakita 3rd Dan.
+                    this.atkFightPhase = fight.phase || 0;
+                    this.atkShinjoPhase = this.atkFightPhase;
+                    this.atkDojiPhase = this.atkFightPhase;
+                }
                 if (fight && fight.weapon && !this.atkIsArchery()) {
                     this.atkWeaponLocked = fight.weapon;
                     this.atkWeaponRolled = fight.weapon[0];
@@ -4475,6 +4487,9 @@
                 }
                 this.atkTargetLocked = {id: t.id, name: t.name, tn: t.tn, athletics_tn: t.athletics_tn};
                 this.atkTargetId = t.id;
+                // Kakita 3rd Dan knows when a target in striking range acts next.
+                this.atkKakitaLocked = t.next_phase !== null && t.next_phase !== undefined;
+                if (this.atkKakitaLocked) this.atkKakitaDefenderPhase = t.next_phase;
                 if (this.atkIsArchery()) {
                     this.atkArcheryBaseTn = t.tn;
                 } else {
@@ -4490,6 +4505,7 @@
             atkSkipTarget() {
                 this.atkTargetLocked = null;
                 this.atkTargetId = null;
+                this.atkKakitaLocked = false;
                 this.atkPhase = 'pre';
             },
 
@@ -4498,6 +4514,8 @@
             atkChangeTarget() {
                 this.atkTargetLocked = null;
                 this.atkTargetId = null;
+                if (this.atkKakitaLocked) this.atkKakitaDefenderPhase = 0;
+                this.atkKakitaLocked = false;
                 this.atkFightPick = '';
                 this.atkFightError = '';
                 this.atkPhase = 'target';
@@ -5368,6 +5386,8 @@
                         && this.atkForceAttackerPhase !== undefined) {
                     return this.atkForceAttackerPhase;
                 }
+                // In a fight the attack happens in the fight's phase.
+                if (this.atkFightPhase !== null) return this.atkFightPhase;
                 const die = this._shinjoDieToSpend();
                 return die ? (die.value || 0) : 0;
             },

@@ -86,6 +86,8 @@ def new_round(db: Session, encounter: Encounter, gm: str,
     for link in encounter.npcs:  # close out the round that is ending
         fight_log.note_dice_replaced(db, link.character)
     encounter.current_round = (encounter.current_round or 0) + 1
+    encounter.current_phase = 0  # a round starts before phase 1 (Kakita's phase 0)
+    encounter.phase_choices = {}
     rolled = {}
     for link in encounter.npcs:
         if link.status == "fighting":

@@ -252,6 +252,11 @@
         var found = list.find(function (o) { return o.id === other; });
         return found ? found.name : "";
       },
+      movePhase: async function (delta) { await this.post("/phase", { delta: delta }); },
+      // A Priest's "Bless a combat phase" pick for the current phase ("" takes it back).
+      setBlessing: async function (pc, kind) {
+        await this.post("/fight/" + pc.id + "/blessing", { kind: kind || null });
+      },
       setDuel: async function (pc, npcId) {
         await this.post("/duel", { pc_id: pc.id, npc_id: npcId ? parseInt(npcId, 10) : null });
       },
