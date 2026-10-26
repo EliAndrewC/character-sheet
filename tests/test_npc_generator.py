@@ -558,7 +558,7 @@ def test_a_specialization_line_is_left_for_the_gm():
 def test_recorded_stats_are_bought_first_without_raising_the_spend():
     plain = gen.build_npc("yogo_warden", 105, 0.67)
     pinned = gen.build_npc("yogo_warden", 105, 0.67, recorded={"Air": 4, "Water": 3})
-    assert pinned["rings"]["Air"] >= 4 and pinned["rings"]["Water"] >= 3
+    assert pinned["rings"]["Air"] == 4 and pinned["rings"]["Water"] == 3
     assert pinned["generation"]["combat_budget"] == plain["generation"]["combat_budget"]
     for b in (plain, pinned):
         spent = calculate_total_xp(_as_character(b))["total"]
@@ -579,13 +579,73 @@ def test_recorded_noncombat_skills_come_from_the_remainder(monkeypatch):
 def test_recorded_knacks_and_combat_skills_lead_the_build_order():
     build = gen.build_npc("brotherhood_of_shinsei_monk", 0, 0.75,
                           recorded={"precepts": 3, "attack": 3, "conviction": 3})
-    assert build["skills"]["precepts"] >= 3 and build["attack"] >= 3
-    assert build["knacks"]["conviction"] >= 3
+    assert build["skills"]["precepts"] == 3 and build["attack"] == 3
+    assert build["knacks"]["conviction"] == 3
 
 
 def test_a_recorded_lunge_reaches_the_simulators_hiruma_as_counterattack():
     build = gen.build_npc("hiruma_scout", 0, 0.75, recorded={"lunge": 3})
-    assert build["knacks"]["lunge"] >= 3
+    assert build["knacks"]["lunge"] == 3
+
+
+def _dan(build):
+    return min(build["knacks"].values())
+
+
+@pytest.mark.parametrize("earned", [100, 200])
+def test_a_recorded_school_ring_is_its_value_after_the_4th_dan_raise(earned):
+    # Issue #3: Air 4 recorded on a Hiruma used to come out Air 5, having paid
+    # for the 3->4 rank the 4th Dan technique gives free.
+    plain = gen.build_npc("hiruma_scout", earned, 0.6)
+    pinned = gen.build_npc("hiruma_scout", earned, 0.6, recorded={"Air": 4})
+    assert _dan(pinned) >= 4 and pinned["rings"]["Air"] == 4
+    assert _dan(pinned) >= _dan(plain)
+    for ring, rank in plain["rings"].items():
+        assert pinned["rings"][ring] >= rank
+
+
+def test_a_recorded_ring_other_than_the_school_ring_is_bought_as_recorded():
+    build = gen.build_npc("hiruma_scout", 200, 0.6, recorded={"Earth": 4})
+    assert _dan(build) >= 4 and build["rings"]["Earth"] == 4
+    assert build["rings"]["Air"] == 4  # the School Ring still gets its 4th Dan raise
+
+
+@pytest.mark.parametrize("npc_type", ["ide_diplomat", "doji_artisan"])
+def test_a_chosen_school_ring_is_the_one_held_to_its_record(npc_type):
+    plain = gen.build_npc(npc_type, 200, 0.6)
+    ring = plain["school_ring_choice"]
+    pinned = gen.build_npc(npc_type, 200, 0.6, recorded={ring: plain["rings"][ring]})
+    assert _dan(pinned) >= 4 and pinned["rings"] == plain["rings"]
+
+
+def test_a_recorded_school_ring_short_of_4th_dan_is_bought_in_full():
+    # 3rd Dan at this XP: buying a rank short cannot reach 4th Dan, so the
+    # build buys the whole record instead.
+    build = gen.build_npc("ide_diplomat", 100, 0.6, recorded={"Water": 4})
+    assert _dan(build) < 4 and build["rings"]["Water"] == 4
+
+
+def test_a_recorded_stat_is_no_longer_overbought():
+    plain = gen.build_npc("hiruma_scout", 400, 0.6)
+    pinned = gen.build_npc("hiruma_scout", 400, 0.6, recorded={"Fire": 3, "attack": 3})
+    assert plain["rings"]["Fire"] > 3 and plain["attack"] > 3
+    assert pinned["rings"]["Fire"] == 3 and pinned["attack"] == 3
+
+
+def test_a_recorded_school_ring_of_3_at_4th_dan_is_refused():
+    with pytest.raises(ValueError, match="a 4th Dan NPC's school ring is at least 4, not Air 3"):
+        gen.build_npc("hiruma_scout", 100, 0.6, recorded={"Air": 3})
+
+
+@pytest.mark.parametrize("npc_type,recorded,message", [
+    ("hiruma_scout", {"attack": 0}, "came out at attack 1, above the recorded 0"),
+    ("hiruma_scout", {"Earth": 1}, "came out at Earth 2, above the recorded 1"),
+    ("ide_diplomat", {"Water": 2}, "came out at Water 3, above the recorded 2"),
+    ("hiruma_scout", {"lunge": 0}, "came out at lunge 1, above the recorded 0"),
+])
+def test_a_recorded_stat_the_build_overshoots_is_refused(npc_type, recorded, message):
+    with pytest.raises(ValueError, match=message):
+        gen.build_npc(npc_type, 100, 0.6, recorded=recorded)
 
 
 def test_recorded_stats_that_do_not_fit_are_refused():
@@ -613,3 +673,15 @@ def test_npc_number_lines_parse_to_stat_ids():
     assert recorded == {"Air": 4, "Water": 3, "sincerity": 1, "precepts": 0,
                         "double_attack": 2, "parry": 3}
     assert unknown == ["- Bushido 2", "nonsense"]
+
+
+@pytest.mark.parametrize("npc_type", sorted(gen.npc_types()))
+def test_a_whole_build_recorded_back_rebuilds_to_itself(npc_type):
+    # gm-assistant writes every built stat back to the NPC's "NPC numbers"
+    # block, so a later generation can get the whole build as recorded.
+    build = gen.build_npc(npc_type, 250, 0.6)
+    stats = {**build["rings"], "attack": build["attack"], "parry": build["parry"],
+             **build["skills"], **build["knacks"], **build["foreign_knacks"]}
+    again = gen.build_npc(npc_type, 250, 0.6, recorded=stats)
+    for field in ("rings", "attack", "parry", "skills", "knacks", "foreign_knacks"):
+        assert again[field] == build[field]

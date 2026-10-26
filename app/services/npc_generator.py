@@ -411,29 +411,41 @@ def match_stat_lines(lines: List[str]) -> Tuple[Dict[str, int], List[str]]:
     return recorded, unknown
 
 
-def _recorded_plan(sim_key: str, recorded: Dict[str, int]) -> Tuple[list, Dict[str, int]]:
-    """``(priority entries to put first, stats to buy from the remainder)``.
+def _recorded_plan(sim_key: str, recorded: Dict[str, int],
+                   school_ring: Optional[str] = None) -> Tuple[list, Dict[str, int]]:
+    """``(priority entries, stats to buy from the remainder)``.
 
     What the simulator's own build order buys for this school (rings, attack,
-    parry, its knacks and skills) leads that order, inside the combat budget;
-    anything else (a courtier's Heraldry on a bushi) is bought afterwards out
+    parry, its knacks and skills) leads that order, inside the combat budget,
+    and the school's own later entries for it are capped at the recorded rank,
+    so a recorded stat comes out exactly as recorded rather than as a floor.
+    Anything else (a courtier's Heraldry on a bushi) is bought afterwards out
     of the non-combat XP the simulator leaves unspent.
+
+    ``school_ring`` (lower case) is bought one rank short of its record: the
+    build is meant to reach 4th Dan, whose technique raises it the last rank.
     """
     priorities = SIM_SCHOOL_PRIORITIES[SIM_SCHOOL_NAMES[sim_key]]
     sim_skills = {name for cat, name, _r in priorities if cat == "skill"} | {"attack", "parry"}
     to_sim = {v: k for k, v in SIM_KNACK_RENAMES.get(sim_key, {}).items()}
     lead: list = []
+    caps: Dict[Tuple[str, str], int] = {}
     rest: Dict[str, int] = {}
     for key, rank in recorded.items():
         if key in _RINGS:
-            lead.append(("ring", key.lower(), rank))
-            continue
-        sim_name = to_sim.get(key, key).replace("_", " ")
-        if sim_name in sim_skills:
-            lead.append(("skill", sim_name, rank))
-        elif rank > 0:
-            rest[key] = rank
-    return lead + list(priorities), rest
+            ring = key.lower()
+            entry = ("ring", ring, rank - 1 if ring == school_ring else rank)
+        else:
+            sim_name = to_sim.get(key, key).replace("_", " ")
+            if sim_name not in sim_skills:
+                if rank > 0:
+                    rest[key] = rank
+                continue
+            entry = ("skill", sim_name, rank)
+        lead.append(entry)
+        caps[entry[:2]] = entry[2]
+    own = [(cat, name, min(r, caps.get((cat, name), r))) for cat, name, r in priorities]
+    return lead + own, rest
 
 
 # ---------------------------------------------------------------------------
@@ -480,6 +492,34 @@ def _technique_choices(school_id: str, sim_school: Any) -> Dict[str, Any]:
     return choices
 
 
+def _config_stats(config: Any, sim_key: str, school_knacks: set) -> Tuple[
+        int, int, Dict[str, int], Dict[str, int], Dict[str, int]]:
+    """``(attack, parry, skills, knacks, foreign knacks)`` of a simulator build,
+    in this app's ids."""
+    renames = SIM_KNACK_RENAMES.get(sim_key, {})
+    skills: Dict[str, int] = {}
+    knacks: Dict[str, int] = {}
+    foreign: Dict[str, int] = {}
+    attack = parry = 1
+    for name, rank in config.skills.items():
+        sid = renames.get(sheet_id(name), sheet_id(name))
+        if sid == "attack":
+            attack = rank
+        elif sid == "parry":
+            parry = rank
+        elif sid in school_knacks:
+            knacks[sid] = rank
+        elif sid in SCHOOL_KNACKS:
+            foreign[sid] = rank
+        elif sid in SKILLS:
+            skills[sid] = rank
+        else:
+            raise LookupError(f"simulator skill {name!r} has no match in this app")
+    for knack in school_knacks:
+        knacks.setdefault(knack, 1)  # school knacks start at 1 for free
+    return attack, parry, skills, knacks, foreign
+
+
 def build_npc(
     npc_type: str, earned_xp: int, combat_share: float,
     traits: Optional[Dict[str, Any]] = None,
@@ -499,7 +539,9 @@ def build_npc(
 
     ``recorded`` (``normalize_recorded``) are stats already used in play.
     They cost no extra XP: they are bought first (``_recorded_plan``), and a
-    build that cannot reach one is refused rather than quietly built short.
+    build that cannot land on one exactly (short, or over) is refused rather
+    than quietly built otherwise. A recorded School Ring is its final value,
+    4th Dan raise included.
     """
     if npc_type not in npc_types():
         raise ValueError(f"unknown NPC type {npc_type!r}")
@@ -524,40 +566,30 @@ def build_npc(
     unchanged = sim_combat == int(total * combat_share)
     fraction = combat_share if unchanged else min(1.0, (sim_combat + 0.5) / total)
     sim_key = npc_types()[npc_type]
-    if recorded:
-        priorities, rest = _recorded_plan(sim_key, recorded)
-        config, breakdown = generate_template(
-            sim_key, total, priorities=priorities, combat_xp_fraction=fraction)
-    else:
-        rest = {}
-        config, breakdown = generate_template(sim_key, total, combat_xp_fraction=fraction)
-
     is_profession = npc_type == WAVE_MAN
     school_id = "" if is_profession else npc_type
     school_knacks = set() if is_profession else set(SCHOOLS[school_id].school_knacks)
     sim_school = None if is_profession else get_school(SIM_SCHOOL_NAMES[sim_key])
-    renames = SIM_KNACK_RENAMES.get(sim_key, {})
-
-    skills: Dict[str, int] = {}
-    knacks: Dict[str, int] = {}
-    foreign: Dict[str, int] = {}
-    attack = parry = 1
-    for name, rank in config.skills.items():
-        sid = renames.get(sheet_id(name), sheet_id(name))
-        if sid == "attack":
-            attack = rank
-        elif sid == "parry":
-            parry = rank
-        elif sid in school_knacks:
-            knacks[sid] = rank
-        elif sid in SCHOOL_KNACKS:
-            foreign[sid] = rank
-        elif sid in SKILLS:
-            skills[sid] = rank
-        else:
-            raise LookupError(f"simulator skill {name!r} has no match in this app")
-    for knack in school_knacks:
-        knacks.setdefault(knack, 1)  # school knacks start at 1 for free
+    school_ring = None if is_profession else sim_school.school_ring().capitalize()
+    if recorded:
+        # A recorded School Ring is its final value, 4th Dan raise included.
+        # Buy it one rank short first: that leaves every later purchase at
+        # least as affordable, so if any build reaches 4th Dan this one does,
+        # and the technique lands the ring on its record. If it falls short of
+        # 4th Dan, buying the full rank cannot reach it either.
+        attempts = [school_ring.lower(), None] if school_ring in recorded else [None]
+        for lowered in attempts:
+            priorities, rest = _recorded_plan(sim_key, recorded, lowered)
+            config, breakdown = generate_template(
+                sim_key, total, priorities=priorities, combat_xp_fraction=fraction)
+            stats = _config_stats(config, sim_key, school_knacks)
+            if lowered is None or min(stats[3].values()) >= 4:
+                break
+    else:
+        rest = {}
+        config, breakdown = generate_template(sim_key, total, combat_xp_fraction=fraction)
+        stats = _config_stats(config, sim_key, school_knacks)
+    attack, parry, skills, knacks, foreign = stats
     for key, rank in rest.items():
         bucket = knacks if key in school_knacks else foreign if key in SCHOOL_KNACKS else skills
         bucket[key] = max(rank, bucket.get(key, 0))
@@ -570,7 +602,9 @@ def build_npc(
 
     rings = {ring.capitalize(): rank for ring, rank in config.rings.items()}
     if recorded:
-        _check_recorded(recorded, rings, attack, parry, {**skills, **knacks, **foreign})
+        dan = min(knacks.values()) if knacks else 0
+        _check_recorded(recorded, rings, attack, parry, {**skills, **knacks, **foreign},
+                        school_ring if dan >= 4 else None)
     generation = {
         "npc_type": npc_type,
         "earned_xp": earned_xp,
@@ -584,7 +618,7 @@ def build_npc(
         generation["recorded"] = recorded
     out = {
         "school": school_id,
-        "school_ring_choice": "" if is_profession else sim_school.school_ring().capitalize(),
+        "school_ring_choice": school_ring or "",
         "profession": PROFESSION_CHARACTER_TYPE if is_profession else "",
         "profession_abilities": abilities,
         "rings": rings,
@@ -609,13 +643,22 @@ def build_npc(
 
 
 def _check_recorded(recorded: Dict[str, int], rings: Dict[str, int], attack: int,
-                    parry: int, ranks: Dict[str, int]) -> None:
+                    parry: int, ranks: Dict[str, int],
+                    raised_ring: Optional[str] = None) -> None:
+    """Refuse a build whose recorded stats did not come out exactly as recorded.
+
+    ``raised_ring`` is the School Ring of a build at 4th Dan or above, which
+    the technique has raised past its starting 3."""
     for key, rank in recorded.items():
+        name = key if key in _RINGS else key.replace("_", " ")
+        if key == raised_ring and rank < 4:
+            raise ValueError(f"a 4th Dan NPC's school ring is at least 4, not {name} {rank}")
         have = rings.get(key) if key in _RINGS else {"attack": attack, "parry": parry}.get(
             key, ranks.get(key, 0))
         if have < rank:
-            name = key if key in _RINGS else key.replace("_", " ")
             raise ValueError(f"the build could not reach {name} {rank} within its XP")
+        if have > rank:
+            raise ValueError(f"the build came out at {name} {have}, above the recorded {rank}")
 
 
 def never_below(previous: Dict[str, Any], build: Dict[str, Any]) -> Dict[str, Any]:

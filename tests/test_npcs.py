@@ -543,7 +543,7 @@ def test_generate_and_rebuild_carry_recorded_stats(client, group):
     enc = s.query(Encounter).filter_by(gaming_group_id=group).one()
     row = dict(_wave_men(1, roll_extra=False), recorded={"Air": 3, "sincerity": 2})
     (npc,) = npcs.generate(s, g, enc, GM, [row], rng=random.Random(1))
-    assert npc.ring_air >= 3 and npc.skills["sincerity"] == 2
+    assert npc.ring_air == 3 and npc.skills["sincerity"] == 2
     npcs.rebuild_npc(s, npc, earned_xp=(npc.earned_xp or 0) + 20)
-    assert npc.ring_air >= 3 and npc.skills["sincerity"] == 2
+    assert npc.ring_air == 3 and npc.skills["sincerity"] == 2
     s.close()
