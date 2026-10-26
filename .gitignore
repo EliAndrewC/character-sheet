@@ -23,3 +23,5 @@ externally-queryable-roll-results.md
 
 # The combat simulator snapshot scripts/deploy.sh puts in the build context
 /build-simulator/
+# project settings (auto-memory off: durable knowledge goes in docs and tooling, not memory)
+!.claude/settings.json
