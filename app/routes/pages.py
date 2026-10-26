@@ -54,7 +54,8 @@ from app.services.attack_rolls import attack_flags
 from app.services.tracking_ops import precepts_pool_flags
 from app.services.wound_checks import wound_check_flags
 from app.services.parry_feint import parry_feint_flags
-from app.services.special_rolls import can_bless, performs_impaired_ritual, xk1_ability
+from app.services.combat_targets import can_bless_phase as _can_bless_phase
+from app.services.special_rolls import can_bless, kitsune_rituals, performs_impaired_ritual, xk1_ability
 from app.services.party import (
     party_member_dan,
     party_member_data,
@@ -1040,6 +1041,11 @@ def sheet_context(request: Request, character: Character, db: Session) -> Option
         # has all ten rituals and so gets both, as before.
         "priest_bless_topic": can_bless(character, "topic"),
         "priest_bless_research": can_bless(character, "research"),
+        # Kitsune Warden 3rd Dan performs priest rituals for a 3rd Dan free raise each.
+        "kitsune_rituals": kitsune_rituals(character),
+        # "Bless a combat phase" in the group's fight (Priest, ritual holder,
+        # Kitsune Warden 3rd Dan): posted to the fight, which knows the phase.
+        "phase_blessing": bool(character.gaming_group_id) and _can_bless_phase(character),
         # Priest 3rd Dan: precepts dice pool (X dice, X = precepts skill rank)
         # rolled at the start of combat; any pool die can swap into any rolled
         # die on attack/parry/damage/wound_check rolls. Persists across combat

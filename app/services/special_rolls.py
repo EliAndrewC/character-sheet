@@ -29,10 +29,45 @@ def performs_impaired_ritual(character: Any) -> bool:
 
 
 def can_bless(character: Any, ritual: str) -> bool:
-    """A Priest has every ritual; a profession character holds it or not."""
+    """A Priest has every ritual; a profession character holds it or not; a
+    Kitsune Warden at 3rd Dan performs any, for a 3rd Dan free raise."""
     if ritual not in BLESS_RITUALS:
         return False
-    return character.school == "priest" or holds_ability(character, BLESS_RITUALS[ritual][1])
+    return (character.school == "priest" or holds_ability(character, BLESS_RITUALS[ritual][1])
+            or kitsune_rituals(character))
+
+
+def kitsune_rituals(character: Any) -> bool:
+    """Kitsune Warden 3rd Dan: "You may also perform priest rituals at the
+    cost of one free raise per ritual" (rules/11-non_pc_schools.md)."""
+    from app.services.void_spend import school_dan
+
+    return character.school == "kitsune_warden" and school_dan(character.to_dict()) >= 3
+
+
+def ritual_costs_a_raise(character: Any, ability_id: str) -> bool:
+    """Whether performing this ritual spends a 3rd Dan free raise: only for a
+    Kitsune Warden, and only for a ritual they do not hold some other way."""
+    return (kitsune_rituals(character) and character.school != "priest"
+            and not holds_ability(character, ability_id))
+
+
+def ritual_raises_left(character: Any) -> int:
+    """3rd Dan free raises left this adventure."""
+    from app.services.per_adventure import per_adventure_abilities
+
+    entry = next((a for a in per_adventure_abilities(character) if a["id"] == "adventure_raises"), None)
+    if entry is None:
+        return 0
+    used = int((character.adventure_state or {}).get("adventure_raises_used", 0) or 0)
+    return max(0, entry["max"] - used)
+
+
+def spend_ritual_raise(character: Any, count: int = 1) -> None:
+    """Spend (or, with a negative ``count``, give back) ritual free raises."""
+    state = dict(character.adventure_state or {})
+    state["adventure_raises_used"] = max(0, int(state.get("adventure_raises_used", 0) or 0) + count)
+    character.adventure_state = state
 
 
 def xk1_ability(char_data: Dict[str, Any]) -> Optional[Dict[str, Any]]:

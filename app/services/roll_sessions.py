@@ -320,6 +320,8 @@ def start_roll(
     notes: list = []
     if live:
         apply_void_spend(character, plan)
+        if formula.get("ritual_raise_cost"):
+            special_rolls.spend_ritual_raise(character, formula["ritual_raise_cost"])
         if roll_key in PARRY_KEYS or is_feint(roll_key):
             notes = apply_post_roll_hooks(character, roll_key)
         if ow:
@@ -417,9 +419,15 @@ def _special(character: Character, char_data: Dict[str, Any], roll_key: str,
         ritual = str(choices.get("ritual") or "")
         if not special_rolls.can_bless(character, ritual):
             raise RollRefused(f"{character.name} cannot perform that ritual")
-        title = special_rolls.BLESS_RITUALS[ritual][0]
-        return ({"label": title, "rolled": 2, "kept": 1, "flat": 0, "reroll_tens": True,
-                 "bonuses": [], "adventure_raises_max_per_roll": 0}, "bless", 0)
+        title, ability = special_rolls.BLESS_RITUALS[ritual]
+        formula = {"label": title, "rolled": 2, "kept": 1, "flat": 0, "reroll_tens": True,
+                   "bonuses": [], "adventure_raises_max_per_roll": 0}
+        if special_rolls.ritual_costs_a_raise(character, ability):
+            # Kitsune Warden 3rd Dan: the ritual's price is a free raise.
+            if special_rolls.ritual_raises_left(character) < 1:
+                raise RollRefused(f"{character.name} has no 3rd Dan free raise left to perform the ritual")
+            formula["ritual_raise_cost"] = 1
+        return formula, "bless", 0
     if roll_key == "spend_vp_xk1":
         ability = special_rolls.xk1_ability(char_data)
         if ability is None or ability["x"] < 1:

@@ -342,6 +342,8 @@
             // spend mutates its displayed value); the player then picks the
             // phase post-roll and the bonus is applied live to baseTotal.
             shinjoParryPhase: null,
+            shinjoParryFightPhase: null,  // the fight's phase, when in one
+            _shinjoParrySeq: 0,
             shinjoParryDieValue: null,
             shinjoParryBonusApplied: 0,
 
@@ -1907,6 +1909,8 @@
                 const eligible = formula?.shinjo_phase_bonus_attack
                         && this.schoolAbilities?.shinjo_phase_bonus;
                 if (!eligible) {
+                    this._shinjoParrySeq++;
+                    this.shinjoParryFightPhase = null;
                     this.shinjoParryPhase = null;
                     this.shinjoParryDieValue = null;
                     this.shinjoParryBonusApplied = 0;
@@ -1919,6 +1923,29 @@
                 this.shinjoParryDieValue = die ? (die.value || 0) : null;
                 this.shinjoParryPhase = null;
                 this.shinjoParryBonusApplied = 0;
+                this._shinjoParryLoadPhase();
+            },
+
+            // In the group's fight the parry's phase is the fight's: fetched
+            // while the dice roll, applied (as the picker would) once the
+            // roll is done and its session exists.
+            async _shinjoParryLoadPhase() {
+                this.shinjoParryFightPhase = null;
+                if (!this._fightGroupId) return;
+                const seq = ++this._shinjoParrySeq;
+                let fight = null;
+                try {
+                    const resp = await fetch('/groups/' + this._fightGroupId + '/combat/fight/{{ character.id }}');
+                    fight = resp.ok ? ((await resp.json()).fight || null) : null;
+                } catch (e) { return; /* the ordinary picker */ }
+                if (!fight || seq !== this._shinjoParrySeq) return;
+                this.shinjoParryFightPhase = fight.phase || 0;
+                for (let i = 0; i < 300 && this.phase !== 'done'; i++) {
+                    await new Promise(r => setTimeout(r, 50));
+                }
+                if (seq !== this._shinjoParrySeq || this.phase !== 'done' || this.shinjoParryDieValue === null) return;
+                this.shinjoParryPhase = this.shinjoParryFightPhase;
+                this._applyShinjoParryBonus();
             },
 
             _shinjoParryPendingBonus() {

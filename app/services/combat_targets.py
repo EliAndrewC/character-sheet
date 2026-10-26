@@ -145,29 +145,53 @@ def set_phase(db: Session, encounter: Encounter, delta: Any) -> int:
 
 
 def can_bless_phase(pc: Character) -> bool:
-    """A Priest has every ritual; a profession character holds it or not."""
+    """A Priest has every ritual; a profession character holds it or not; a
+    Kitsune Warden at 3rd Dan may, for a 3rd Dan free raise."""
     from app.services.professions import holds_ability
+    from app.services.special_rolls import kitsune_rituals
 
-    return pc.school == "priest" or holds_ability(pc, BLESSING_ABILITY)
+    return pc.school == "priest" or holds_ability(pc, BLESSING_ABILITY) or kitsune_rituals(pc)
 
 
-def set_blessing(db: Session, encounter: Encounter, pc: Character, kind: Any) -> None:
-    """The Priest's pick for the fight's current phase, or ``None`` to take
-    it back (a mistake; the rules allow one pick per phase)."""
+def blessing_is_optional(pc: Character) -> bool:
+    """A Kitsune Warden pays a free raise for it, so not blessing a phase is
+    the usual case and is not shown as "not yet chosen"."""
+    from app.services.special_rolls import ritual_costs_a_raise
+
+    return ritual_costs_a_raise(pc, BLESSING_ABILITY)
+
+
+def set_blessing(db: Session, encounter: Encounter, pc: Character, kind: Any) -> Dict[str, Any]:
+    """The pick for the fight's current phase, or ``None`` to take it back (a
+    mistake; the rules allow one pick per phase). A Kitsune Warden's first
+    pick in a phase spends a 3rd Dan free raise and taking it back returns
+    it; changing the pick costs nothing more. Returns ``{phase, kind}``."""
+    from app.services.special_rolls import ritual_raises_left, spend_ritual_raise
+
     if not can_bless_phase(pc):
         raise ValueError(f"{pc.name} cannot bless a combat phase")
     if kind is not None and kind not in BLESSINGS:
         raise ValueError("choose attack, parry, damage or wound_check")
     choices = {k: dict(v) for k, v in (encounter.phase_choices or {}).items()}
     mine = choices.get(str(pc.id), {})
+    phase = str(encounter.current_phase or 0)
+    had = phase in mine
+    if blessing_is_optional(pc):
+        if kind is not None and not had:
+            if ritual_raises_left(pc) < 1:
+                raise ValueError(f"{pc.name} has no 3rd Dan free raise left to perform the ritual")
+            spend_ritual_raise(pc, 1)
+        elif kind is None and had:
+            spend_ritual_raise(pc, -1)
     if kind is None:
-        mine.pop(str(encounter.current_phase or 0), None)
+        mine.pop(phase, None)
     else:
-        mine[str(encounter.current_phase or 0)] = kind
+        mine[phase] = kind
     choices[str(pc.id)] = mine
     encounter.phase_choices = choices
     npcs.touch(encounter)
     db.flush()
+    return {"phase": int(phase), "kind": kind}
 
 
 def phase_abilities(encounter: Optional[Encounter], pc: Character) -> List[Dict[str, Any]]:
@@ -184,8 +208,10 @@ def phase_abilities(encounter: Optional[Encounter], pc: Character) -> List[Dict[
                     "choice": history[phase - 1] if len(history) >= phase else None})
     if can_bless_phase(pc):
         pick = ((encounter.phase_choices or {}).get(str(pc.id)) or {}).get(str(phase))
-        out.append({"kind": "blessing", "label": "Blessing",
-                    "choice": BLESSINGS.get(pick), "value": pick})
+        entry = {"kind": "blessing", "label": "Blessing", "choice": BLESSINGS.get(pick), "value": pick}
+        if blessing_is_optional(pc):
+            entry["optional"] = True  # only shown once made (a Kitsune's free raise)
+        out.append(entry)
     return out
 
 
@@ -383,6 +409,16 @@ def add_stance(db: Session, character: Character, roll_key: str, result: Dict[st
     link = duel_link(pc_encounter(db, character), character.id)
     if link is not None:
         result["stance"] = stance(link.character, result["total"])
+
+
+def lock_act_phase(db: Session, character: Character, action: str, args: Dict[str, Any]) -> None:
+    """Before a parry's Shinjo phase action by a PC in a fight: the die was
+    spent in the fight's phase."""
+    if action != "shinjo_phase":
+        return
+    encounter = pc_encounter(db, character)
+    if encounter is not None:
+        args["phase"] = encounter.current_phase or 0
 
 
 def lock_weapon(db: Session, character: Character, session: RollSession, action: str,

@@ -324,9 +324,10 @@
             {# Two separate rituals, so two flags: a profession character who
                learned only one gets only that button. A Priest school
                character has all ten and gets both. #}
-            {% if school_abilities.get('priest_bless_topic') or school_abilities.get('priest_bless_research') %}
-            <div class="mt-2 pt-2 border-t border-ink/10">
-                <div class="text-sm text-ink/60 mb-1">Priest Rituals</div>
+            {% if school_abilities.get('priest_bless_topic') or school_abilities.get('priest_bless_research') or (school_abilities.get('phase_blessing') and viewer_can_edit) %}
+            <div class="mt-2 pt-2 border-t border-ink/10" data-testid="priest-rituals">
+                <div class="text-sm text-ink/60 mb-1">Priest Rituals{% if school_abilities.get('kitsune_rituals') %}
+                    <span class="text-xs" data-testid="kitsune-ritual-cost">(Kitsune 3rd Dan: each costs one 3rd Dan free raise)</span>{% endif %}</div>
                 <div class="flex flex-col gap-2">
                     {% if school_abilities.get('priest_bless_research') %}
                     <div class="tooltip-trigger relative inline-block self-start" data-bless-research>
@@ -352,6 +353,29 @@
                         <span class="tooltip-content absolute left-0 top-full z-10 mt-1 p-2 bg-ink text-parchment text-xs rounded shadow-lg max-w-xs whitespace-normal">
                             Before a conversation, bless a target and pick a topic of conversation. When the target makes their first contested roll on that topic, roll 2k1 and add it to their roll. Each blessing replaces the previous one. Time: 5 minutes.
                         </span>
+                    </div>
+                    {% endif %}
+                    {# "Bless a combat phase": posted to the group's fight, which
+                       knows the current phase (the combat page shows the pick). #}
+                    {% if school_abilities.get('phase_blessing') and viewer_can_edit %}
+                    <div class="flex flex-wrap items-center gap-2 text-xs" data-testid="sheet-phase-blessing"
+                         x-data="{ pick: 'attack', note: '', err: '', busy: false }">
+                        <span class="tooltip-trigger relative">Bless this combat phase:
+                            <span class="tooltip-content absolute left-0 top-full z-10 mt-1 p-2 bg-ink text-parchment text-xs rounded shadow-lg w-64 whitespace-normal">Once per phase of combat: at the beginning of the phase, pick one of attacks, parries, damage or wound checks. You and all allies round up all rolls of that type to the nearest multiple of 5 that phase. The phase is the fight's, as the GM set it on the combat page.</span></span>
+                        <select x-model="pick" data-action="sheet-phase-blessing-kind" class="border rounded px-1 py-0.5 text-xs">
+                            <option value="attack">attacks</option>
+                            <option value="parry">parries</option>
+                            <option value="damage">damage</option>
+                            <option value="wound_check">wound checks</option>
+                        </select>
+                        <button type="button" :disabled="busy" data-action="sheet-phase-blessing"
+                                @click="busy = true; err = ''; note = '';
+                                        blessCombatPhase(pick).then(r => { busy = false;
+                                            if (r.error) { err = r.error; return; }
+                                            note = 'Phase ' + r.phase + ' blessed: ' + ({attack: 'attacks', parry: 'parries', damage: 'damage', wound_check: 'wound checks'})[r.kind] + '.'; })"
+                                class="px-2 py-1 rounded bg-accent/10 hover:bg-accent/20 border border-accent/30 disabled:opacity-40">Bless</button>
+                        <span x-show="note" x-cloak class="text-success" data-testid="sheet-phase-blessing-note" x-text="note"></span>
+                        <span x-show="err" x-cloak class="text-red-700" data-testid="sheet-phase-blessing-error" x-text="err"></span>
                     </div>
                     {% endif %}
                 </div>

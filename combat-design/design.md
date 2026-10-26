@@ -90,6 +90,8 @@ Status: **built and deployed** (2026-09-28). All phases done, including the GM's
 | D41 | **Knowing the next action.** A Kakita 3rd Dan knows when a target within striking range acts next, so choosing one fills in Kakita's defender phase: the NPC's lowest unspent die, never earlier than the current phase (a held die can act now), 11 with none left. Out of striking range (an arrow), the picker stays. A Kitsuki 4th Dan knows every NPC's next action and parry, so every TN. Nobody else is sent an NPC's unspent dice (D34). |
 | D42 | **A Mantis may not declare a posture for a phase the fight has not reached** (refused on the server with the numbers; the sheet takes it back). The combat page shows each Mantis's posture for the current phase, or "not yet chosen", in both views. The posture history still resets on the Mantis's own initiative, not on "New round". |
 | D43 | **A Priest's "Bless a combat phase" pick is recorded per phase on the fight** (`Encounter.phase_choices`, cleared by "New round"): picked on the combat page by the Priest's player or the GM, shown in both views with "not yet chosen" until made, changeable or clearable within the phase. The rounding is not applied to rolls. |
+| D44 | **A Kitsune Warden at 3rd Dan performs priest rituals for one 3rd Dan free raise each** (rules/11-non_pc_schools.md). "Bless a combat phase": optional, so the card shows nothing until it is chosen, then the pick; chosen from the PC's kebab on the combat page (the Kitsune's player gets a kebab for this alone; the GM's has it too) or from the sheet's Priest Rituals block. The first pick in a phase spends a raise, changing it is free, taking it back returns it. The sheet's "Bless research" / "Bless conversation topic" 2k1 rolls are offered too and spend a raise when rolled live; with none left, both are refused with the reason. A Priest (or a holder of the ritual) pays nothing. |
+| D45 | **A Shinjo's parry in a fight is spent at the fight's phase**: the sheet shows the phase in place of the after-the-roll picker and applies the bonus itself, and the server's `shinjo_phase` action uses the fight's phase whatever it is sent. |
 
 ## 3. What exists today
 
@@ -285,7 +287,7 @@ Each phase ends with tests green at 100% coverage in every repo it touches, targ
 - Round 3: git (D24), stub schools (D25), names (D26), public combat page (D27), real names (D28), roll totals only (D29), every visible PC (D30), new round (D31).
 - Round 4: PCs on the public page (D32), one fight at a time (D33).
 - Round 5: a PC's attack target (D35-D37) and weapon (D38); iaijutsu duels (D39).
-- Round 6: the fight's phase (D40-D43).
+- Round 6: the fight's phase (D40-D43); Kitsune Warden rituals and the Shinjo parry (D44-D45).
 
 
 ## Addendum (2026-10-05): NPC rolls on the sheet's own roller

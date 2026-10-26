@@ -471,7 +471,11 @@
                          data-testid="shinjo-parry-phase-bonus"
                          class="bg-parchment rounded p-2 text-sm flex flex-wrap items-center gap-2">
                         <span>Shinjo Bushi: die <span class="font-mono" x-text="shinjoParryDieValue"></span> spent at phase</span>
-                        <select x-model.number="shinjoParryPhase"
+                        {# In a fight the phase is the fight's (the server uses it):
+                           shown, and applied once the roll's session exists. #}
+                        <b x-show="shinjoParryFightPhase !== null" x-cloak data-testid="shinjo-parry-fight-phase"
+                           title="The fight's current phase, set by the GM" x-text="shinjoParryFightPhase"></b>
+                        <select x-show="shinjoParryFightPhase === null" x-model.number="shinjoParryPhase"
                                 @change="_applyShinjoParryBonus()"
                                 data-action="shinjo-parry-phase"
                                 class="border rounded px-1 py-0.5 text-xs">

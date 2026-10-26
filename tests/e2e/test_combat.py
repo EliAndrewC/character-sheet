@@ -856,7 +856,7 @@ def test_a_can_strike_flyout_stays_open_while_the_pointer_crosses_to_it(page, li
 # The fight's phase
 # ---------------------------------------------------------------------------
 
-def _school_pc_in_fight(page, live_server_url, name, school, knacks=None):
+def _school_pc_in_fight(page, live_server_url, name, school, knacks=None, skills=None):
     """A fresh group whose one PC is ``name`` of ``school`` (knack ranks
     ``knacks``), in a fight with one Wave Man it can strike."""
     from tests.e2e.test_school_abilities import _create_char
@@ -866,7 +866,7 @@ def _school_pc_in_fight(page, live_server_url, name, school, knacks=None):
     page.fill('input[name="name"][placeholder*="Friday"]', gname)
     page.locator('form[action="/admin/groups/new"] button[type="submit"]').click()
     page.wait_for_load_state("networkidle")
-    _create_char(page, live_server_url, name, school, knack_overrides=knacks)
+    _create_char(page, live_server_url, name, school, knack_overrides=knacks, skill_overrides=skills)
     sheet = page.url
     page.goto(sheet + "/edit")
     page.wait_for_selector('select[name="gaming_group_id"]')
@@ -977,3 +977,56 @@ def test_a_priest_blesses_the_current_phase_on_the_combat_page(page, page_anon, 
     assert page_anon.locator(f'[data-testid="pc-blessing-{pc["id"]}"]').count() == 0
     page.locator('[data-testid="phase-next"]').click()
     expect(line).to_contain_text("not yet chosen")
+
+
+def _raises_left(page):
+    return page.evaluate("() => window._trackingBridge.getCount('adventure_raises')")
+
+
+def test_a_kitsune_warden_blesses_a_phase_and_performs_rituals_for_free_raises(page, page_anon, live_server_url):
+    gid, pc, npc = _school_pc_in_fight(page, live_server_url, "PhaseKitsune", "kitsune_warden",
+                                       knacks={"absorb_void": 3, "commune": 3, "iaijutsu": 3},
+                                       skills={"precepts": 2})
+    # Optional: no "not yet chosen" line on the card.
+    page.goto(f"{live_server_url}/groups/{gid}/combat")
+    line = page.locator(f'[data-testid="pc-phase-blessing-{pc["id"]}"]')
+    expect(line).to_be_hidden()
+    page.locator(f'[data-testid="pc-menu-{pc["id"]}"]').click()
+    page.locator(f'[data-testid="pc-optional-blessing-{pc["id"]}"]').select_option("damage")
+    expect(line).to_contain_text("Blessing this phase: damage")
+    page_anon.goto(f"{live_server_url}/groups/{gid}/combat")
+    expect(page_anon.locator(f'[data-testid="pc-phase-blessing-{pc["id"]}"]')).to_contain_text("damage")
+
+    # The sheet: one raise spent already; the rituals say what they cost.
+    page.goto(f"{live_server_url}/characters/{pc['id']}")
+    page.wait_for_function("() => window._trackingBridge")
+    used = page.evaluate("() => window._trackingBridge.getCount('adventure_raises')")
+    expect(page.locator('[data-testid="kitsune-ritual-cost"]')).to_contain_text("one 3rd Dan free raise")
+    page.locator('[data-action="bless-conversation"]').click()
+    page.wait_for_function("() => window._diceRoller && window._diceRoller.phase === 'done'")
+    assert page.evaluate("() => window._trackingBridge.getCount('adventure_raises')") == used + 1
+    page.locator('[data-modal="dice-roller"] button:has-text("×")').click()
+
+    # Bless this combat phase from the sheet: the fight's phase, a changed pick.
+    _phase(page, live_server_url, gid, 1)
+    page.locator('[data-action="sheet-phase-blessing-kind"]').select_option("wound_check")
+    page.locator('[data-action="sheet-phase-blessing"]').click()
+    expect(page.locator('[data-testid="sheet-phase-blessing-note"]')).to_have_text("Phase 1 blessed: wound checks.")
+    assert page.evaluate("() => window._trackingBridge.getCount('adventure_raises')") == used + 2
+    expect(page_anon.locator(f'[data-testid="pc-phase-blessing-{pc["id"]}"]')).to_contain_text(
+        "wound checks", timeout=10000)
+
+
+def test_a_shinjos_parry_in_a_fight_is_spent_at_the_fights_phase(page, live_server_url):
+    gid, pc, npc = _school_pc_in_fight(page, live_server_url, "PhaseShinjo", "shinjo_bushi")
+    _set_dice(page, live_server_url, pc["id"], [{"value": 2, "spent": False}])
+    for _ in range(6):
+        _phase(page, live_server_url, gid, 1)
+    page.goto(f"{live_server_url}/characters/{pc['id']}")
+    page.wait_for_function("() => window._trackingBridge")
+    from tests.e2e.test_school_abilities import _roll_via_menu_or_direct
+
+    _roll_via_menu_or_direct(page, "parry")
+    expect(page.locator('[data-testid="shinjo-parry-fight-phase"]')).to_have_text("6")
+    expect(page.locator('[data-testid="shinjo-parry-phase-bonus-display"]')).to_contain_text("+8")
+    expect(page.locator('[data-action="shinjo-parry-phase"]')).to_be_hidden()

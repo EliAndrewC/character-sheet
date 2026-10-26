@@ -252,6 +252,10 @@
         var found = list.find(function (o) { return o.id === other; });
         return found ? found.name : "";
       },
+      // A Kitsune Warden's optional blessing entry for this phase, or null.
+      optionalBlessing: function (pc) {
+        return (pc.phase_abilities || []).find(function (a) { return a.kind === "blessing" && a.optional; }) || null;
+      },
       movePhase: async function (delta) { await this.post("/phase", { delta: delta }); },
       // A Priest's "Bless a combat phase" pick for the current phase ("" takes it back).
       setBlessing: async function (pc, kind) {

@@ -606,3 +606,116 @@ def test_only_a_priest_or_a_holder_of_the_ritual_blesses_a_phase(fight):
     pc.profession_abilities = {ct.BLESSING_ABILITY: 1}
     ct.set_blessing(s, enc, pc, "parry")
     assert ct.phase_abilities(enc, pc)[0]["choice"] == "parries"
+
+
+# ---------------------------------------------------------------------------
+# Kitsune Warden 3rd Dan: priest rituals for a free raise
+# ---------------------------------------------------------------------------
+
+def _kitsune(pc, dan=3, precepts=2):
+    _school(pc, "kitsune_warden", dan)
+    pc.skills = {"precepts": precepts}  # 2 x precepts free raises
+    pc.adventure_state = {}
+
+
+def _raises_used(fight):
+    fight["s"].expire_all()
+    return int((fight["pc"].adventure_state or {}).get("adventure_raises_used", 0))
+
+
+def test_a_kitsunes_phase_blessing_is_optional_and_costs_a_free_raise(client, fight):
+    s, pc, enc = fight["s"], fight["pc"], fight["enc"]
+    _kitsune(pc)
+    s.commit()
+    url = _fight_url(fight, "/blessing")
+    assert ct.phase_abilities(enc, pc) == [
+        {"kind": "blessing", "label": "Blessing", "choice": None, "value": None, "optional": True}]
+    r = client.post(url, json={"kind": "damage"}, headers=PLAYER).json()
+    assert r["phase"] == 0 and r["kind"] == "damage"
+    assert r["tracking"]["adventure_state"]["adventure_raises_used"] == 1
+    client.post(url, json={"kind": "attack"}, headers=PLAYER)  # a change: no second raise
+    assert _raises_used(fight) == 1
+    client.post(url, json={"kind": None}, headers=PLAYER)  # taken back: the raise returns
+    assert _raises_used(fight) == 0
+    client.post(url, json={"kind": None}, headers=PLAYER)  # nothing to take back
+    assert _raises_used(fight) == 0
+
+
+def test_a_kitsune_with_no_free_raise_left_cannot_bless(client, fight):
+    s, pc = fight["s"], fight["pc"]
+    _kitsune(pc, precepts=1)
+    pc.adventure_state = {"adventure_raises_used": 2}
+    s.commit()
+    r = client.post(_fight_url(fight, "/blessing"), json={"kind": "parry"}, headers=PLAYER)
+    assert r.status_code == 400 and "no 3rd Dan free raise left" in r.json()["error"]
+
+
+def test_a_kitsune_below_3rd_dan_has_no_rituals(fight):
+    from app.services import special_rolls
+
+    _kitsune(fight["pc"], dan=2)
+    assert not ct.can_bless_phase(fight["pc"])
+    assert not special_rolls.can_bless(fight["pc"], "topic")
+
+
+def test_a_priest_blesses_for_free(client, fight):
+    s, pc = fight["s"], fight["pc"]
+    _school(pc, "priest", 3)
+    pc.skills = {"precepts": 2}
+    s.commit()
+    client.post(_fight_url(fight, "/blessing"), json={"kind": "damage"}, headers=PLAYER)
+    assert _raises_used(fight) == 0
+    assert "optional" not in ct.phase_abilities(fight["enc"], pc)[0]
+
+
+def _bless(client, fight, ritual, headers=PLAYER):
+    return client.post(f"/characters/{fight['pc'].id}/roll", headers=headers,
+                       json={"roll_key": "bless", "ritual": ritual})
+
+
+def test_a_kitsunes_bless_roll_spends_a_free_raise(client, fight, scripted):
+    s, pc = fight["s"], fight["pc"]
+    _kitsune(pc, precepts=1)
+    s.commit()
+    first = _bless(client, fight, "topic", headers=scripted("5"))
+    assert first.status_code == 200 and first.json()["formula"]["ritual_raise_cost"] == 1
+    assert _raises_used(fight) == 1
+    assert _bless(client, fight, "research", headers=scripted("5", base=OTHER)).json()["mode"] == "simulate"
+    assert _raises_used(fight) == 1  # a test-drive spends nothing
+    _bless(client, fight, "research", headers=scripted("5"))
+    assert _raises_used(fight) == 2
+    refused = _bless(client, fight, "topic", headers=scripted("5"))
+    assert refused.status_code == 400 and "no 3rd Dan free raise left" in refused.json()["error"]
+
+
+def test_a_priests_bless_roll_costs_nothing(client, fight, scripted):
+    s, pc = fight["s"], fight["pc"]
+    _school(pc, "priest", 1)
+    s.commit()
+    data = _bless(client, fight, "topic", headers=scripted("5")).json()
+    assert "ritual_raise_cost" not in data["formula"]
+
+
+def test_a_shinjos_parry_phase_is_the_fights(client, fight, scripted):
+    s, pc = fight["s"], fight["pc"]
+    _school(pc, "shinjo_bushi", 1)
+    pc.skills = {"parry": 2}
+    fight["enc"].current_phase = 7
+    s.commit()
+    sid = client.post(f"/characters/{pc.id}/roll", headers=scripted("5"),
+                      json={"roll_key": "parry"}).json()["session_id"]
+    total = _act(client, fight, sid, "shinjo_phase", phase=3, die_value=2).json()["total"]
+    base = _act(client, fight, sid, "shinjo_phase", phase=0, die_value=7).json()["total"]
+    assert total - base == 2 * (7 - 2)  # held from 2 to the fight's 7, whatever was sent
+    args = {"phase": 4}
+    ct.lock_act_phase(s, pc, "raise", args)
+    assert args == {"phase": 4}
+
+
+def test_a_kitsune_without_precepts_has_no_raises_to_spend(fight):
+    from app.services import special_rolls
+
+    _kitsune(fight["pc"], precepts=0)
+    assert special_rolls.ritual_raises_left(fight["pc"]) == 0
+    with pytest.raises(ValueError, match="no 3rd Dan free raise left"):
+        ct.set_blessing(fight["s"], fight["enc"], fight["pc"], "attack")

@@ -175,13 +175,32 @@
                                title="Open the character sheet in a new tab"
                                class="font-semibold text-ink truncate min-w-0 hover:underline" x-text="pc.name"></a>
                         </span>
-                        <template x-if="gm && state.encounter">
+                        {# The GM's options; a player gets the menu for their own PC
+                           only for what is theirs to choose (a Kitsune's blessing). #}
+                        <template x-if="state.encounter && (gm || (pc.mine && optionalBlessing(pc)))">
                             <div class="relative ml-auto" x-data="{ open: false }" @click.outside="open = false">
                                 <button type="button" @click="open = !open" :data-testid="'pc-menu-' + pc.id"
                                         title="Options" aria-label="Options"
                                         class="btn-ghost rounded leading-none font-bold px-2 py-1 text-xl">&#8942;</button>
                                 <div x-show="open" x-cloak
                                      class="absolute right-0 top-full mt-1 z-30 bg-white rounded-lg shadow-xl border border-ink/20 py-1 min-w-[180px] text-sm">
+                                    {# Kitsune Warden 3rd Dan: bless this phase for a free
+                                       raise. Optional, so it lives here, not on the card. #}
+                                    <template x-if="optionalBlessing(pc)">
+                                        <label class="block px-4 py-2" @click.stop>
+                                            <span class="block text-ink/70 mb-1" x-text="'Bless phase ' + (state.encounter?.phase ?? 0) + ' (1 free raise)'"></span>
+                                            <select @change="setBlessing(pc, $event.target.value); open = false" :disabled="busy"
+                                                    :data-testid="'pc-optional-blessing-' + pc.id" class="w-full border rounded px-1 py-1 text-sm">
+                                                <option value="" :selected="!optionalBlessing(pc).value">- Not this phase -</option>
+                                                <option value="attack" :selected="optionalBlessing(pc).value === 'attack'">attacks</option>
+                                                <option value="parry" :selected="optionalBlessing(pc).value === 'parry'">parries</option>
+                                                <option value="damage" :selected="optionalBlessing(pc).value === 'damage'">damage</option>
+                                                <option value="wound_check" :selected="optionalBlessing(pc).value === 'wound_check'">wound checks</option>
+                                            </select>
+                                        </label>
+                                    </template>
+                                    <template x-if="gm">
+                                    <div>
                                     <button type="button" @click="open = false; openRoller(pc, null, $event, 'initiative')" :data-testid="'pc-init-' + pc.id"
                                             class="block w-full text-left px-4 py-2 hover:bg-parchment">Roll initiative</button>
                                     {{ can_strike('pc', 'npcs', 'pc.id', 'o.id', 'lg:left-full lg:pl-2') }}
@@ -215,6 +234,8 @@
                                                     class="btn-ghost text-xs px-2 py-1 rounded">Clear</button>
                                         </div>
                                     </div>
+                                    </div>
+                                    </template>
                                 </div>
                             </div>
                         </template>
@@ -276,11 +297,12 @@
                     </template>
                     {# This phase's posture (Mantis) / blessing (Priest): declared, so public. #}
                     <template x-for="a in pc.phase_abilities || []" :key="a.kind">
-                        <div class="text-xs flex flex-wrap items-center gap-x-2 gap-y-1" :data-testid="'pc-phase-' + a.kind + '-' + pc.id">
+                        <div x-show="!a.optional || a.choice" class="text-xs flex flex-wrap items-center gap-x-2 gap-y-1"
+                             :data-testid="'pc-phase-' + a.kind + '-' + pc.id">
                             <span class="text-ink/60" x-text="a.label + ' this phase:'"></span>
                             <b x-show="a.choice" class="text-ink" x-text="a.choice"></b>
                             <span x-show="!a.choice" class="text-orange-700 font-medium">not yet chosen</span>
-                            <template x-if="a.kind === 'blessing' && (gm || pc.mine)">
+                            <template x-if="a.kind === 'blessing' && !a.optional && (gm || pc.mine)">
                                 <select @change="setBlessing(pc, $event.target.value)" :disabled="busy"
                                         :data-testid="'pc-blessing-' + pc.id" class="border rounded px-1 py-0.5 text-xs">
                                     <option value="" :selected="!a.value">- choose -</option>

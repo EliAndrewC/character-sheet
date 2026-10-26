@@ -477,6 +477,7 @@ async def act_on_roll(request: Request, char_id: int, session_id: str,
         return JSONResponse({"error": "Too many rolls - try again in a minute"}, status_code=429)
     args = body.get("args") if isinstance(body.get("args"), dict) else {}
     combat_targets.lock_weapon(db, character, session, action, args)
+    combat_targets.lock_act_phase(db, character, action, args)
     try:
         result = roll_sessions.act(db, session, character, action, args,
                                    rng=_test_rng(request))

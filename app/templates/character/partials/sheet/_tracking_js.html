@@ -265,6 +265,25 @@
                     this._opChain = (this._opChain || Promise.resolve()).then(run, run);
                     return this._opChain;
                 },
+                // "Bless a combat phase" (Priest, ritual holder, Kitsune Warden
+                // 3rd Dan for a free raise): the fight knows the phase, so the
+                // pick is posted there. Adopts the snapshot (a spent raise).
+                async blessCombatPhase(kind) {
+                    if (!this.canEdit) return {error: 'Only an editor can do that.'};
+                    let resp = null, data = null;
+                    try {
+                        resp = await fetch('/groups/{{ character.gaming_group_id or 0 }}/combat/fight/' + this._charId + '/blessing', {
+                            method: 'POST', headers: {'Content-Type': 'application/json'},
+                            body: JSON.stringify({kind: kind}),
+                        });
+                        data = await resp.json().catch(() => null);
+                    } catch (e) {
+                        return {error: 'Could not reach the server - nothing was blessed.'};
+                    }
+                    if (data && data.tracking) this.adoptServerState(data.tracking, false);
+                    if (!resp.ok) return {error: (data && data.error) || 'That could not be done.'};
+                    return data;
+                },
                 _showOpError(message) {
                     this.opError = message;
                     clearTimeout(this._opErrorTimer);

@@ -302,11 +302,14 @@ async def blessing(group_id: int, pc_id: int, request: Request, db: Session = De
         return _error("No fight in progress", 409)
     body = await _body(request)
     try:
-        combat_targets.set_blessing(db, encounter, pc, body.get("kind"))
+        done = combat_targets.set_blessing(db, encounter, pc, body.get("kind"))
     except ValueError as exc:
         return _error(str(exc))
     db.commit()
-    return {"status": "ok"}
+    # The sheet adopts the snapshot: a Kitsune's free raise was spent.
+    from app.services.tracking import tracking_snapshot
+
+    return {"status": "ok", **done, "tracking": tracking_snapshot(pc)}
 
 
 @router.post("/groups/{group_id}/combat/npcs/{npc_id}/status")
