@@ -12,10 +12,13 @@
     return share == null ? "?" : Math.round(share * 100);
   }
 
+  // op: what an Obsidian Portal lookup filled in (D46-D47), shown for the GM
+  // to read before generating; null for an ordinary row.
   function newRow(share) {
     return {
       npc_type: "wave_man", count: 1, earned_xp: 50, roll_extra: true,
       combat_target: share.default, exact_share: false,
+      op_ref: "", op: null, op_busy: false, op_error: "", op_candidates: [],
     };
   }
 
@@ -175,13 +178,59 @@
 
       // ---- builder ----
       addRow: function () { this.rows.push(newRow(this.share)); },
+      // Fill a row from an Obsidian Portal character: one NPC, its name, its
+      // exact earned XP (no extra roll), traits and recorded stats. A school
+      // the conventions cannot map leaves the type blank for the GM.
+      lookUpOp: async function (row, ref) {
+        if (ref !== undefined) row.op_ref = ref;
+        if (!row.op_ref.trim()) return;
+        row.op_busy = true;
+        row.op_error = "";
+        row.op_candidates = [];
+        try {
+          var resp = await fetch(this.url("/op-character?ref=" + encodeURIComponent(row.op_ref.trim())),
+                                 { cache: "no-store" });
+          var data = await resp.json().catch(function () { return {}; });
+          if (!resp.ok) {
+            row.op_error = data.error || ("Lookup failed (" + resp.status + ")");
+            row.op_candidates = data.candidates || [];
+            return;
+          }
+          var op = data.row;
+          row.op = op;
+          row.npc_type = op.npc_type || "";
+          row.count = 1;
+          row.roll_extra = false;
+          if (op.earned_xp !== null) row.earned_xp = op.earned_xp;
+        } finally {
+          row.op_busy = false;
+        }
+      },
+      clearOp: function (row) {
+        Object.assign(row, newRow(this.share), {
+          combat_target: row.combat_target, exact_share: row.exact_share,
+        });
+      },
+      recordedText: function (recorded) {
+        return Object.keys(recorded || {}).map(function (k) { return k + " " + recorded[k]; }).join(", ");
+      },
       generate: async function () {
+        var blank = this.rows.find(function (r) { return !r.npc_type; });
+        if (blank) {
+          this.error = "Pick a type for " + (blank.op ? blank.op.name : "every row") + " first.";
+          return;
+        }
         var rows = this.rows.map(function (r) {
           var row = {
             npc_type: r.npc_type, count: r.count, earned_xp: r.earned_xp,
             roll_extra: !!r.roll_extra, combat_target: r.combat_target,
           };
           if (r.exact_share) row.combat_share = r.combat_target;
+          if (r.op) {
+            row.names = [r.op.name];
+            row.traits = r.op.traits;
+            row.recorded = r.op.recorded;
+          }
           return row;
         });
         var data = await this.post("/generate", { rows: rows });

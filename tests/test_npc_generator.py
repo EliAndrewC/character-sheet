@@ -685,3 +685,15 @@ def test_a_whole_build_recorded_back_rebuilds_to_itself(npc_type):
     again = gen.build_npc(npc_type, 250, 0.6, recorded=stats)
     for field in ("rings", "attack", "parry", "skills", "knacks", "foreign_knacks"):
         assert again[field] == build[field]
+
+
+def test_a_trait_line_with_a_note_after_a_spaced_hyphen_still_matches():
+    """OP adds the GM's note that way ("Poor - even by Wasp standards");
+    a hyphen inside a word, or a line that is not a trait, stays flavor."""
+    traits, flavor = gen.match_trait_lines([
+        "Poor - even by Wasp standards", "Good Reputation - \"knows his place\"",
+        "sword-calloused", "personally hated by an enemy - the Mantis",
+    ])
+    assert traits["disadvantages"] == ["poor"]
+    assert traits["advantages"] == ["good_reputation"]
+    assert flavor == ["sword-calloused", "personally hated by an enemy - the Mantis"]

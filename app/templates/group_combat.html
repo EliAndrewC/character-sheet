@@ -473,9 +473,44 @@
             </p>
             <template x-for="(row, i) in rows" :key="i">
                 <div class="flex flex-wrap items-end gap-2 border-t border-ink/10 pt-2" :data-testid="'builder-row-' + i">
+                    {# An Obsidian Portal character fills the row (combat-design D46-D47);
+                       the GM reads what came back before generating. #}
+                    <div class="basis-full space-y-1">
+                        <form class="flex flex-wrap items-end gap-2" @submit.prevent="lookUpOp(row)" x-show="!row.op">
+                            <div class="min-w-0 flex-1">
+                                <label class="block text-xs font-medium mb-1">From Obsidian Portal (optional)</label>
+                                <input type="text" x-model="row.op_ref" placeholder="Character link or name"
+                                       :data-testid="'row-op-ref-' + i" class="w-full border rounded px-2 py-1.5 text-sm">
+                            </div>
+                            <button type="submit" :disabled="row.op_busy || !row.op_ref.trim()" :data-testid="'row-op-lookup-' + i"
+                                    class="btn-secondary px-3 py-1.5 rounded text-sm disabled:opacity-40"
+                                    x-text="row.op_busy ? 'Looking up...' : 'Look up'"></button>
+                        </form>
+                        <p x-show="row.op_error" x-cloak class="text-xs text-red-700" :data-testid="'row-op-error-' + i" x-text="row.op_error"></p>
+                        <div x-show="row.op_candidates.length" x-cloak class="flex flex-wrap gap-1" :data-testid="'row-op-candidates-' + i">
+                            <template x-for="name in row.op_candidates" :key="name">
+                                <button type="button" @click="lookUpOp(row, name)" class="btn-ghost text-xs px-2 py-0.5 rounded border border-ink/20"
+                                        x-text="name"></button>
+                            </template>
+                        </div>
+                        <template x-if="row.op">
+                            <div class="text-xs bg-parchment/60 border border-ink/10 rounded px-3 py-2 space-y-0.5" :data-testid="'row-op-summary-' + i">
+                                <div class="flex items-start justify-between gap-2">
+                                    <span class="font-bold text-sm text-ink" x-text="row.op.name"></span>
+                                    <button type="button" @click="clearOp(row)" class="btn-ghost px-2 py-0.5 rounded" :data-testid="'row-op-clear-' + i">Clear</button>
+                                </div>
+                                <p :class="row.op.npc_type ? 'text-ink/70' : 'text-red-700'" :data-testid="'row-op-type-' + i" x-text="'Type: ' + row.op.type_note"></p>
+                                <p x-show="row.op.earned_xp === null" class="text-red-700">No "XP:" line on Obsidian Portal - set the earned XP.</p>
+                                <p x-show="row.op.trait_names.length" :data-testid="'row-op-traits-' + i" x-text="'Traits: ' + row.op.trait_names.join(', ')"></p>
+                                <p x-show="Object.keys(row.op.recorded).length" :data-testid="'row-op-recorded-' + i" x-text="'NPC numbers: ' + recordedText(row.op.recorded)"></p>
+                                <p x-show="row.op.ignored.length" class="text-ink/60" :data-testid="'row-op-ignored-' + i" x-text="'Not used: ' + row.op.ignored.join('; ')"></p>
+                            </div>
+                        </template>
+                    </div>
                     <div class="min-w-[10rem] flex-1">
                         <label class="block text-xs font-medium mb-1">Type</label>
                         <select x-model="row.npc_type" class="w-full border rounded px-2 py-1.5 text-sm" :data-testid="'row-type-' + i">
+                            <option value="" disabled x-show="!row.npc_type">Pick a type</option>
                             <template x-for="t in npcTypes" :key="t.id">
                                 <option :value="t.id" x-text="t.label" :selected="t.id === row.npc_type"></option>
                             </template>
@@ -483,7 +518,7 @@
                     </div>
                     <div class="w-16">
                         <label class="block text-xs font-medium mb-1">How many</label>
-                        <input type="number" min="1" max="30" x-model.number="row.count" :data-testid="'row-count-' + i"
+                        <input type="number" min="1" max="30" x-model.number="row.count" :data-testid="'row-count-' + i" :disabled="!!row.op"
                                class="w-full border rounded px-2 py-1.5 text-sm text-right">
                     </div>
                     <div class="w-24">

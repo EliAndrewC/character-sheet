@@ -25,6 +25,7 @@ from app.services import combat_targets
 from app.services import combat_view
 from app.services import npc_generator as gen
 from app.services import npcs
+from app.services import op_characters
 from app.services.auth import can_edit_character, get_all_editors, is_admin
 from app.services.npc_backport import backport_all
 from app.services.npc_names import fetch_names
@@ -129,6 +130,25 @@ def end(group_id: int, request: Request, db: Session = Depends(get_db)):
     npcs.end_encounter(db, encounter)
     db.commit()
     return {"status": "ended"}
+
+
+@router.get("/groups/{group_id}/combat/op-character")
+async def op_character(group_id: int, request: Request, ref: str = "",
+                       db: Session = Depends(get_db)):
+    """A builder row from an Obsidian Portal character (D46-D47): the GM
+    pastes a link or a name, reviews what came back, then generates. Writes
+    nothing, so the wait on gm-assistant sits outside any read-modify-write."""
+    _, _, err = _load(db, group_id, request)
+    if err:
+        return err
+    ref = ref.strip()
+    if not ref:
+        return _error("Paste an Obsidian Portal link or a character's name")
+    try:
+        facts = await op_characters.fetch_op_character(ref)
+    except op_characters.OpLookupError as exc:
+        return JSONResponse({"error": str(exc), "candidates": exc.candidates}, status_code=400)
+    return {"row": op_characters.builder_row(facts)}
 
 
 @router.post("/groups/{group_id}/combat/generate")

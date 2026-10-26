@@ -1030,3 +1030,100 @@ def test_a_shinjos_parry_in_a_fight_is_spent_at_the_fights_phase(page, live_serv
     expect(page.locator('[data-testid="shinjo-parry-fight-phase"]')).to_have_text("6")
     expect(page.locator('[data-testid="shinjo-parry-phase-bonus-display"]')).to_contain_text("+8")
     expect(page.locator('[data-action="shinjo-parry-phase"]')).to_be_hidden()
+
+
+def _fake_op(page, rows):
+    """Answer the page's Obsidian Portal lookups from ``rows`` (ref -> row, or
+    ref -> (status, body)) instead of gm-assistant."""
+    import json
+    from urllib.parse import parse_qs, urlparse
+
+    def handle(route):
+        ref = parse_qs(urlparse(route.request.url).query)["ref"][0]
+        answer = rows[ref]
+        status, body = answer if isinstance(answer, tuple) else (200, {"row": answer})
+        route.fulfill(status=status, content_type="application/json", body=json.dumps(body))
+    page.route("**/combat/op-character?*", handle)
+
+
+_FUMITAKE_ROW = {
+    "name": "Tsuruchi Fumitake", "npc_type": "wave_man",
+    "type_note": '"male Peasantborn": a peasant is a Wave Man.', "earned_xp": 140,
+    "traits": {"advantages": [], "disadvantages": ["contrary"], "campaign_advantages": [],
+               "campaign_disadvantages": [], "specializations": [], "advantage_details": {}},
+    "trait_names": ["Contrary"], "recorded": {"Air": 4}, "ignored": ["squinty"],
+}
+
+
+def test_a_builder_row_filled_from_obsidian_portal(page, live_server_url):
+    """An ambiguous name offers the candidates; picking one fills the row
+    (one NPC, exact XP, no extra roll), shows what was read and what was
+    not, and generates the NPC under its own name with its traits."""
+    gid = _group_with_pc(page, live_server_url, "OpPC")
+    _fake_op(page, {
+        "Fumitake": (400, {"error": "Fumitake matches several Obsidian Portal records",
+                           "candidates": ["Tsuruchi Fumitake", "Hida Fumitake"]}),
+        "Tsuruchi Fumitake": _FUMITAKE_ROW,
+    })
+    page.goto(f"{live_server_url}/groups/{gid}/combat")
+    page.fill('[data-testid="fight-name"]', "Inspection")
+    page.locator('[data-testid="start-fight-btn"]').click()
+    page.wait_for_selector('[data-testid="builder"]')
+    page.fill('[data-testid="row-op-ref-0"]', "Fumitake")
+    page.locator('[data-testid="row-op-lookup-0"]').click()
+    expect(page.locator('[data-testid="row-op-error-0"]')).to_contain_text("matches several")
+    page.locator('[data-testid="row-op-candidates-0"] button', has_text="Tsuruchi Fumitake").click()
+
+    summary = page.locator('[data-testid="row-op-summary-0"]')
+    expect(summary).to_contain_text("Tsuruchi Fumitake")
+    expect(page.locator('[data-testid="row-op-type-0"]')).to_contain_text("a peasant is a Wave Man")
+    expect(page.locator('[data-testid="row-op-traits-0"]')).to_have_text("Traits: Contrary")
+    expect(page.locator('[data-testid="row-op-recorded-0"]')).to_have_text("NPC numbers: Air 4")
+    expect(page.locator('[data-testid="row-op-ignored-0"]')).to_have_text("Not used: squinty")
+    assert page.locator('[data-testid="row-op-error-0"]').is_hidden()
+    assert page.locator('[data-testid="row-op-ref-0"]').is_hidden()
+    assert page.locator('[data-testid="row-type-0"]').input_value() == "wave_man"
+    assert page.locator('[data-testid="row-xp-0"]').input_value() == "140"
+    assert page.locator('[data-testid="row-count-0"]').is_disabled()
+    assert not page.locator('[data-testid="row-roll-0"]').is_checked()
+
+    page.locator('[data-testid="generate-btn"]').click()
+    page.wait_for_selector('[data-testid^="npc-card-"]')
+    card = page.locator('[data-testid^="npc-card-"]').first
+    expect(card).to_contain_text("Tsuruchi Fumitake")
+    expect(card).to_contain_text("140 earned XP")
+    npc_id = card.get_attribute("data-testid").split("-")[-1]
+    sheet = page.request.get(f"{live_server_url}/groups/{gid}/combat/state").json()
+    assert any(n["id"] == int(npc_id) for n in sheet["npcs"])
+    # The builder is back to an ordinary row.
+    assert page.locator('[data-testid="row-op-summary-0"]').count() == 0
+    assert page.locator('[data-testid="row-op-ref-0"]').input_value() == ""
+
+
+def test_an_unmapped_school_waits_for_the_gm_and_clear_resets_the_row(page, live_server_url):
+    gid = _group_with_pc(page, live_server_url, "OpPC2")
+    _fake_op(page, {"Seppun Kenji": {
+        **_FUMITAKE_ROW, "name": "Seppun Kenji", "npc_type": None, "earned_xp": None,
+        "type_note": "Imperial families have no school to build from - pick a type, or leave this one out.",
+        "trait_names": [], "recorded": {}, "ignored": [],
+    }})
+    page.goto(f"{live_server_url}/groups/{gid}/combat")
+    page.fill('[data-testid="fight-name"]', "Court")
+    page.locator('[data-testid="start-fight-btn"]').click()
+    page.wait_for_selector('[data-testid="builder"]')
+    page.fill('[data-testid="row-xp-0"]', "75")
+    page.fill('[data-testid="row-op-ref-0"]', "Seppun Kenji")
+    page.locator('[data-testid="row-op-ref-0"]').press("Enter")
+    expect(page.locator('[data-testid="row-op-type-0"]')).to_contain_text("Imperial families")
+    expect(page.locator('[data-testid="row-op-type-0"]')).to_have_class(re.compile("text-red-700"))
+    assert page.locator('[data-testid="row-type-0"]').input_value() == ""
+    assert page.locator('[data-testid="row-xp-0"]').input_value() == "75"   # no XP line: kept
+    page.locator('[data-testid="generate-btn"]').click()
+    expect(page.locator('[data-testid="combat-error"]')).to_have_text("Pick a type for Seppun Kenji first.")
+    assert page.locator('[data-testid^="npc-card-"]').count() == 0
+
+    page.locator('[data-testid="row-op-clear-0"]').click()
+    assert page.locator('[data-testid="row-op-summary-0"]').count() == 0
+    assert page.locator('[data-testid="row-type-0"]').input_value() == "wave_man"
+    assert page.locator('[data-testid="row-count-0"]').is_enabled()
+    assert page.locator('[data-testid="row-roll-0"]').is_checked()

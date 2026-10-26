@@ -331,9 +331,12 @@ def match_trait_lines(lines: List[str]) -> Tuple[Dict[str, Any], List[str]]:
     per line, e.g. "Contrary", "squinty") into ``(traits, flavor)``.
 
     A line matches when it IS an advantage or disadvantage name or id,
-    ignoring case and surrounding space; anything else ("pauses before
-    speaking") is flavor and is returned for the GM to read, never guessed
-    at. Ids come back sorted, each once.
+    ignoring case and surrounding space, or when the part before a spaced
+    hyphen is one ("Poor - even by Wasp standards": OP adds the GM's note that
+    way, 6 of the 1311 cached trait lines in 2026-10); anything else ("pauses
+    before speaking", "personally hated by an enemy - the Mantis") is flavor
+    and is returned for the GM to read, never guessed at. Ids come back
+    sorted, each once.
     """
     index = _trait_index()
     found: Dict[str, set] = {field: set() for field in _TRAIT_CATALOGS}
@@ -342,7 +345,7 @@ def match_trait_lines(lines: List[str]) -> Tuple[Dict[str, Any], List[str]]:
         text = line.strip()
         if not text:
             continue
-        hit = index.get(text.lower())
+        hit = index.get(text.lower()) or index.get(text.split(" - ", 1)[0].strip().lower())
         if hit:
             found[hit[0]].add(hit[1])
         else:

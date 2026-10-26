@@ -2251,6 +2251,8 @@ The combat page is public (design D27): the GM gets the tracker, everyone else t
 - [x] An NPC put Down (or Dead) from the dying-threshold prompt loses its striking lines in both views; other NPCs' lines stay - `test_combat.py::test_an_npc_going_down_loses_its_striking_lines`
 - [x] GM drags PC and NPC cards by their grips to reorder each side; the order persists for the fight and the player view (no grips) follows; dragging an NPC over the PC column changes neither column - `test_combat.py::test_gm_drags_each_side_into_the_order_they_stand_in`
 - [x] GM NPC card: the build (type, earned / total XP, combat / non-combat %) is a tooltip on the name that really shows on hover; Roll initiative / Adjust / Rebuild / Rename / Sheet / Leave fight and the Fighting / Down / Dead status live in a kebab menu (a non-fighting NPC shows a Down / Dead label); LW opens the sheet's light-wounds modal; Impaired is an orange SW count with a tooltip, for players too - `test_combat.py::test_gm_card_keeps_npc_controls_in_a_kebab_menu`
+- [x] Builder row from Obsidian Portal: an ambiguous name lists the candidates; picking one fills the row (type, exact XP, one NPC, no extra roll) and shows the type's reason, traits, NPC numbers and the lines not used; Generate builds the NPC under its OP name and the row resets - `test_combat.py::test_a_builder_row_filled_from_obsidian_portal`
+- [x] An unmapped school (an Imperial) is shown in red with the type left blank and the row's XP kept; Generate refuses with "Pick a type for <name> first."; Clear restores an ordinary row - `test_combat.py::test_an_unmapped_school_waits_for_the_gm_and_clear_resets_the_row`
 
 ## Server-made Rolls (mark: `server_rolls`; server-rolls-design; POST /characters/{id}/roll)
 
