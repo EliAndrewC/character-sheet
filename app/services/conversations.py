@@ -107,17 +107,12 @@ def serialize(conversation: Conversation) -> Dict[str, Any]:
         }
         for npc in conversation.npcs
     ]
-    primary = conversation.npcs[0] if conversation.npcs else None
     return {
         "conversation_id": conversation.id,
         "group": conversation.gaming_group_id,
         "opened_at": _iso_utc(conversation.opened_at),
         "expires_at": _iso_utc(conversation.opened_at + CONVERSATION_TTL),
         "npcs": npcs,
-        # The one-NPC shape the deployed REPL still reads: the primary NPC's.
-        # Goes away with the old PUT shape once gm-assistant has switched.
-        "npc_ref": primary.npc_ref if primary else "",
-        "discern_honor": npcs[0]["discern_honor"] if npcs else [],
     }
 
 
@@ -190,36 +185,27 @@ def _parse_entries(db: Session, raw: Any) -> List[Tuple[int, Any]]:
     return out
 
 
-def _parse_text(raw: Any, what: str, allow_empty: bool, limit: int) -> str:
-    if raw is None and allow_empty:
-        return ""
+def _parse_text(raw: Any, what: str, limit: int) -> str:
     if not isinstance(raw, str):
         raise ConversationError(f"{what} must be a string")
-    if (not raw.strip() and not allow_empty) or len(raw) > limit:
+    if not raw.strip() or len(raw) > limit:
         raise ConversationError(f"{what} must be a string of 1-{limit} characters")
     return raw
 
 
 def _parse_npcs(db: Session, body: Dict[str, Any]) -> List[Dict[str, Any]]:
     """The request's NPCs, in order, each ``{npc_ref, name, present,
-    entries}``.
-
-    The old one-NPC shape (top-level ``npc_ref`` + ``discern_honor``, no
-    names) is read as a one-NPC list, so the deployed REPL keeps working
-    until it switches; it is the only way to send an NPC without a name.
-    """
-    legacy = [key for key in ("npc_ref", "discern_honor") if key in body]
-    if "npcs" not in body:
-        return [{
-            "npc_ref": _parse_text(body.get("npc_ref", ""), "npc_ref", True, MAX_ID_LENGTH),
-            "name": "",
-            "present": True,
-            "entries": _parse_entries(db, body.get("discern_honor")),
-        }]
-    if legacy:
+    entries}``. The one-NPC body (top-level ``npc_ref`` + ``discern_honor``)
+    was retired once the REPL switched (character-sheet#6) and is refused by
+    name, so a stale client learns what changed instead of opening an empty
+    conversation."""
+    if "npc_ref" in body or "discern_honor" in body:
         raise ConversationError(
-            "send either npcs or the old npc_ref / discern_honor, not both"
+            "the one-NPC body (top-level npc_ref / discern_honor) is retired; "
+            "send npcs: [{npc_ref, name, present, discern_honor}]"
         )
+    if "npcs" not in body:
+        raise ConversationError("npcs is required (a list, the primary NPC first)")
     raw = body["npcs"]
     if not isinstance(raw, list):
         raise ConversationError("npcs must be a list")
@@ -227,7 +213,7 @@ def _parse_npcs(db: Session, body: Dict[str, Any]) -> List[Dict[str, Any]]:
     for item in raw:
         if not isinstance(item, dict):
             raise ConversationError("each npc must be an object")
-        npc_ref = _parse_text(item.get("npc_ref"), "npc_ref", False, MAX_ID_LENGTH)
+        npc_ref = _parse_text(item.get("npc_ref"), "npc_ref", MAX_ID_LENGTH)
         if any(npc["npc_ref"] == npc_ref for npc in out):
             raise ConversationError(f"npc_ref {npc_ref} appears twice in npcs")
         present = item.get("present", True)
@@ -235,7 +221,7 @@ def _parse_npcs(db: Session, body: Dict[str, Any]) -> List[Dict[str, Any]]:
             raise ConversationError(f"present for {npc_ref} must be true or false")
         out.append({
             "npc_ref": npc_ref,
-            "name": _parse_text(item.get("name"), "name", False, MAX_NAME_LENGTH).strip(),
+            "name": _parse_text(item.get("name"), "name", MAX_NAME_LENGTH).strip(),
             "present": present,
             "entries": _parse_entries(db, item.get("discern_honor")),
         })
@@ -248,7 +234,7 @@ def _check_present_names(npcs: List[Tuple[str, bool]]) -> None:
     seen = set()
     for name, present in npcs:
         key = name.casefold()
-        if present and name and key in seen:
+        if present and key in seen:
             raise ConversationError(
                 f"two present NPCs are both called {name}; give them distinct names"
             )
@@ -403,7 +389,7 @@ def discern_honor_reply(
             (n for n in present if n.name.casefold() == wanted.casefold()), None,
         )
         if match is None:
-            names = ", ".join(n.name for n in present if n.name) or "nobody"
+            names = ", ".join(n.name for n in present) or "nobody"
             return (
                 f"No one called {wanted[:MAX_NAME_LENGTH]} is in this "
                 f"conversation. Present: {names}."
@@ -428,10 +414,9 @@ def discern_honor_reply(
     lines = [f"{character.name}'s current read of their Honor:"]
     for n in present:
         told = _read(db, n, character, now)
-        label = n.name or "this character"
         lines.append(
-            f"- {label}: the GM will have to tell you this one" if told is None
-            else f"- {label}: **{format_told(told)}**"
+            f"- {n.name}: the GM will have to tell you this one" if told is None
+            else f"- {n.name}: **{format_told(told)}**"
         )
     return "\n".join(lines)
 
@@ -442,4 +427,4 @@ def present_npc_names(db: Session, character: Character) -> List[str]:
     conversation = open_conversation(db, character.gaming_group_id)
     if conversation is None:
         return []
-    return [n.name for n in conversation.npcs if n.present and n.name]
+    return [n.name for n in conversation.npcs if n.present]

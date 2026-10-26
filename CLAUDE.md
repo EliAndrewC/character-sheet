@@ -846,10 +846,8 @@ answers - the GM's explicit requirement. The REPL polls back which PCs asked and
   crash-resumed open can never change a number a player has already been shown. Two PRESENT NPCs
   may not share a name (ignoring case) - the command picks by name. A new id replaces the group's
   conversation outright. One conversation per group (`conversations.gaming_group_id` is unique).
-  Everything is validated before any row is touched. **Transition:** the old one-NPC body
-  (top-level `npc_ref` + `discern_honor`, no name) is still read as a one-NPC list, and responses
-  still carry those two fields (the primary's), until gm-assistant says it has switched on #6;
-  then remove both (`_parse_npcs`' legacy branch and the tail of `serialize`).
+  Everything is validated before any row is touched. The old one-NPC body (top-level `npc_ref` +
+  `discern_honor`) was retired on 2026-10-26 and is a 400 that says so.
 - `GET /api/conversation?group=<id>` -> `{"conversation": {...}}` with `asked_at` per entry, or
   `{"conversation": null}`. `DELETE /api/conversation/{id}` closes; 404 for an unknown id.
 - **`npc_ref` is opaque and is never shown to a player.** The NPC's `name` IS shown: it is the

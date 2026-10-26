@@ -487,9 +487,7 @@ async def put_conversation(request: Request, db: Session = Depends(get_db)):
     value ``/api/rolls`` takes), ``opened_at`` (ISO-8601 with an offset) and
     ``npcs``: ``[{"npc_ref", "name", "present", "discern_honor": [{"character_id",
     "told"}]}]``, the first the primary. ``npc_ref`` is opaque, stored and
-    returned, never shown to a player. The old one-NPC body (top-level
-    ``npc_ref`` + ``discern_honor``) is still accepted until gm-assistant
-    switches (character-sheet#6).
+    returned, never shown to a player.
 
     Re-sending the id that is already open PRESERVES every existing entry's
     ``told`` and ``asked_at`` (NPCs matched by ``npc_ref``) and only adds what

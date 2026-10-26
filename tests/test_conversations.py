@@ -85,15 +85,22 @@ def _now_iso(delta=timedelta(0)):
 
 
 def _body(world, **overrides):
+    """A one-NPC conversation. ``npc_ref`` / ``discern_honor`` overrides go to
+    that NPC; everything else to the body."""
+    npc = {
+        "npc_ref": overrides.pop("npc_ref", "opaque-ref"),
+        "name": "Hideki",
+        "present": True,
+        "discern_honor": overrides.pop("discern_honor", [
+            {"character_id": world["asker"], "told": 4.5},
+            {"character_id": world["second"], "told": 3.0},
+        ]),
+    }
     body = {
         "conversation_id": "c-20260921-7f3a",
         "group": world["group"],
-        "npc_ref": "opaque-ref",
         "opened_at": _now_iso(),
-        "discern_honor": [
-            {"character_id": world["asker"], "told": 4.5},
-            {"character_id": world["second"], "told": 3.0},
-        ],
+        "npcs": [npc],
     }
     body.update(overrides)
     return body
@@ -109,7 +116,7 @@ def _get(client, group, headers=WRITE):
 
 def _entries(client, world):
     got = _get(client, world["group"]).json()["conversation"]
-    return {e["character_id"]: e for e in got["discern_honor"]}
+    return {e["character_id"]: e for e in got["npcs"][0]["discern_honor"]}
 
 
 def _ask(client, character_id, now=None):
@@ -202,9 +209,9 @@ def test_put_then_get_round_trips_the_conversation(client, world):
     assert got == r.json()["conversation"]
     assert got["conversation_id"] == "c-20260921-7f3a"
     assert got["group"] == world["group"]
-    assert got["npc_ref"] == "opaque-ref"
+    assert got["npcs"][0]["npc_ref"] == "opaque-ref"
     assert got["opened_at"] == body["opened_at"]
-    assert got["discern_honor"] == [
+    assert got["npcs"][0]["discern_honor"] == [
         {"character_id": world["asker"], "told": 4.5, "asked_at": None},
         {"character_id": world["second"], "told": 3.0, "asked_at": None},
     ]
@@ -221,7 +228,7 @@ def test_told_comes_back_exactly_as_sent(client, world):
         {"character_id": world["second"], "told": 3},
     ]))
     raw = _get(client, world["group"]).text
-    told = [e["told"] for e in json.loads(raw)["conversation"]["discern_honor"]]
+    told = [e["told"] for e in json.loads(raw)["conversation"]["npcs"][0]["discern_honor"]]
     assert told == [3.0, 3]
     assert [type(t) for t in told] == [float, int]
 
@@ -238,13 +245,24 @@ def test_get_needs_an_integer_group(client, world, query):
     assert r.status_code == 400
 
 
-def test_npc_ref_and_entries_are_optional(client, world):
+def test_an_npcs_entries_are_optional_and_its_ref_is_not(client, world):
     body = _body(world)
-    del body["npc_ref"], body["discern_honor"]
+    del body["npcs"][0]["discern_honor"]
     got = _put(client, body).json()["conversation"]
-    assert got["npc_ref"] == "" and got["discern_honor"] == []
-    got = _put(client, _body(world, npc_ref=None)).json()["conversation"]
-    assert got["npc_ref"] == ""
+    assert got["npcs"][0]["discern_honor"] == []
+    assert _put(client, _body(world, npc_ref=None)).status_code == 400
+
+
+def test_the_retired_one_npc_body_is_refused_by_name(client, world):
+    for old in ({"npc_ref": "x", "discern_honor": []}, {"discern_honor": []}, {"npc_ref": "x"}):
+        body = _body(world)
+        del body["npcs"]
+        r = _put(client, {**body, **old})
+        assert r.status_code == 400 and "retired" in r.json()["error"]
+    body = _body(world)
+    del body["npcs"]
+    r = _put(client, body)
+    assert r.status_code == 400 and "npcs is required" in r.json()["error"]
 
 
 @pytest.mark.parametrize("change,status", [
@@ -360,7 +378,7 @@ def test_put_of_a_new_id_replaces_the_groups_conversation(client, world):
     assert r.status_code == 200
     got = _get(client, world["group"]).json()["conversation"]
     assert got["conversation_id"] == "c-next"
-    assert got["discern_honor"] == [
+    assert got["npcs"][0]["discern_honor"] == [
         {"character_id": world["asker"], "told": 2.5, "asked_at": None},
     ]
     db = _session(client)
@@ -728,7 +746,7 @@ def _npcs(client, world):
     return _get(client, world["group"]).json()["conversation"]["npcs"]
 
 
-def test_multi_npc_put_round_trips_and_keeps_the_old_fields_for_the_primary(client, world):
+def test_multi_npc_put_round_trips(client, world):
     r = _put(client, _two(world))
     assert r.status_code == 200
     got = _get(client, world["group"]).json()["conversation"]
@@ -742,22 +760,13 @@ def test_multi_npc_put_round_trips_and_keeps_the_old_fields_for_the_primary(clie
             {"character_id": world["second"], "told": 3.0, "asked_at": None},
         ]},
     ]
-    # The deployed REPL reads the one-NPC shape: the primary NPC's.
-    assert got["npc_ref"] == "ref-hideki"
-    assert got["discern_honor"] == got["npcs"][0]["discern_honor"]
-
-
-def test_the_old_shape_is_a_one_npc_list_without_a_name(client, world):
-    got = _put(client, _body(world)).json()["conversation"]
-    assert [(n["npc_ref"], n["name"], n["present"]) for n in got["npcs"]] == [
-        ("opaque-ref", "", True),
-    ]
-    assert got["npcs"][0]["discern_honor"] == got["discern_honor"]
+    # The retired one-NPC fields are gone from the answer.
+    assert "npc_ref" not in got and "discern_honor" not in got
 
 
 def test_a_conversation_with_no_npcs_serializes_empty(client, world):
     got = _put(client, _multi(world, [])).json()["conversation"]
-    assert got["npcs"] == [] and got["npc_ref"] == "" and got["discern_honor"] == []
+    assert got["npcs"] == []
 
 
 def test_present_defaults_to_true(client, world):
@@ -785,12 +794,6 @@ def test_put_refuses_malformed_npcs(client, world, npcs):
     r = _put(client, _multi(world, npcs))
     assert r.status_code == 400
     assert r.json()["error"]
-
-
-def test_put_refuses_npcs_mixed_with_the_old_fields(client, world):
-    for extra in ({"npc_ref": "x"}, {"discern_honor": []}):
-        r = _put(client, {**_two(world), **extra})
-        assert r.status_code == 400 and "not both" in r.json()["error"]
 
 
 def test_a_departed_npc_may_share_a_name_with_a_present_one(client, world):
@@ -928,22 +931,6 @@ def test_a_departed_npc_cannot_be_named_but_keeps_its_asks(client, world):
         "No one called Hideki is in this conversation. Present: Souma."
     )
     assert _npcs(client, world)[0]["discern_honor"][0]["asked_at"] is not None
-
-
-def test_an_old_shape_npc_beside_named_ones_is_this_character(client, world):
-    """Only a mix of the two shapes on one id makes a nameless NPC appear
-    beside named ones; it still reads sensibly and is never offered."""
-    _put(client, _multi(world, [_npc("ref-hideki", "Hideki", [(world["asker"], 4.1)])]))
-    _put(client, {
-        "conversation_id": "c-multi", "group": world["group"], "opened_at": _now_iso(),
-        "npc_ref": "", "discern_honor": [{"character_id": world["asker"], "told": 2.0}],
-    })
-    assert _ask_npc(client, world["asker"], None).endswith("- this character: **2.0**")
-    assert "Present: Hideki." in _ask_npc(client, world["asker"], "Kaede")
-    db = _session(client)
-    asker = db.query(Character).filter(Character.id == world["asker"]).one()
-    assert conversations.present_npc_names(db, asker) == ["Hideki"]
-    db.close()
 
 
 def test_the_command_takes_the_npc_option(client, world, signing_key, discord_calls):
