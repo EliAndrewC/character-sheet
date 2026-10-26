@@ -32,6 +32,9 @@
       share: share,
       busy: false,
       error: "",
+      // What gm-assistant said about writing the last built NPCs' stats back
+      // to Obsidian Portal: [{name, status, message}].
+      backport: [],
       fightName: "",
       rows: [newRow(share)],
       roster: null,
@@ -103,6 +106,7 @@
             if (this.dlg) this.dlg.error = msg; else this.error = msg;
             return null;
           }
+          if (data.backport && data.backport.length) this.backport = data.backport;
           await this.refresh();
           return data;
         } finally {
@@ -112,6 +116,8 @@
 
       // ---- helpers for the template ----
       pct: pct,
+      // No page, or the backport switched off: most NPCs, so it stays quiet.
+      backportQuiet: function (b) { return b.status === "no_record" || b.status === "off"; },
       voidText: function (c) {
         var extra = [];
         if (c.temp_void) extra.push("+" + c.temp_void + " temp");

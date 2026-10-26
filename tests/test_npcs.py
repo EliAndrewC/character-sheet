@@ -206,7 +206,7 @@ def test_status_remove_rename(client, group):
     base = f"/groups/{group}/combat/npcs/{npc_id}"
     assert client.post(f"{base}/status", json={"status": "dead"}).json() == {"status": "dead"}
     assert client.post(f"{base}/status", json={"status": "napping"}).status_code == 400
-    assert client.post(f"{base}/rename", json={"name": "  Kenji  "}).json() == {"name": "Kenji"}
+    assert client.post(f"{base}/rename", json={"name": "  Kenji  "}).json()["name"] == "Kenji"
     assert client.post(f"{base}/rename", json={"name": ""}).status_code == 400
     assert client.post(f"{base}/remove").status_code == 200
     assert client.post(f"{base}/remove").status_code == 404
@@ -266,7 +266,9 @@ def test_rebuild_with_new_xp_and_share(client, group):
     (npc_id,) = _npc_ids(client, group)
     url = f"/groups/{group}/combat/npcs/{npc_id}/rebuild"
     resp = client.post(url, json={"earned_xp": 200, "combat_share": 0.6})
-    assert resp.json() == {"earned_xp": 200, "combat_share": 0.6}
+    body = resp.json()
+    assert (body["earned_xp"], body["combat_share"]) == (200, 0.6)
+    assert body["backport"][0]["status"] == "off"  # no gm-assistant in unit tests
     assert client.post(url, json={"combat_share": 99}).json()["combat_share"] == 0.91  # clamped
     assert client.post(url, json={"earned_xp": "lots"}).status_code == 400
     assert client.post(url, json={"earned_xp": 5000}).status_code == 400
@@ -296,7 +298,8 @@ def test_roster_and_bring_back_heals_and_adds_xp(client, group):
 
     _start(client, group, name="Rematch")
     resp = client.post(f"/groups/{group}/combat/roster/{npc_id}/bring-back", json={"gained_xp": 60})
-    assert resp.json() == {"id": npc_id, "earned_xp": 110}
+    body = resp.json()
+    assert (body["id"], body["earned_xp"]) == (npc_id, 110)
     s = _session(client)
     npc = s.get(Character, npc_id)
     assert npc.current_serious_wounds == 0 and npc.current_void_points > 0

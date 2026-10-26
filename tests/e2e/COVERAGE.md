@@ -2224,6 +2224,8 @@ The combat page is public (design D27): the GM gets the tracker, everyone else t
 - [x] A player gets 404 on an NPC sheet; the home page never lists NPCs; the GM can open the sheet - `test_combat.py::test_players_cannot_open_an_npc_sheet_and_home_never_lists_npcs`
 - [x] Ending a fight keeps its NPCs in the roster; a new fight brings one back with gained XP - `test_combat.py::test_roster_brings_an_npc_back_to_the_next_fight`
 - [x] Rebuild (earned XP + combat %) and rename an NPC from its card - `test_combat.py::test_rebuild_and_rename_an_npc`
+- [x] Obsidian Portal backport panel: one line per built NPC after generate / rename, quiet for `off` / `no_record`, accent for `ambiguous` / `failed`, Dismiss hides it - `test_combat.py::test_gm_sees_the_obsidian_portal_backport_outcome`
+- [x] Backport panel never shows on the public view - `test_combat.py::test_backport_panel_is_gm_only`
 - [x] Combat rolls view lists the fight's rolls and filters PC / NPC - `test_combat.py::test_combat_rolls_view_filters_npc_rolls`
 - [x] No JS errors and no horizontal overflow at phone width - `test_combat.py::test_combat_page_has_no_js_errors_and_fits_a_phone`
 - [x] PC names on the combat page (GM and player views) link to the character sheet in a new tab - `test_combat.py::test_pc_names_link_to_their_sheets_in_a_new_tab`

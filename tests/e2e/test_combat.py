@@ -631,3 +631,43 @@ def test_a_player_rolls_initiative_and_sets_a_die_on_their_own_pc(page, page_non
     assert dice[-1]["value"] == 10
     assert page_nonadmin.request.get(
         f"{live_server_url}/groups/{gid}/combat/roller/{theirs['id']}").status == 403
+
+
+def test_gm_sees_the_obsidian_portal_backport_outcome(page, live_server_url):
+    # The clicktest server has no gm-assistant, so every build answers "off":
+    # shown quietly, after generating and after a rename, and dismissable.
+    gid = _group_with_pc(page, live_server_url, "BackportPC")
+    npc_id = _start_fight_with_wave_men(page, live_server_url, gid, count=2)
+    panel = page.locator('[data-testid="backport"]')
+    expect(panel).to_be_visible()
+    lines = panel.locator('[data-testid="backport-line"]')
+    expect(lines).to_have_count(2)
+    expect(lines.first).to_have_attribute("data-status", "off")
+    expect(lines.first).to_contain_text("Obsidian Portal not updated")
+    assert "text-ink/50" in lines.first.get_attribute("class")
+    page.locator('[data-testid="backport-dismiss"]').click()
+    expect(panel).to_be_hidden()
+    _menu(page, npc_id, "npc-rename")
+    page.fill('[data-testid="rename-input"]', "Tsuruchi Goro")
+    page.locator('[data-testid="rename-save-btn"]').click()
+    page.wait_for_selector('[data-testid="combat-dialog"]', state="detached")
+    expect(lines).to_have_count(1)
+    expect(lines.first).to_contain_text("Tsuruchi Goro: Obsidian Portal not updated")
+    # A gm-assistant answer that needs the GM's eye is not quiet.
+    page.evaluate("""() => {
+        const root = document.querySelector('[data-testid="backport"]').closest('[x-data]');
+        Alpine.$data(root).backport = [{name: "A", status: "ambiguous", message: "A: several records"},
+                                        {name: "B", status: "written", message: "B: added Air 4"}];
+    }""")
+    expect(lines).to_have_count(2)
+    assert "text-accent" in lines.nth(0).get_attribute("class")
+    assert "text-ink" in lines.nth(1).get_attribute("class")
+
+
+def test_backport_panel_is_gm_only(page, page_anon, live_server_url):
+    gid = _group_with_pc(page, live_server_url, "BackportAnonPC")
+    _start_fight_with_wave_men(page, live_server_url, gid)
+    page_anon.goto(f"{live_server_url}/groups/{gid}/combat")
+    page_anon.wait_for_selector('[data-testid^="npc-card-"], [data-testid^="public-npc"]', timeout=10000)
+    assert page_anon.locator('[data-testid="backport"]').count() == 0 or \
+        not page_anon.locator('[data-testid="backport"]').is_visible()

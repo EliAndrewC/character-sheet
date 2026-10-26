@@ -24,6 +24,7 @@ from app.services import combat_view
 from app.services import npc_generator as gen
 from app.services import npcs
 from app.services.auth import can_edit_character, get_all_editors, is_admin
+from app.services.npc_backport import backport_all
 from app.services.npc_names import fetch_names
 
 router = APIRouter(dependencies=[Depends(prefetch_body)])
@@ -157,7 +158,10 @@ async def generate(group_id: int, request: Request, db: Session = Depends(get_db
     except ValueError as exc:
         return _error(str(exc))
     db.commit()
-    return {"created": [{"id": c.id, "name": c.name} for c in created]}
+    # Only after the commit: gm-assistant can be slow or down, and the NPCs
+    # are already saved whatever it answers.
+    return {"created": [{"id": c.id, "name": c.name} for c in created],
+            "backport": await backport_all(created)}
 
 
 # ---------------------------------------------------------------------------
@@ -283,7 +287,8 @@ async def rebuild(group_id: int, npc_id: int, request: Request, db: Session = De
     if encounter is not None:
         npcs.touch(encounter)
     db.commit()
-    return {"earned_xp": npc.earned_xp, "combat_share": npc.npc_generation["combat_share"]}
+    return {"earned_xp": npc.earned_xp, "combat_share": npc.npc_generation["combat_share"],
+            "backport": await backport_all([npc])}
 
 
 @router.post("/groups/{group_id}/combat/npcs/{npc_id}/rename")
@@ -298,12 +303,14 @@ async def rename(group_id: int, npc_id: int, request: Request, db: Session = Dep
     name = str(body.get("name") or "").strip()[:80]
     if not name:
         return _error("A name is required")
+    renamed = name != npc.name
     npc.name = name
     encounter = _active(db, group)
     if encounter is not None:
         npcs.touch(encounter)
     db.commit()
-    return {"name": name}
+    # A new name can be a different Obsidian Portal page.
+    return {"name": name, "backport": await backport_all([npc] if renamed else [])}
 
 
 # ---------------------------------------------------------------------------
@@ -346,7 +353,9 @@ async def bring_back(group_id: int, npc_id: int, request: Request, db: Session =
     except ValueError as exc:
         return _error(str(exc))
     db.commit()
-    return {"id": npc.id, "earned_xp": npc.earned_xp}
+    # Brought back with no XP, the stats did not change.
+    return {"id": npc.id, "earned_xp": npc.earned_xp,
+            "backport": await backport_all([npc] if gained > 0 else [])}
 
 
 @router.post("/groups/{group_id}/combat/roster/{npc_id}/delete")

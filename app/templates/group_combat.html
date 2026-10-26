@@ -89,6 +89,20 @@
     <p x-show="error" x-cloak class="text-sm text-red-700 bg-red-50 border border-red-200 rounded px-3 py-2"
        data-testid="combat-error" x-text="error"></p>
 
+    <section x-show="gm && backport.length" x-cloak data-testid="backport"
+             class="bg-white rounded border border-ink/10 px-3 py-2 text-sm flex items-start gap-2">
+        <div class="flex-1 min-w-0 space-y-0.5">
+            <p class="text-xs font-medium text-ink/60">Obsidian Portal</p>
+            <template x-for="(b, i) in backport" :key="i">
+                <p :data-status="b.status" data-testid="backport-line" class="break-words"
+                   :class="backportQuiet(b) ? 'text-ink/50 text-xs' : (b.status === 'failed' || b.status === 'ambiguous') ? 'text-accent' : 'text-ink'"
+                   x-text="b.message"></p>
+            </template>
+        </div>
+        <button type="button" class="btn-ghost text-xs px-2 py-0.5 rounded" data-testid="backport-dismiss"
+                @click="backport = []">Dismiss</button>
+    </section>
+
     {# ---------------- GM: start a fight ---------------- #}
     <template x-if="gm && !state.encounter">
         <section class="bg-white rounded-lg shadow border border-ink/10 p-4 space-y-3" data-testid="start-fight">
