@@ -42,7 +42,10 @@ def test_each_rest_is_a_roll_history_line(page, live_server_url):
     assert rows.first.locator('[data-action="annotation-input"]').count() == 0
     rows.nth(1).locator('[data-testid="rest-label"]').hover()
     explainer = rows.nth(1).locator('[data-testid="rest-explainer"]')
-    assert "Light wounds: 4 -> 0" in explainer.text_content()
+    assert "Heal 4 light wounds" in explainer.text_content()
+    rows.first.locator('[data-testid="rest-label"]').hover()
+    assert "Nothing needed restoring." in rows.first.locator(
+        '[data-testid="rest-explainer"]').text_content()
     rows.first.locator('[data-testid="rest-result"]').click()
     page.wait_for_timeout(300)
     assert page.locator('[data-testid="readonly-roll-modal"]:visible').count() == 0

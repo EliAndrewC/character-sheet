@@ -76,6 +76,24 @@ def test_owner_rest_is_recorded_with_before_and_after(client):
     assert rest.summary["sw_remaining"] == 1
     assert rest.summary["vp_before"] == 0
     assert rest.summary["vp_after"] == 1
+    assert rest.summary["effects"] == [
+        "Heal 4 light wounds", "Restore 1 void point", "Heal 1 serious wound",
+    ]
+
+
+def test_recorded_effects_name_the_per_day_pools_refreshed(client):
+    cid = _seed(client, knacks={"conviction": 2, "feint": 1, "iaijutsu": 1},
+                adventure_state={"conviction_used": 3})
+    client.post(f"/characters/{cid}/nights-rest", json={}, headers=PLAYER_HDR)
+    [rest] = _rests(client, cid)
+    assert rest.summary["effects"] == ["Refresh Conviction (regain 3)"]
+
+
+def test_a_rest_with_nothing_to_restore_records_no_effects(client):
+    cid = _seed(client)
+    client.post(f"/characters/{cid}/nights-rest", json={}, headers=PLAYER_HDR)
+    [rest] = _rests(client, cid)
+    assert rest.summary["effects"] == []
 
 
 def test_a_rest_that_restores_nothing_is_still_recorded(client):

@@ -417,7 +417,8 @@ def perform_nights_rest(character, db, actor_discord_id: str,
 
     Every writer goes through here (the sheet's button, the GM's Rest
     page), so every rest is counted no matter who clicked it. The summary
-    gains the before-values so the history line can say what changed.
+    gains the before-values and the preview's effect labels so the history
+    line can say what changed.
     The caller commits.
     """
     from app.models import RestEvent
@@ -427,6 +428,10 @@ def perform_nights_rest(character, db, actor_discord_id: str,
         "lw_before": character.current_light_wounds or 0,
         "sw_before": character.current_serious_wounds or 0,
         "vp_before": character.current_void_points or 0,
+        # The preview's bullets ("Restore 1 void point", "Refresh Conviction
+        # (regain 2)", ...), so the history says what this night restored.
+        "effects": [e["label"] for e in
+                    compute_nights_rest_plan(character, accelerate)["effects"]],
     }
     summary = {**before, **apply_nights_rest(character, accelerate=accelerate)}
     db.add(RestEvent(

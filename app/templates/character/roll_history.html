@@ -387,13 +387,21 @@
             },
 
             restDetails(r) {
+                // The same bullets the Night's Rest dialog showed before the
+                // rest ("Restore 1 void point", "Refresh Conviction (regain 2)").
+                // Rests recorded before those were stored fall back to the
+                // before/after numbers.
                 const s = r.summary || {};
                 const lines = [];
-                if (typeof s.lw_before === 'number') lines.push('Light wounds: ' + s.lw_before + ' -> 0');
-                if (typeof s.sw_before === 'number') lines.push('Serious wounds: ' + s.sw_before + ' -> ' + s.sw_remaining);
-                if (typeof s.vp_before === 'number') lines.push('Void points: ' + s.vp_before + ' -> ' + s.vp_after);
+                if (Array.isArray(s.effects)) {
+                    if (s.effects.length) lines.push(...s.effects);
+                    else lines.push('Nothing needed restoring.');
+                } else {
+                    if (typeof s.lw_before === 'number') lines.push('Light wounds: ' + s.lw_before + ' -> 0');
+                    if (typeof s.sw_before === 'number') lines.push('Serious wounds: ' + s.sw_before + ' -> ' + s.sw_remaining);
+                    if (typeof s.vp_before === 'number') lines.push('Void points: ' + s.vp_before + ' -> ' + s.vp_after);
+                }
                 if (r.accelerate) lines.push('Healing cadence accelerated.');
-                lines.push('Per-day abilities refreshed.');
                 return lines.join('\n');
             },
 
