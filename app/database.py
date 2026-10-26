@@ -270,6 +270,28 @@ def _migrate_add_columns():
     if enc_npc_cols and "tn_revealed" not in enc_npc_cols:  # pragma: no cover
         cursor.execute("ALTER TABLE encounter_npcs ADD COLUMN tn_revealed BOOLEAN DEFAULT 0")
 
+    # Conversations with several NPCs (character-sheet#6): each told entry now
+    # belongs to a conversation_npcs row (create_all has just made that
+    # table). A conversation from before gets one NPC carrying its old
+    # npc_ref and no name - exactly what an old-shape PUT now makes.
+    cursor.execute("PRAGMA table_info(conversation_discern_honor)")
+    cdh_cols = {row[1] for row in cursor.fetchall()}
+    if cdh_cols and "npc_id" not in cdh_cols:  # pragma: no cover
+        cursor.execute(
+            "ALTER TABLE conversation_discern_honor ADD COLUMN npc_id INTEGER "
+            "REFERENCES conversation_npcs(id)"
+        )
+        cursor.execute("SELECT id, COALESCE(npc_ref, '') FROM conversations")
+        for conversation_id, npc_ref in cursor.fetchall():
+            cursor.execute(
+                "INSERT INTO conversation_npcs (conversation_id, position, npc_ref, name, present) "
+                "VALUES (?, 0, ?, '', 1)", (conversation_id, npc_ref),
+            )
+            cursor.execute(
+                "UPDATE conversation_discern_honor SET npc_id = ? WHERE conversation_id = ?",
+                (cursor.lastrowid, conversation_id),
+            )
+
     # Roll History: roll_label was dropped in favour of deriving the display
     # label from payload.title at read time (see
     # app/services/roll_descriptions.label_for_roll). Drop the now-unused column

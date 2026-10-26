@@ -915,10 +915,13 @@ def test_every_roll_takes_void_and_initiative_does_not():
     }
     for name, definition in by_name.items():
         option_names = [o["name"] for o in definition["options"]]
-        if name in ("initiative", "discern-honor", "ishi-3rd-dan-technique"):
+        if name in ("initiative", "ishi-3rd-dan-technique"):
             # rules/03-combat.md: initiative is rolled "without spending
-            # void points". Discern Honor is not a roll at all.
+            # void points".
             assert option_names == []
+        elif name == "discern-honor":
+            # Not a roll at all: no void, only whom to read.
+            assert option_names == ["npc"]
         elif name == "roll":
             assert option_names == ["skill", "void"]
         else:

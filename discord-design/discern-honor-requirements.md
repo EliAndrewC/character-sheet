@@ -60,6 +60,15 @@
 > read token are 401, the write token on `/api/characters` is 401. The one step left is the GM
 > copying `GM_WRITE_TOKEN` from this repo's `.env` into gm-assistant's `development-secrets.ini`;
 > then Part 4 can run.
+>
+> **Superseded in part 2026-10-26 by character-sheet#6 (gm-assistant feature 230): several NPCs per
+> conversation.** The GM ruled Discern Honor works on every NPC in a conversation. `PUT` takes
+> `npcs: [{npc_ref, name, present, discern_honor}]` (the old one-NPC body is read as a one-NPC
+> list during the switch), NPCs merge by `npc_ref` on a re-PUT of the open id with every told value
+> and `asked_at` frozen, and `/discern-honor` takes an optional `npc` with autocomplete over the
+> PRESENT NPCs of the asker's group. FR-003's "no NPC name leaves" is relaxed for those names only;
+> `npc_ref`, the true Honor and the die still never leave. Reply 10 above still holds for the
+> one-present-NPC case. The contract and its details are on the issue; production notes in `CLAUDE.md`.
 
 ---
 

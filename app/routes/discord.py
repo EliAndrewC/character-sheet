@@ -32,6 +32,8 @@ from app.database import get_db
 from app.services import discord_api
 from app.services.discord_commands import (
     CommandError,
+    DISCERN_HONOR_COMMAND,
+    autocomplete_discern_honor,
     autocomplete_skills,
     focused_option_value,
     invoker_discord_id,
@@ -123,14 +125,22 @@ async def interactions(request: Request, db: Session = Depends(get_db)):
     if kind == TYPE_PING:
         return JSONResponse({"type": RESPONSE_PONG})
     if kind == TYPE_AUTOCOMPLETE:
-        # /roll's skill option. Cannot be deferred and must answer inside 3
-        # seconds; it is a filter over 18 names, touches no database, and
-        # never errors at the player (autocomplete_skills sees to that).
+        # Cannot be deferred and must answer inside 3 seconds; neither
+        # completer ever errors at the player. /roll's skill option is a
+        # filter over 18 names and touches no database. /discern-honor's npc
+        # option reads the invoker's group's open conversation - a couple of
+        # indexed queries.
+        data = interaction.get("data") or {}
+        typed = focused_option_value(data)
+        if str(data.get("name") or "").strip().lower() == DISCERN_HONOR_COMMAND:
+            choices = autocomplete_discern_honor(
+                db, invoker_discord_id(interaction) or "", typed,
+            )
+        else:
+            choices = autocomplete_skills(typed)
         return JSONResponse({
             "type": RESPONSE_AUTOCOMPLETE_RESULT,
-            "data": {"choices": autocomplete_skills(
-                focused_option_value(interaction.get("data") or {})
-            )},
+            "data": {"choices": choices},
         })
     if kind != TYPE_APPLICATION_COMMAND:
         return _ephemeral("That interaction type is not supported yet.")

@@ -16,6 +16,7 @@ from app.models import (
     Character,
     Conversation,
     ConversationDiscernHonor,
+    ConversationNpc,
     GamingGroup,
     RollHistory,
 )
@@ -115,7 +116,7 @@ def _ask(client, character_id, now=None):
     db = _session(client)
     try:
         character = db.query(Character).filter(Character.id == character_id).one()
-        reply = discern_honor_reply(db, character, now)
+        reply = discern_honor_reply(db, character, now=now)
         db.commit()
         return reply
     finally:
@@ -574,10 +575,13 @@ def discord_calls(monkeypatch):
     return sent
 
 
-def _interact(client, key, discord_id):
+def _interact(client, key, discord_id, options=None, kind=2):
+    data = {"id": "cmd_1", "name": "discern-honor", "type": 1}
+    if options is not None:
+        data["options"] = options
     raw = json.dumps({
-        "type": 2, "id": "interaction_1", "token": "interaction_token_abc",
-        "data": {"id": "cmd_1", "name": "discern-honor", "type": 1},
+        "type": kind, "id": "interaction_1", "token": "interaction_token_abc",
+        "data": data,
         "member": {"user": {"id": discord_id, "username": "someone"}},
     }).encode()
     timestamp = "1700000000"
@@ -671,7 +675,9 @@ def test_discern_honor_is_not_a_roll_command():
         c for c in discord_commands.command_definitions()
         if c["name"] == "discern-honor"
     )
-    assert definition["options"] == []
+    (npc,) = definition["options"]
+    assert npc["name"] == "npc" and npc["type"] == 3
+    assert npc["required"] is False and npc["autocomplete"] is True
 
 
 def test_the_rules_text_typo_is_fixed():
@@ -679,3 +685,330 @@ def test_the_rules_text_typo_is_fixed():
 
     text = SCHOOL_KNACKS["discern_honor"].rules_text
     assert "0.5 * (1k1 - 5)" in text and "1k1 - 0.5" not in text
+
+
+# ---------------------------------------------------------------------------
+# Several NPCs in one conversation (character-sheet#6)
+# ---------------------------------------------------------------------------
+
+
+def _npc(ref, name, entries, present=True):
+    return {
+        "npc_ref": ref, "name": name, "present": present,
+        "discern_honor": [{"character_id": c, "told": t} for c, t in entries],
+    }
+
+
+def _multi(world, npcs, conversation_id="c-multi"):
+    return {
+        "conversation_id": conversation_id, "group": world["group"],
+        "opened_at": _now_iso(), "npcs": npcs,
+    }
+
+
+def _two(world, **kw):
+    return _multi(world, [
+        _npc("ref-hideki", "Hideki", [(world["asker"], 4.1)]),
+        _npc("ref-souma", "Souma", [(world["asker"], 2.5), (world["second"], 3.0)]),
+    ], **kw)
+
+
+def _ask_npc(client, character_id, npc):
+    db = _session(client)
+    try:
+        character = db.query(Character).filter(Character.id == character_id).one()
+        reply = discern_honor_reply(db, character, npc)
+        db.commit()
+        return reply
+    finally:
+        db.close()
+
+
+def _npcs(client, world):
+    return _get(client, world["group"]).json()["conversation"]["npcs"]
+
+
+def test_multi_npc_put_round_trips_and_keeps_the_old_fields_for_the_primary(client, world):
+    r = _put(client, _two(world))
+    assert r.status_code == 200
+    got = _get(client, world["group"]).json()["conversation"]
+    assert got == r.json()["conversation"]
+    assert got["npcs"] == [
+        {"npc_ref": "ref-hideki", "name": "Hideki", "present": True, "discern_honor": [
+            {"character_id": world["asker"], "told": 4.1, "asked_at": None},
+        ]},
+        {"npc_ref": "ref-souma", "name": "Souma", "present": True, "discern_honor": [
+            {"character_id": world["asker"], "told": 2.5, "asked_at": None},
+            {"character_id": world["second"], "told": 3.0, "asked_at": None},
+        ]},
+    ]
+    # The deployed REPL reads the one-NPC shape: the primary NPC's.
+    assert got["npc_ref"] == "ref-hideki"
+    assert got["discern_honor"] == got["npcs"][0]["discern_honor"]
+
+
+def test_the_old_shape_is_a_one_npc_list_without_a_name(client, world):
+    got = _put(client, _body(world)).json()["conversation"]
+    assert [(n["npc_ref"], n["name"], n["present"]) for n in got["npcs"]] == [
+        ("opaque-ref", "", True),
+    ]
+    assert got["npcs"][0]["discern_honor"] == got["discern_honor"]
+
+
+def test_a_conversation_with_no_npcs_serializes_empty(client, world):
+    got = _put(client, _multi(world, [])).json()["conversation"]
+    assert got["npcs"] == [] and got["npc_ref"] == "" and got["discern_honor"] == []
+
+
+def test_present_defaults_to_true(client, world):
+    npc = _npc("ref-hideki", "Hideki", [])
+    del npc["present"]
+    assert _put(client, _multi(world, [npc])).json()["conversation"]["npcs"][0]["present"] is True
+
+
+@pytest.mark.parametrize("npcs", [
+    {"npc_ref": "x"},
+    ["nope"],
+    [{"name": "Hideki"}],
+    [{"npc_ref": "", "name": "Hideki"}],
+    [{"npc_ref": "x" * 129, "name": "Hideki"}],
+    [{"npc_ref": 5, "name": "Hideki"}],
+    [{"npc_ref": "a"}],
+    [{"npc_ref": "a", "name": "   "}],
+    [{"npc_ref": "a", "name": "x" * 81}],
+    [{"npc_ref": "a", "name": "Hideki", "present": "yes"}],
+    [{"npc_ref": "a", "name": "Hideki"}, {"npc_ref": "a", "name": "Souma"}],
+    [{"npc_ref": "a", "name": "Hideki", "discern_honor": [{"character_id": 99999, "told": 1}]}],
+    [{"npc_ref": "a", "name": "Hideki"}, {"npc_ref": "b", "name": "hideki"}],
+])
+def test_put_refuses_malformed_npcs(client, world, npcs):
+    r = _put(client, _multi(world, npcs))
+    assert r.status_code == 400
+    assert r.json()["error"]
+
+
+def test_put_refuses_npcs_mixed_with_the_old_fields(client, world):
+    for extra in ({"npc_ref": "x"}, {"discern_honor": []}):
+        r = _put(client, {**_two(world), **extra})
+        assert r.status_code == 400 and "not both" in r.json()["error"]
+
+
+def test_a_departed_npc_may_share_a_name_with_a_present_one(client, world):
+    r = _put(client, _multi(world, [
+        _npc("a", "Souma", [], present=False), _npc("b", "souma", []),
+    ]))
+    assert r.status_code == 200
+
+
+def test_a_reput_cannot_make_two_present_npcs_share_a_name(client, world):
+    _put(client, _two(world))
+    r = _put(client, _multi(world, [_npc("ref-new", "SOUMA", [])]))
+    assert r.status_code == 400 and "SOUMA" in r.json()["error"]
+    assert [n["name"] for n in _npcs(client, world)] == ["Hideki", "Souma"]
+    # Once the first Souma leaves, the name is free.
+    gone = _npc("ref-souma", "Souma", [], present=False)
+    r = _put(client, _multi(world, [gone, _npc("ref-new", "SOUMA", [])]))
+    assert r.status_code == 200
+
+
+def test_reput_of_the_open_id_merges_npcs_by_ref(client, world):
+    _put(client, _two(world))
+    _ask_npc(client, world["asker"], "Souma")
+    stamped = _npcs(client, world)[1]["discern_honor"][0]["asked_at"]
+    assert stamped is not None
+    # Reordered, Souma renamed and departed with a changed told value,
+    # Hideki left out, a newcomer added, and the second PC added to Hideki.
+    r = _put(client, _multi(world, [
+        _npc("ref-new", "Kaede", [(world["asker"], 1.0)]),
+        _npc("ref-souma", "Tsuruchi Souma", [(world["asker"], 9.9)], present=False),
+        _npc("ref-hideki", "Hideki", [(world["asker"], 9.9), (world["second"], 2.0)]),
+    ]))
+    assert r.status_code == 200
+    npcs = _npcs(client, world)
+    assert [(n["npc_ref"], n["name"], n["present"]) for n in npcs] == [
+        ("ref-hideki", "Hideki", True),
+        ("ref-souma", "Tsuruchi Souma", False),
+        ("ref-new", "Kaede", True),
+    ]
+    assert [(e["character_id"], e["told"]) for e in npcs[0]["discern_honor"]] == [
+        (world["asker"], 4.1), (world["second"], 2.0),
+    ]
+    assert npcs[1]["discern_honor"][0] == {
+        "character_id": world["asker"], "told": 2.5, "asked_at": stamped,
+    }
+    # Left out of a re-PUT: kept as it was.
+    _put(client, _multi(world, [_npc("ref-new", "Kaede", [])]))
+    assert [n["npc_ref"] for n in _npcs(client, world)] == ["ref-hideki", "ref-souma", "ref-new"]
+    # A departed NPC can come back.
+    _put(client, _multi(world, [_npc("ref-souma", "Souma", [], present=True)]))
+    assert _npcs(client, world)[1]["present"] is True
+
+
+def test_a_new_id_replaces_every_npc_and_delete_removes_them(client, world):
+    _put(client, _two(world))
+    _put(client, _two(world, conversation_id="c-next"))
+    db = _session(client)
+    assert db.query(ConversationNpc).count() == 2
+    assert db.query(ConversationDiscernHonor).count() == 3
+    db.close()
+    assert client.delete("/api/conversation/c-next", headers=WRITE).status_code == 200
+    db = _session(client)
+    assert db.query(ConversationNpc).count() == 0
+    assert db.query(ConversationDiscernHonor).count() == 0
+    db.close()
+
+
+def test_without_npc_every_present_npc_is_answered_and_stamped(client, world):
+    _put(client, _multi(world, [
+        _npc("ref-hideki", "Hideki", [(world["asker"], 4.1)]),
+        _npc("ref-souma", "Souma", [(world["second"], 3.0)]),
+        _npc("ref-gone", "Kaede", [(world["asker"], 7.0)], present=False),
+    ]))
+    first = _ask_npc(client, world["asker"], None)
+    assert first == (
+        "Doji Asker's current read of their Honor:\n"
+        "- Hideki: **4.1**\n"
+        "- Souma: the GM will have to tell you this one"
+    )
+    assert _ask_npc(client, world["asker"], "") == first
+    npcs = _npcs(client, world)
+    assert npcs[0]["discern_honor"][0]["asked_at"] is not None
+    assert npcs[1]["discern_honor"][0]["asked_at"] is None     # the second PC's
+    assert npcs[2]["discern_honor"][0]["asked_at"] is None     # departed: not asked
+    assert "ref-" not in first and "Kaede" not in first
+
+
+def test_one_present_npc_reads_as_it_always_did(client, world):
+    _put(client, _multi(world, [
+        _npc("ref-hideki", "Hideki", [(world["asker"], 4.1)]),
+        _npc("ref-gone", "Kaede", [(world["asker"], 7.0)], present=False),
+    ]))
+    assert _ask_npc(client, world["asker"], None) == (
+        "Doji Asker's current read of this character's Honor is **4.1**."
+    )
+    assert _ask_npc(client, world["second"], None) == (
+        "The GM will have to tell you this one - ask the GM."
+    )
+
+
+def test_when_everyone_has_left(client, world):
+    _put(client, _multi(world, [_npc("a", "Hideki", [(world["asker"], 4.1)], present=False)]))
+    assert _ask_npc(client, world["asker"], None) == (
+        "No one in this conversation is still here - ask the GM."
+    )
+    assert _ask_npc(client, world["asker"], "Hideki") == (
+        "No one called Hideki is in this conversation. Present: nobody."
+    )
+
+
+def test_naming_an_npc_answers_for_that_one(client, world):
+    _put(client, _two(world))
+    assert _ask_npc(client, world["asker"], "  souma ") == (
+        "Doji Asker's current read of Souma's Honor is **2.5**."
+    )
+    npcs = _npcs(client, world)
+    assert npcs[0]["discern_honor"][0]["asked_at"] is None
+    assert npcs[1]["discern_honor"][0]["asked_at"] is not None
+    assert _ask_npc(client, world["second"], "Hideki") == (
+        "The GM will have to tell you this one - ask the GM."
+    )
+    assert _ask_npc(client, world["asker"], "Kaede") == (
+        "No one called Kaede is in this conversation. Present: Hideki, Souma."
+    )
+    assert _ask_npc(client, world["asker"], "x" * 200).startswith(
+        f"No one called {'x' * 80} is"
+    )
+
+
+def test_a_departed_npc_cannot_be_named_but_keeps_its_asks(client, world):
+    _put(client, _two(world))
+    _ask_npc(client, world["asker"], "Hideki")
+    _put(client, _multi(world, [_npc("ref-hideki", "Hideki", [], present=False)]))
+    assert _ask_npc(client, world["asker"], "Hideki") == (
+        "No one called Hideki is in this conversation. Present: Souma."
+    )
+    assert _npcs(client, world)[0]["discern_honor"][0]["asked_at"] is not None
+
+
+def test_an_old_shape_npc_beside_named_ones_is_this_character(client, world):
+    """Only a mix of the two shapes on one id makes a nameless NPC appear
+    beside named ones; it still reads sensibly and is never offered."""
+    _put(client, _multi(world, [_npc("ref-hideki", "Hideki", [(world["asker"], 4.1)])]))
+    _put(client, {
+        "conversation_id": "c-multi", "group": world["group"], "opened_at": _now_iso(),
+        "npc_ref": "", "discern_honor": [{"character_id": world["asker"], "told": 2.0}],
+    })
+    assert _ask_npc(client, world["asker"], None).endswith("- this character: **2.0**")
+    assert "Present: Hideki." in _ask_npc(client, world["asker"], "Kaede")
+    db = _session(client)
+    asker = db.query(Character).filter(Character.id == world["asker"]).one()
+    assert conversations.present_npc_names(db, asker) == ["Hideki"]
+    db.close()
+
+
+def test_the_command_takes_the_npc_option(client, world, signing_key, discord_calls):
+    _put(client, _two(world))
+    content = _assert_private(_interact(
+        client, signing_key, PLAYER_ID,
+        options=[{"name": "npc", "type": 3, "value": "Hideki"}],
+    ), discord_calls, client)
+    assert content == "Doji Asker's current read of Hideki's Honor is **4.1**."
+    content = _assert_private(
+        _interact(client, signing_key, PLAYER_ID), discord_calls, client,
+    )
+    assert "- Hideki: **4.1**" in content and "- Souma: **2.5**" in content
+
+
+def _complete(client, key, discord_id, typed):
+    r = _interact(client, key, discord_id, kind=4, options=[
+        {"name": "npc", "type": 3, "value": typed, "focused": True},
+    ])
+    assert r.status_code == 200 and r.json()["type"] == 8
+    return [c["value"] for c in r.json()["data"]["choices"]]
+
+
+def test_npc_autocomplete_offers_the_present_npcs_of_the_askers_group(
+    client, world, signing_key,
+):
+    assert _complete(client, signing_key, PLAYER_ID, "") == []      # nothing open
+    _put(client, _multi(world, [
+        _npc("a", "Hideki", []), _npc("b", "Souma", []),
+        _npc("c", "Kaede", [], present=False), _npc("d", "Tsuruchi Shiro", []),
+    ]))
+    assert _complete(client, signing_key, PLAYER_ID, "") == ["Hideki", "Souma", "Tsuruchi Shiro"]
+    assert _complete(client, signing_key, PLAYER_ID, "s") == ["Souma", "Tsuruchi Shiro"]
+    assert _complete(client, signing_key, PLAYER_ID, "SHI") == ["Tsuruchi Shiro"]
+    assert _complete(client, signing_key, PLAYER_ID, "kae") == []     # departed
+    # No character, or one in another group, is offered nothing.
+    assert _complete(client, signing_key, "nobody_at_all", "") == []
+    db = _session(client)
+    db.query(Character).filter(Character.id == world["second"]).one().gaming_group_id = (
+        world["other_group"]
+    )
+    db.commit()
+    db.close()
+    assert _complete(client, signing_key, OTHER_ID, "") == []
+
+
+def test_npc_autocomplete_needs_edit_access(client, world, signing_key, monkeypatch):
+    monkeypatch.setenv(
+        discord_commands.OVERRIDES_ENV_VAR, f"stranger_1:{world['asker']}",
+    )
+    _put(client, _two(world))
+    assert _complete(client, signing_key, "stranger_1", "") == []
+
+
+def test_roll_autocomplete_is_unchanged(client, signing_key):
+    raw = json.dumps({
+        "type": 4, "id": "i", "token": "t",
+        "data": {"id": "c", "name": "roll", "type": 1, "options": [
+            {"name": "skill", "type": 3, "value": "etiq", "focused": True},
+        ]},
+        "member": {"user": {"id": PLAYER_ID, "username": "someone"}},
+    }).encode()
+    r = client.post("/discord/interactions", content=raw, headers={
+        "Content-Type": "application/json",
+        "X-Signature-Ed25519": signing_key.sign(b"1700000000" + raw).signature.hex(),
+        "X-Signature-Timestamp": "1700000000",
+    })
+    assert [c["value"] for c in r.json()["data"]["choices"]] == ["etiquette"]

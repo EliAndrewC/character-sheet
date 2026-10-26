@@ -849,10 +849,8 @@ class Conversation(Base):
     and read by the ``/discern-honor`` slash command (see
     ``app/services/conversations.py``). At most one row per gaming group:
     opening a conversation under a new id replaces the group's previous one.
-
-    ``npc_ref`` is an opaque string the REPL uses to recognize its own
-    conversation after a crash. It is not a name, and it is never shown to a
-    player. Timestamps are naive UTC, like every other datetime here.
+    Its NPCs are ``ConversationNpc`` rows, the first of them the primary.
+    Timestamps are naive UTC, like every other datetime here.
 
     Schema note: a brand-new table, so ``create_all`` makes it on first
     startup and ``_migrate_add_columns`` needs no entry.
@@ -864,17 +862,52 @@ class Conversation(Base):
     gaming_group_id: Mapped[int] = mapped_column(
         ForeignKey("gaming_groups.id"), nullable=False, unique=True,
     )
+    # Unused since the NPCs moved to ConversationNpc (character-sheet#6).
+    # Still mapped, so inserts fill it: the production column is NOT NULL.
     npc_ref: Mapped[str] = mapped_column(String, default="")
     opened_at: Mapped[datetime] = mapped_column(nullable=False)
 
-    entries: Mapped[List["ConversationDiscernHonor"]] = relationship(
+    npcs: Mapped[List["ConversationNpc"]] = relationship(
         back_populates="conversation", cascade="all, delete-orphan",
+        order_by="ConversationNpc.position",
+    )
+
+
+class ConversationNpc(Base):
+    """One NPC in a conversation (character-sheet#6).
+
+    ``npc_ref`` is the REPL's opaque handle on the NPC and is never shown to
+    a player; ``name`` is the personal name the players are already using,
+    which ``/discern-honor`` offers and answers by. ``present`` turns false
+    when the NPC leaves: they are no longer offered or answered, but their
+    entries and ``asked_at`` are kept, so the REPL can still record an ask
+    from before they left. ``position`` is the order of first appearance;
+    position 0 is the conversation's primary NPC.
+
+    Schema note: a brand-new table, so ``create_all`` makes it; the lift of
+    conversations from before it existed is in ``_migrate_add_columns``.
+    """
+
+    __tablename__ = "conversation_npcs"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    conversation_id: Mapped[str] = mapped_column(
+        ForeignKey("conversations.id"), nullable=False, index=True,
+    )
+    position: Mapped[int] = mapped_column(nullable=False, default=0)
+    npc_ref: Mapped[str] = mapped_column(String, nullable=False, default="")
+    name: Mapped[str] = mapped_column(String, nullable=False, default="")
+    present: Mapped[bool] = mapped_column(nullable=False, default=True)
+
+    conversation: Mapped["Conversation"] = relationship(back_populates="npcs")
+    entries: Mapped[List["ConversationDiscernHonor"]] = relationship(
+        back_populates="npc", cascade="all, delete-orphan",
         order_by="ConversationDiscernHonor.id",
     )
 
 
 class ConversationDiscernHonor(Base):
-    """What one character is told when they use Discern Honor in a conversation.
+    """What one character is told when they use Discern Honor on one NPC.
 
     ``told`` is the number the GM's tooling computed and the ONLY Honor-related
     value this app ever holds - never a true Honor. Nothing does arithmetic
@@ -890,13 +923,16 @@ class ConversationDiscernHonor(Base):
     conversation_id: Mapped[str] = mapped_column(
         ForeignKey("conversations.id"), nullable=False, index=True,
     )
+    npc_id: Mapped[int] = mapped_column(
+        ForeignKey("conversation_npcs.id"), nullable=False, index=True,
+    )
     character_id: Mapped[int] = mapped_column(
         ForeignKey("characters.id"), nullable=False,
     )
     told_json: Mapped[str] = mapped_column("told", String, nullable=False)
     asked_at: Mapped[Optional[datetime]] = mapped_column(default=None, nullable=True)
 
-    conversation: Mapped["Conversation"] = relationship(back_populates="entries")
+    npc: Mapped["ConversationNpc"] = relationship(back_populates="entries")
 
     @property
     def told(self) -> Any:

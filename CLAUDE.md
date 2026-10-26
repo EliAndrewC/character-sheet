@@ -637,7 +637,7 @@ registration script sends:
 | one per id in `game_data.SKILLS` | `skill:<id>` | `void` |
 | `/oppose-social`, `/oppose-knowledge`, `/commune` | `knack:<id>` (`KNACK_COMMANDS`) | `void` |
 | `/initiative` | `initiative`, and starts the combat round | none |
-| `/discern-honor` | nothing - a private lookup, see "Discern Honor" | none |
+| `/discern-honor` | nothing - a private lookup, see "Discern Honor" | `npc` (optional, autocomplete) |
 | `/ishi-3rd-dan-technique` and the MESSAGE command `Ishi 3rd Dan boost` | `spend_vp_xk1:isawa_ishi`, see "Isawa Ishi 3rd Dan boost" | none |
 
 - `SKILLS` holds exactly the 18 non-combat skills (attack / parry are in `COMBAT_SKILLS`; iaijutsu
@@ -834,25 +834,37 @@ answers - the GM's explicit requirement. The REPL polls back which PCs asked and
   401, and with `GM_WRITE_TOKEN` unset those routes 503 even though the read token is configured.
   `GET` accepts either. The write token is not accepted by `/api/rolls` or `/api/characters`.
   **Do not add another write route under the read token.**
+- **A conversation has several NPCs** (character-sheet#6; the GM ruled Discern Honor works on every
+  NPC in it): `ConversationNpc` rows `{npc_ref, name, present, position}`, each with its own told
+  entries; the first is the primary.
 - `PUT /api/conversation` (`conversation_id`, `group` = a `gaming_groups.id` as on `/api/rolls`,
-  `npc_ref`, `opened_at` with an offset, `discern_honor: [{character_id, told}]`). **The id that is
-  already open PRESERVES every existing entry's `told` and `asked_at`** and only adds characters not
-  yet present - a retried or crash-resumed open can never change a number a player has already been
-  shown. A new id replaces the group's conversation outright. One conversation per group
-  (`conversations.gaming_group_id` is unique). Everything is validated before any row is touched.
+  `opened_at` with an offset, `npcs: [{npc_ref, name, present, discern_honor: [{character_id,
+  told}]}]`). **The id that is already open PRESERVES every existing entry's `told` and
+  `asked_at`**: NPCs match by `npc_ref`, only characters an NPC lacks are added, a new NPC is
+  appended, one left out is kept; `name` / `present` take the request's values. A retried or
+  crash-resumed open can never change a number a player has already been shown. Two PRESENT NPCs
+  may not share a name (ignoring case) - the command picks by name. A new id replaces the group's
+  conversation outright. One conversation per group (`conversations.gaming_group_id` is unique).
+  Everything is validated before any row is touched. **Transition:** the old one-NPC body
+  (top-level `npc_ref` + `discern_honor`, no name) is still read as a one-NPC list, and responses
+  still carry those two fields (the primary's), until gm-assistant says it has switched on #6;
+  then remove both (`_parse_npcs`' legacy branch and the tail of `serialize`).
 - `GET /api/conversation?group=<id>` -> `{"conversation": {...}}` with `asked_at` per entry, or
   `{"conversation": null}`. `DELETE /api/conversation/{id}` closes; 404 for an unknown id.
-- **`npc_ref` is opaque and is never shown to a player** - an NPC's record name can be a name the
-  players have not learned. The command takes no options for the same reason: an NPC option would
-  leak the roster through autocomplete.
+- **`npc_ref` is opaque and is never shown to a player.** The NPC's `name` IS shown: it is the
+  personal name the players are already using, and the `npc` option's autocomplete offers only the
+  PRESENT NPCs of the asker's own group's conversation - never the roster. A departed NPC
+  (`present: false`) is neither offered nor answered, but keeps its entries and `asked_at`.
 - **Every reply is ephemeral, success included, and nothing is written to `roll_history`.** It is
   answered inline as a type-4 message (no deferral, no card) through
   `discord_commands.run_private_command`, never `run_command`. The character is resolved exactly as
   the roll commands do, edit check included. Replies, in order: no knack (school or foreign, rank
-  0 / absent); no open conversation; open but no entry ("the GM will have to tell you this one");
-  the told value. **The success reply is a function of `told` alone** - it names no NPC and says
-  nothing about accuracy, how many conversations there have been, or finality - and only the FIRST
-  successful ask sets `asked_at`. No "you already asked" scolding.
+  0 / absent); no open conversation; then with `npc:` that NPC's value (or "no one called X ...
+  Present: ..."), and without it every present NPC (one line each; with exactly one present, the
+  original "this character's Honor" sentence). **The success reply is a function of the told values
+  and the NPCs' names alone** - it says nothing about accuracy, how many conversations there have
+  been, or finality - and only the FIRST successful ask of each NPC sets that entry's `asked_at`.
+  No "you already asked" scolding.
 - **Expiry is lazy, 12 hours from `opened_at`** (`CONVERSATION_TTL`): the REPL can die without
   closing anything, and the failure to avoid is answering about an NPC who left the scene
   yesterday. An expired conversation is neither served nor returned; the row stays until replaced.

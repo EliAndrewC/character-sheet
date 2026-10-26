@@ -71,7 +71,7 @@ from sqlalchemy.orm import Session
 from app.game_data import SCHOOL_KNACKS, SKILLS
 from app.models import Character, RollHistory, User
 from app.services.auth import can_edit_character, get_all_editors
-from app.services.conversations import discern_honor_reply
+from app.services.conversations import discern_honor_reply, present_npc_names
 from app.services.dice import build_all_roll_formulas
 from app.services.party import party_member_data, visible_party_members
 from app.services.roll_engine import execute_initiative, execute_roll, impaired_now
@@ -120,6 +120,7 @@ OPTION_TYPE_INTEGER = 4
 ROLL_COMMAND = "roll"
 INITIATIVE_COMMAND = "initiative"
 DISCERN_HONOR_COMMAND = "discern-honor"
+DISCERN_HONOR_NPC_OPTION = "npc"
 #: Message commands keep their display name (spaces and capitals allowed).
 ISHI_BOOST_MESSAGE_COMMAND = "Ishi 3rd Dan boost"
 ISHI_BOOST_SLASH_COMMAND = "ishi-3rd-dan-technique"
@@ -194,13 +195,20 @@ def command_definitions() -> List[Dict[str, Any]]:
         INITIATIVE_COMMAND,
         "Roll initiative and start your character's combat round", [],
     ))
-    # Not a roll, and no options: which character is being read is the GM's
-    # to say (the open conversation), never the player's - an NPC option
-    # would leak the roster through autocomplete.
+    # Not a roll. Which NPCs can be read is the GM's to say (the open
+    # conversation); the optional ``npc`` picks one of them, and its
+    # autocomplete offers only the NPCs present in the asker's own group's
+    # conversation - names the players are already using, never the roster.
     commands.append(chat(
         DISCERN_HONOR_COMMAND,
-        "Privately learn what your character reads of this character's Honor",
-        [],
+        "Privately learn what your character reads of the Honor of those you are talking to",
+        [{
+            "name": DISCERN_HONOR_NPC_OPTION,
+            "description": "Whom to read (default: everyone in the conversation)",
+            "type": OPTION_TYPE_STRING,
+            "required": False,
+            "autocomplete": True,
+        }],
     ))
     # Isawa Ishi 3rd Dan. No options on either: the void point is the
     # technique's fixed price, and the message command's target IS its input.
@@ -281,6 +289,30 @@ def autocomplete_skills(typed: Any) -> List[Dict[str, str]]:
         ][:MAX_AUTOCOMPLETE_CHOICES]
     except Exception:
         return everything[:MAX_AUTOCOMPLETE_CHOICES]
+
+
+def autocomplete_discern_honor(
+    db: Session, discord_id: str, typed: Any,
+) -> List[Dict[str, str]]:
+    """Choices for ``/discern-honor``'s ``npc`` option: the present NPCs of
+    the invoker's character's group's open conversation, prefix matches
+    first, then substring, in conversation order. The character is
+    resolved, edit check included, exactly as the command resolves it.
+    Never raises - an autocomplete must not error at the player - so any
+    failure, a missing character included, offers nothing.
+    """
+    try:
+        character = resolve_character(db, discord_id)
+        _require_edit_access(db, character, discord_id)
+        names = present_npc_names(db, character)
+        needle = str(typed or "").strip().casefold()
+        prefix = [n for n in names if n.casefold().startswith(needle)]
+        inside = [n for n in names if needle in n.casefold() and n not in prefix]
+        return [
+            {"name": n, "value": n} for n in prefix + inside
+        ][:MAX_AUTOCOMPLETE_CHOICES]
+    except Exception:
+        return []
 
 
 def focused_option_value(data: Dict[str, Any]) -> Any:
@@ -391,7 +423,9 @@ def run_private_command(
         return None
     character = resolve_character(db, discord_id)
     _require_edit_access(db, character, discord_id)
-    reply = discern_honor_reply(db, character)
+    reply = discern_honor_reply(
+        db, character, _options(data).get(DISCERN_HONOR_NPC_OPTION),
+    )
     db.commit()
     return reply
 
