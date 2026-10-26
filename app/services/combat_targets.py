@@ -19,6 +19,14 @@ fills in both numbers:
   (``Encounter.weapons``, seeded from the group's previous fight);
   ``lock_weapon`` puts them into the damage roll.
 
+* **The duel.** The GM marks which NPC a PC is in an iaijutsu duel with
+  (``Encounter.duels``). The duel modal then needs no opponent XP: its
+  starting TN comes from the NPC (``duel_tn``), and ``lock_duel`` judges
+  the strike against it plus 5 per focus the opponent declared. The PC's
+  Evaluate Stance roll answers what that roll tells them about this NPC
+  (``stance``) - computed here, so the NPC's Fire and TN never reach the
+  browser beyond what the roll reveals.
+
 Melee reach is list-only: the server does not refuse an attack on an NPC
 out of reach (the GM trusts the players, and lines are often drawn late).
 """
@@ -60,6 +68,30 @@ def _numbers(npc: Character) -> Dict[str, int]:
     return {"tn": tn_to_be_hit(npc), "athletics_tn": 5 + 10 * (npc.parry or 1)}
 
 
+def duel_tn(npc: Character) -> int:
+    """A duelist's starting TN to be hit: total XP / 10 (rules/03-combat.md)."""
+    return ((npc.starting_xp or 0) + (npc.earned_xp or 0)) // 10
+
+
+def duel_link(encounter: Optional[Encounter], pc_id: int) -> Optional[EncounterNpc]:
+    """The NPC (still fighting) this PC is in a duel with, or None."""
+    npc_id = ((encounter.duels or {}) if encounter else {}).get(str(pc_id))
+    return _link(encounter, npc_id) if npc_id is not None else None
+
+
+def stance(npc: Character, total: int) -> Dict[str, Any]:
+    """What an Evaluate Stance roll of ``total`` tells about ``npc``: its
+    Fire is at least total / 5 (known exactly when that exceeds it), and its
+    starting TN at least the total (known exactly when the total exceeds it)."""
+    total = max(0, int(total or 0))
+    fire, tn, bound = npc.ring_fire or 0, duel_tn(npc), total // 5
+    return {
+        "name": npc.name,
+        "fire": {"exact": True, "value": fire} if bound > fire else {"exact": False, "value": bound},
+        "tn": {"exact": True, "value": tn} if total > tn else {"exact": False, "value": total},
+    }
+
+
 def for_pc(db: Session, pc: Character) -> Optional[Dict[str, Any]]:
     """The attack modal's target step for ``pc``, or None outside a fight."""
     from app.services.combat_view import tn_known
@@ -79,11 +111,14 @@ def for_pc(db: Session, pc: Character) -> Optional[Dict[str, Any]]:
             entry.update(_numbers(link.character))
         targets.append(entry)
     weapon = weapon_for(encounter, pc.id)
+    duel = duel_link(encounter, pc.id)
     return {
         "group_id": encounter.gaming_group_id,
         "encounter": encounter.name,
         "weapon": list(weapon) if weapon else None,
         "targets": targets,
+        "duel": {"id": duel.character_id, "name": duel.character.name, "tn": duel_tn(duel.character)}
+        if duel else None,
     }
 
 
@@ -121,6 +156,27 @@ def set_weapon(db: Session, encounter: Encounter, pc_id: Any, rolled: Any, kept:
     db.flush()
 
 
+def set_duel(db: Session, encounter: Encounter, pc_id: Any, npc_id: Any, pcs: List[int]) -> None:
+    """The GM marks (or, with ``npc_id`` None, clears) whom a PC duels."""
+    if isinstance(pc_id, bool) or pc_id not in pcs:
+        raise ValueError("that character is not in this fight")
+    duels = dict(encounter.duels or {})
+    if npc_id is None:
+        duels.pop(str(pc_id), None)
+    else:
+        if _link(encounter, npc_id) is None:
+            raise ValueError("that NPC is not fighting in this fight")
+        duels[str(pc_id)] = npc_id
+    encounter.duels = duels
+    npcs.touch(encounter)
+    db.flush()
+
+
+def current_duels(encounter: Optional[Encounter], pcs: List[int]) -> List[List[int]]:
+    """``[pc_id, npc_id]`` for each PC in the fight dueling a fighting NPC."""
+    return [[pc, duel_link(encounter, pc).character_id] for pc in pcs if duel_link(encounter, pc)]
+
+
 def seed_weapons(db: Session, encounter: Encounter) -> None:
     """A new fight starts with the weapons of the group's previous one."""
     previous = (
@@ -155,6 +211,35 @@ def lock_target(db: Session, character: Character, body: Dict[str, Any], live: b
     body["target_numbers"] = _numbers(link.character)
     if live and not link.tn_revealed:
         reveal(db, encounter, link.character_id)
+
+
+def lock_duel(db: Session, character: Character, body: Dict[str, Any]) -> None:
+    """Before an iaijutsu strike by a PC the GM put in a duel: the opponent's
+    TN is the NPC's starting TN plus 5 per focus it declared
+    (``opponent_focuses``), whatever ``opponent_tn`` the request says."""
+    if str(body.get("roll_key") or "") != "iaijutsu:strike":
+        return
+    link = duel_link(pc_encounter(db, character), character.id)
+    if link is None:
+        return
+    try:
+        focuses = max(0, min(20, int(body.get("opponent_focuses") or 0)))
+    except (TypeError, ValueError):
+        focuses = 0
+    body["opponent_tn"] = duel_tn(link.character) + 5 * focuses
+
+
+EVALUATE_STANCE_KEY = "knack:iaijutsu:evaluate"
+
+
+def add_stance(db: Session, character: Character, roll_key: str, result: Dict[str, Any]) -> None:
+    """After a live Evaluate Stance roll (or an action that rescored one) by
+    a PC in a duel: what it tells them about their opponent."""
+    if roll_key != EVALUATE_STANCE_KEY or result.get("mode", "live") != "live" or result.get("total") is None:
+        return
+    link = duel_link(pc_encounter(db, character), character.id)
+    if link is not None:
+        result["stance"] = stance(link.character, result["total"])
 
 
 def lock_weapon(db: Session, character: Character, session: RollSession, action: str,

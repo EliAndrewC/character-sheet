@@ -913,6 +913,9 @@ class Encounter(Base):
     # [rolled, kept]}. A PC's attack damage uses it instead of the modal's
     # inputs. Seeded from the group's previous fight (combat_targets).
     weapons: Mapped[Optional[Dict[str, List[int]]]] = mapped_column(JSON, default=dict)
+    # Who each PC is in an iaijutsu duel with, as the GM set it: {str(pc_id):
+    # npc_id}. The PC's duel modal and Evaluate Stance roll use that NPC.
+    duels: Mapped[Optional[Dict[str, int]]] = mapped_column(JSON, default=dict)
 
     npcs: Mapped[List["EncounterNpc"]] = relationship(
         back_populates="encounter", cascade="all, delete-orphan",

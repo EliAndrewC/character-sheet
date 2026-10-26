@@ -781,3 +781,47 @@ def test_the_gm_sets_a_pcs_weapon_for_the_fight(page, live_server_url):
     open_melee_attack(page)
     page.locator('[data-testid="atk-fight-skip"]').click()
     expect(page.locator('[data-testid="atk-weapon-rolled"]')).to_be_enabled()
+
+
+def test_the_gm_puts_a_pc_in_a_duel_and_their_duel_and_stance_rolls_know_the_opponent(
+        page, page_anon, live_server_url):
+    from tests.e2e.test_iaijutsu_duel import _open_duel_modal, _wait_dice_done
+
+    gid, pc, (npc,) = _pc_in_fight(page, live_server_url, wave_men=1)
+    page.goto(f"{live_server_url}/groups/{gid}/combat")
+    page.locator(f'[data-testid="pc-menu-{pc["id"]}"]').click()
+    page.locator(f'[data-testid="pc-duel-{pc["id"]}"]').select_option(str(npc["id"]))
+    expect(page.locator(f'[data-testid="pc-dueling-{pc["id"]}"]')).to_have_text(
+        f"In an iaijutsu duel with {npc['name']}")
+    expect(page.locator(f'[data-testid="npc-dueling-{npc["id"]}"]')).to_have_text(
+        "In an iaijutsu duel with Striker")
+    page_anon.goto(f"{live_server_url}/groups/{gid}/combat")
+    expect(page_anon.locator(f'[data-testid="pc-dueling-{pc["id"]}"]')).to_be_visible()
+
+    # The duel modal: no XP to enter, the NPC's TN instead.
+    page.goto(f"{live_server_url}/characters/{pc['id']}")
+    _open_duel_modal(page)
+    duel_tn = npc["total_xp"] // 10
+    expect(page.locator('[data-testid="duel-fight-opponent-tn"]')).to_have_text(str(duel_tn))
+    modal = page.locator('[data-modal="iaijutsu-duel"]')
+    expect(modal.locator('button:has-text("Proceed to Contested Roll")')).to_be_enabled()
+    modal.locator('button:has-text("×")').click()
+
+    # Evaluate Stance: what this roll tells about that opponent.
+    force_dice(page, [1, 1, 1, 1, 1, 1])
+    page.locator('[data-roll-key="knack:iaijutsu"]').click()
+    page.locator('[data-action="evaluate-stance"]').click()
+    _wait_dice_done(page)
+    restore_dice(page)
+    known = page.locator('[data-testid="evaluate-stance-known"]')
+    expect(known).to_be_visible()
+    expect(page.locator('[data-testid="evaluate-stance-known-fire"]')).to_contain_text(f"{npc['name']}'s Fire Ring: at least", use_inner_text=True)
+    expect(page.locator('[data-testid="evaluate-stance-known-tn"]')).to_contain_text("at least", use_inner_text=True)
+    expect(page.locator('[data-testid="evaluate-stance-known-tn"]')).not_to_contain_text("exactly", use_inner_text=True)
+    expect(page.locator('[data-testid="evaluate-stance-fire"]')).to_be_hidden()
+
+    # Ending the duel puts the XP input back.
+    page.goto(f"{live_server_url}/groups/{gid}/combat")
+    page.locator(f'[data-testid="pc-menu-{pc["id"]}"]').click()
+    page.locator(f'[data-testid="pc-duel-{pc["id"]}"]').select_option("")
+    expect(page.locator(f'[data-testid="pc-dueling-{pc["id"]}"]')).to_be_hidden()

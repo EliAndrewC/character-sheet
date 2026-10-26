@@ -164,6 +164,18 @@
                                     <button type="button" @click="open = false; openRoller(pc, null, $event, 'initiative')" :data-testid="'pc-init-' + pc.id"
                                             class="block w-full text-left px-4 py-2 hover:bg-parchment">Roll initiative</button>
                                     {{ can_strike('pc', 'npcs', 'pc.id', 'o.id', 'lg:left-full lg:ml-1') }}
+                                    {# Whom this PC is in an iaijutsu duel with: their duel
+                                       modal and Evaluate Stance roll use that NPC (combat_targets). #}
+                                    <label class="block px-4 py-2 border-t border-ink/10" @click.stop>
+                                        <span class="block text-ink/70 mb-1">In an iaijutsu duel with</span>
+                                        <select @change="setDuel(pc, $event.target.value); open = false" :data-testid="'pc-duel-' + pc.id"
+                                                class="w-full border rounded px-1 py-1 text-sm">
+                                            <option value="" :selected="!duelOf('pcs', pc.id)">- Nobody -</option>
+                                            <template x-for="o in state.npcs.filter(n => n.status === 'fighting')" :key="o.id">
+                                                <option :value="o.id" :selected="duelOf('pcs', pc.id) === o.id" x-text="o.name"></option>
+                                            </template>
+                                        </select>
+                                    </label>
                                     {# The weapon this PC's attacks roll damage with in this
                                        fight (combat_targets); their attack modal cannot change it. #}
                                     <div class="px-4 py-2 border-t border-ink/10" @click.stop
@@ -241,6 +253,8 @@
                             </template>
                         </div>
                     </template>
+                    <p x-show="duelOf('pcs', pc.id)" x-cloak class="text-xs text-accent font-medium" :data-testid="'pc-dueling-' + pc.id"
+                       x-text="'In an iaijutsu duel with ' + duelName('pcs', pc.id)"></p>
                     {# Narrow screens stack the columns, so no lines: say it instead. #}
                     <p x-show="reachNames('pcs', pc.id).length" class="lg:hidden text-xs text-ink/70" :data-testid="'pc-reach-' + pc.id"
                        x-text="'Can strike: ' + reachNames('pcs', pc.id).join(', ')"></p>
@@ -378,6 +392,8 @@
                         </div>
                     </template>
 
+                    <p x-show="duelOf('npcs', npc.id)" x-cloak class="text-xs text-accent font-medium" :data-testid="'npc-dueling-' + npc.id"
+                       x-text="'In an iaijutsu duel with ' + duelName('npcs', npc.id)"></p>
                     <p x-show="reachNames('npcs', npc.id).length" class="lg:hidden text-xs text-ink/70" :data-testid="'npc-reach-' + npc.id"
                        x-text="'Can strike: ' + reachNames('npcs', npc.id).join(', ')"></p>
                 </div>

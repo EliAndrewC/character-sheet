@@ -665,7 +665,23 @@
                         <div class="font-medium text-ink/80">
                             Evaluate Stance - what you learn (result <span x-text="baseTotal"></span>)
                         </div>
-                        <div data-testid="evaluate-stance-fire">
+                        {# A PC in a duel the GM set on the combat page: what this
+                           roll revealed about that opponent (the server's answer). #}
+                        <template x-if="stanceKnown">
+                        <div class="space-y-1" data-testid="evaluate-stance-known">
+                            <div data-testid="evaluate-stance-known-fire">
+                                <span class="font-medium" x-text="stanceKnown.name + '\'s Fire Ring:'"></span>
+                                <span x-show="stanceKnown.fire.exact">exactly <b class="text-accent" x-text="stanceKnown.fire.value"></b>.</span>
+                                <span x-show="!stanceKnown.fire.exact">at least <b class="text-accent" x-text="stanceKnown.fire.value"></b>.</span>
+                            </div>
+                            <div data-testid="evaluate-stance-known-tn">
+                                <span class="font-medium" x-text="stanceKnown.name + '\'s iaijutsu TN to be hit:'"></span>
+                                <span x-show="stanceKnown.tn.exact">exactly <b class="text-accent" x-text="stanceKnown.tn.value"></b>.</span>
+                                <span x-show="!stanceKnown.tn.exact">at least <b class="text-accent" x-text="stanceKnown.tn.value"></b>.</span>
+                            </div>
+                        </div>
+                        </template>
+                        <div x-show="!stanceKnown" data-testid="evaluate-stance-fire">
                             <span class="font-medium">Opponent's Fire Ring:</span>
                             {# Result is high enough that the lower bound meets
                                the ring cap, so the exact value is always known. #}
@@ -685,7 +701,7 @@
                                     or higher.</span>
                             </template>
                         </div>
-                        <div data-testid="evaluate-stance-tn">
+                        <div x-show="!stanceKnown" data-testid="evaluate-stance-tn">
                             <span class="font-medium">Opponent's iaijutsu TN to be hit:</span>
                             you learn its exact value if it is
                             <span class="font-bold text-accent" x-text="window.L7RRollMath.evaluateStanceInfo(baseTotal).tnExactMax"></span>

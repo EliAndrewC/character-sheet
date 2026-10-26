@@ -616,6 +616,14 @@
             duelPlayerTN: window.L7RRollMath.duelTn({{ character.starting_xp }} + {{ character.earned_xp }}),
             duelOpponentXP: '',
             duelOpponentTN: 0,
+            // The NPC the GM put this PC in a duel with on the combat page
+            // ({id, name, tn}: its starting TN, so no XP is entered), and how
+            // many times it focused (the server judges the strike from both).
+            duelFightOpponent: null,
+            duelOpponentFocuses: 0,
+            // An Evaluate Stance roll by a PC in a duel: what the server says
+            // it revealed about the opponent ({name, fire, tn}), or null.
+            stanceKnown: null,
             duelContestedDone: false,
             duelContestedRoll: 0,
             duelPlayerCanFocus: true,
@@ -2157,6 +2165,7 @@
                 this._serverSessionMode = data.mode;
                 this._serverSessionKind = 'roll';
                 this._serverDice = data.dice;
+                this.stanceKnown = data.stance || null;
                 this._adoptPostRollBonuses(data.payload);
                 this.feintState = data.feint || null;
                 if (data.notes) {
@@ -3438,6 +3447,7 @@
             // Show the session's dice and total as the server scored them.
             _adoptServerResult(data) {
                 this._serverDice = data.dice;
+                this.stanceKnown = data.stance || null;
                 this._adoptPostRollBonuses(data.payload);
                 this.formula = { ...this.formula, ...data.formula };
                 const p = data.payload || {};
@@ -4033,11 +4043,32 @@
                 this.rollImageBlob = null;
                 this._rollImageReqId++;
                 this._lastPayloadSig = '';
+                this.duelOpponentFocuses = 0;
                 this.duelOpen = true;
+                this._duelLoadOpponent();
+            },
+
+            // A PC the GM put in a duel on the combat page: that NPC's
+            // starting TN replaces the opponent XP input.
+            async _duelLoadOpponent() {
+                this.duelFightOpponent = null;
+                if (!this._fightGroupId) return;
+                try {
+                    const resp = await fetch('/groups/' + this._fightGroupId + '/combat/fight/{{ character.id }}');
+                    const fight = resp.ok ? ((await resp.json()).fight || null) : null;
+                    if (this.duelPhase === 'setup') this.duelFightOpponent = fight ? (fight.duel || null) : null;
+                } catch (e) { /* the ordinary XP input */ }
+            },
+
+            // The opponent's starting TN: the dueled NPC's, else XP / 10.
+            duelBaseOpponentTn() {
+                return this.duelFightOpponent ? this.duelFightOpponent.tn
+                    : window.L7RRollMath.duelTn(parseInt(this.duelOpponentXP || '0'));
             },
 
             duelStartContested() {
-                this.duelOpponentTN = window.L7RRollMath.duelTn(parseInt(this.duelOpponentXP || '0'));
+                this.duelOpponentTN = this.duelBaseOpponentTn();
+                this.duelOpponentFocuses = 0;
                 this.duelPhase = 'contested';
             },
 
@@ -4228,6 +4259,7 @@
             duelOpponentFocus() {
                 if (!this.duelOpponentCanFocus) return;
                 this.duelOpponentTN += 5;
+                this.duelOpponentFocuses += 1;
                 this.duelOpponentCanFocus = false;
                 this.duelPlayerCanFocus = true;
             },
@@ -4243,6 +4275,7 @@
                     roll_key: 'iaijutsu:strike',
                     restart_bonus: this.duelRestartBonus || 0,
                     opponent_tn: this.duelOpponentTN,
+                    opponent_focuses: this.duelOpponentFocuses,
                     request_id: this._newRequestId(),
                 };
                 await this._runServerDuel('duel-strike');
@@ -4344,7 +4377,8 @@
                 this.duelVoidSelected = 0;
                 // Reset TNs to base values (XP / 10) - focus bonuses don't carry over
                 this.duelPlayerTN = window.L7RRollMath.duelTn({{ character.starting_xp }} + {{ character.earned_xp }});
-                this.duelOpponentTN = window.L7RRollMath.duelTn(parseInt(this.duelOpponentXP || '0'));
+                this.duelOpponentTN = this.duelBaseOpponentTn();
+                this.duelOpponentFocuses = 0;
                 this.duelPhase = 'contested';
             },
 

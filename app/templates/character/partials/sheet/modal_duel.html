@@ -27,7 +27,12 @@
                             <div class="text-sm text-ink/60">Your Duel TN</div>
                             <div class="text-2xl font-bold" x-text="duelPlayerTN"></div>
                         </div>
-                        <div>
+                        <div x-show="duelFightOpponent" x-cloak class="bg-parchment rounded p-3 text-center" data-testid="duel-fight-opponent">
+                            <div class="text-sm text-ink/60" x-text="(duelFightOpponent?.name || '') + '\'s Duel TN'"></div>
+                            <div class="text-2xl font-bold" data-testid="duel-fight-opponent-tn" x-text="duelFightOpponent?.tn"></div>
+                            <div class="text-xs text-ink/50">Your opponent, set by the GM on the combat page</div>
+                        </div>
+                        <div x-show="!duelFightOpponent">
                             <label class="block text-sm font-medium mb-1">Opponent's Total XP</label>
                             <input type="number" x-model="duelOpponentXP" min="0" placeholder="e.g. 200"
                                    class="w-full border rounded px-3 py-2 text-sm">
@@ -40,7 +45,7 @@
                         Weapon: Katana (4k2)
                     </div>
                     <button type="button" @click="duelStartContested()"
-                            :disabled="!duelOpponentXP"
+                            :disabled="!duelOpponentXP && !duelFightOpponent"
                             class="btn-primary px-4 py-2 rounded text-sm font-medium disabled:opacity-40">
                         Proceed to Contested Roll
                     </button>

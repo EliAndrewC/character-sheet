@@ -240,6 +240,21 @@
       toggleReach: async function (pc, npc, on) {
         await this.post("/reach", { pc_id: pc, npc_id: npc, on: on });
       },
+      // The other duelist of a PC ("pcs") or an NPC ("npcs"), by id, or null.
+      duelOf: function (side, id) {
+        var mine = side === "pcs" ? 0 : 1;
+        var pair = (this.state.duels || []).find(function (p) { return p[mine] === id; });
+        return pair ? pair[1 - mine] : null;
+      },
+      duelName: function (side, id) {
+        var other = this.duelOf(side, id);
+        var list = side === "pcs" ? this.state.npcs : this.state.pcs;
+        var found = list.find(function (o) { return o.id === other; });
+        return found ? found.name : "";
+      },
+      setDuel: async function (pc, npcId) {
+        await this.post("/duel", { pc_id: pc.id, npc_id: npcId ? parseInt(npcId, 10) : null });
+      },
       setWeapon: async function (pc, rolled, kept) {
         await this.post("/weapon", { pc_id: pc.id, rolled: rolled, kept: kept });
       },

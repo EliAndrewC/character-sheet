@@ -80,6 +80,7 @@ Status: **built and deployed** (2026-09-28). All phases done, including the GM's
 | D36 | **The server judges a targeted attack against the NPC's real TN**, whatever the request says (`combat_targets.lock_target`): 5 + 5 x Parry, 5 + 10 x Parry for an athletics attack, and an arrow's base TN (distance, evasion and cover stay the player's). The damage action's after-the-roll TN correction is ignored for such an attack. A simulated (read-only) roll reveals nothing. "Not one of these - enter the TN myself" keeps the old inputs for anyone the tracker does not have. |
 | D37 | **A melee or athletics attack lists only NPCs within the PC's striking distance** (`Encounter.reach`), and names the rest as out of reach; **an arrow may target any NPC still fighting.** List-only: the server does not refuse an out-of-reach target. The list follows the lines even while the GM has hidden them from view. |
 | D38 | **The GM sets each PC's weapon dice for the fight** (PC kebab > Weapon damage; `Encounter.weapons`). The PC's attack modal shows them disabled ("Set by the GM for this fight") and the server rolls damage with them whatever the request says. A new fight starts with the previous fight's weapons. Duel and Kakita 5th Dan damage keep their own inputs. |
+| D39 | **The GM marks whom a PC is in an iaijutsu duel with** (PC kebab > "In an iaijutsu duel with"; `Encounter.duels`; both views say "In an iaijutsu duel with ..." on both cards - the duel is public). The PC's duel modal then needs no opponent XP: it shows the NPC's starting TN (total XP / 10; the XP itself is not shown), and the server judges the strike against that TN plus 5 per focus the opponent declared, whatever TN the request says. The PC's Evaluate Stance roll answers what it revealed about that NPC, per the rule: Fire exactly when roll / 5 exceeds it, else "at least roll / 5"; the TN exactly when the roll exceeds it, else "at least the roll". The server computes it, so nothing beyond what the roll reveals reaches the browser; a test-drive (read-only) roll gets the general explanation. A downed opponent ends the duel. |
 
 ## 3. What exists today
 
@@ -274,7 +275,7 @@ Each phase ends with tests green at 100% coverage in every repo it touches, targ
 - Round 2: exact vs base XP (D13), clamp (D14), sheet migration (D15), returning NPCs (D17), missing schools (D18), NPC attacks (D19), keep-LW vs take-SW (D20), records (D21), player visibility (D22, D23), card detail (D23 / 4.5).
 - Round 3: git (D24), stub schools (D25), names (D26), public combat page (D27), real names (D28), roll totals only (D29), every visible PC (D30), new round (D31).
 - Round 4: PCs on the public page (D32), one fight at a time (D33).
-- Round 5: a PC's attack target (D35-D37) and weapon (D38).
+- Round 5: a PC's attack target (D35-D37) and weapon (D38); iaijutsu duels (D39).
 
 
 ## Addendum (2026-10-05): NPC rolls on the sheet's own roller

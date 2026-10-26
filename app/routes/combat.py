@@ -251,6 +251,26 @@ async def weapon(group_id: int, request: Request, db: Session = Depends(get_db))
     return {"status": "ok"}
 
 
+@router.post("/groups/{group_id}/combat/duel")
+async def duel(group_id: int, request: Request, db: Session = Depends(get_db)):
+    """``{"pc_id", "npc_id"}``: that PC is in an iaijutsu duel with that NPC;
+    ``npc_id: null`` ends it."""
+    _, group, err = _load(db, group_id, request)
+    if err:
+        return err
+    encounter = _active(db, group)
+    if encounter is None:
+        return _error("No fight in progress", 409)
+    body = await _body(request)
+    try:
+        combat_targets.set_duel(db, encounter, body.get("pc_id"), body.get("npc_id"),
+                                [pc.id for pc in combat_view.visible_pcs(db, group)])
+    except ValueError as exc:
+        return _error(str(exc))
+    db.commit()
+    return {"status": "ok"}
+
+
 @router.post("/groups/{group_id}/combat/npcs/{npc_id}/status")
 async def set_status(group_id: int, npc_id: int, request: Request, db: Session = Depends(get_db)):
     _, group, err = _load(db, group_id, request)

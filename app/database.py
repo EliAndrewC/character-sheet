@@ -255,6 +255,8 @@ def _migrate_add_columns():
         cursor.execute("ALTER TABLE encounters ADD COLUMN show_reach BOOLEAN DEFAULT 1")
     if enc_cols and "weapons" not in enc_cols:  # pragma: no cover
         cursor.execute("ALTER TABLE encounters ADD COLUMN weapons TEXT DEFAULT '{}'")
+    if enc_cols and "duels" not in enc_cols:  # pragma: no cover
+        cursor.execute("ALTER TABLE encounters ADD COLUMN duels TEXT DEFAULT '{}'")
 
     # Encounter NPCs table migrations
     cursor.execute("PRAGMA table_info(encounter_npcs)")

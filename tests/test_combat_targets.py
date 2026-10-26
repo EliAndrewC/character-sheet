@@ -273,3 +273,120 @@ def test_without_a_gm_weapon_the_modals_weapon_rolls(client, fight, scripted):
                headers=scripted("5")).json()["damage"]
     assert dmg["formula"]["kept"] == 2
     assert dmg["formula"]["rolled"] == 4 + (pc.ring_fire or 2) + data["attack"]["extra_dice"]
+
+
+# ---------------------------------------------------------------------------
+# Iaijutsu duels
+# ---------------------------------------------------------------------------
+
+@pytest.fixture
+def duel(fight):
+    """The PC is in a duel with ``far`` (Fire 4, 150 + 140 XP: TN 29)."""
+    s, far = fight["s"], fight["far"]
+    far.ring_fire, far.starting_xp, far.earned_xp = 4, 150, 140
+    ct.set_duel(s, fight["enc"], fight["pc"].id, far.id, [fight["pc"].id])
+    s.commit()
+    return fight
+
+
+def test_the_duel_tn_is_total_xp_over_ten(duel):
+    assert ct.duel_tn(duel["far"]) == 29
+
+
+@pytest.mark.parametrize("total,fire,tn", [
+    (0, {"exact": False, "value": 0}, {"exact": False, "value": 0}),
+    (20, {"exact": False, "value": 4}, {"exact": False, "value": 20}),   # 20 / 5 = 4: Fire 4 or more
+    (25, {"exact": True, "value": 4}, {"exact": False, "value": 25}),    # 5 exceeds Fire 4
+    (29, {"exact": True, "value": 4}, {"exact": False, "value": 29}),    # 29 does not exceed TN 29
+    (30, {"exact": True, "value": 4}, {"exact": True, "value": 29}),
+    (-3, {"exact": False, "value": 0}, {"exact": False, "value": 0}),
+])
+def test_what_evaluate_stance_reveals(duel, total, fire, tn):
+    assert ct.stance(duel["far"], total) == {"name": duel["far"].name, "fire": fire, "tn": tn}
+
+
+def test_the_fight_names_the_pcs_duel(duel):
+    far = duel["far"]
+    assert ct.for_pc(duel["s"], duel["pc"])["duel"] == {"id": far.id, "name": far.name, "tn": 29}
+    assert cv.public_state(duel["s"], duel["g"])["duels"] == [[duel["pc"].id, far.id]]
+    assert cv.gm_state(duel["s"], duel["g"])["duels"] == [[duel["pc"].id, far.id]]
+
+
+def test_a_downed_opponent_ends_the_duel(duel):
+    npcs.set_status(duel["s"], duel["enc"], duel["far"], "dead")
+    assert ct.for_pc(duel["s"], duel["pc"])["duel"] is None
+    assert cv.public_state(duel["s"], duel["g"])["duels"] == []
+
+
+def test_the_gm_clears_a_duel_and_bad_duels_are_refused(duel):
+    s, enc, pc = duel["s"], duel["enc"], duel["pc"]
+    with pytest.raises(ValueError, match="not in this fight"):
+        ct.set_duel(s, enc, 999, duel["far"].id, [pc.id])
+    with pytest.raises(ValueError, match="not fighting"):
+        ct.set_duel(s, enc, pc.id, 999, [pc.id])
+    ct.set_duel(s, enc, pc.id, None, [pc.id])
+    assert ct.for_pc(s, pc)["duel"] is None
+
+
+def test_duel_route(client, duel):
+    pc, near = duel["pc"], duel["npc"]
+    assert client.post(_url(duel, "/duel"), json={"pc_id": pc.id, "npc_id": near.id}).status_code == 200
+    assert client.get(_fight_url(duel), headers=PLAYER).json()["fight"]["duel"]["id"] == near.id
+    assert client.post(_url(duel, "/duel"), json={"pc_id": pc.id, "npc_id": 999}).status_code == 400
+    assert client.post(_url(duel, "/duel"), json={"pc_id": pc.id, "npc_id": None}, headers=PLAYER).status_code == 403
+    npcs.end_encounter(duel["s"], duel["enc"])
+    duel["s"].commit()
+    assert client.post(_url(duel, "/duel"), json={"pc_id": pc.id, "npc_id": None}).status_code == 409
+
+
+def _strike(client, duel, headers=PLAYER, **body):
+    body.update(roll_key="iaijutsu:strike")
+    return client.post(f"/characters/{duel['pc'].id}/roll", json=body, headers=headers)
+
+
+def test_the_strike_is_judged_against_the_dueled_npcs_tn(client, duel, scripted):
+    plain = _strike(client, duel, opponent_tn=5, headers=scripted("5")).json()
+    assert plain["formula"]["opponent_tn"] == 29
+    focused = _strike(client, duel, opponent_tn=5, opponent_focuses=2, headers=scripted("5")).json()
+    assert focused["formula"]["opponent_tn"] == 39
+    junk = _strike(client, duel, opponent_tn=5, opponent_focuses="x", headers=scripted("5")).json()
+    assert junk["formula"]["opponent_tn"] == 29
+
+
+def test_without_a_duel_the_strike_takes_the_modals_tn(client, fight, scripted):
+    data = _strike(client, fight, opponent_tn=17, headers=scripted("5")).json()
+    assert data["formula"]["opponent_tn"] == 17
+
+
+def _evaluate(client, duel, headers=PLAYER):
+    return client.post(f"/characters/{duel['pc'].id}/roll", headers=headers,
+                       json={"roll_key": "knack:iaijutsu:evaluate"})
+
+
+def test_evaluate_stance_answers_what_it_revealed(client, duel, scripted):
+    pc = duel["pc"]
+    pc.knacks = dict(pc.knacks, iaijutsu=3)
+    pc.advantages = ["lucky"]
+    duel["s"].commit()
+    data = _evaluate(client, duel, headers=scripted("2")).json()
+    assert data["stance"] == ct.stance(duel["far"], data["total"])
+    # A reroll re-answers it at the new total.
+    after = _act(client, duel, data["session_id"], "lucky_reroll", headers=scripted("9")).json()
+    assert after["total"] != data["total"]
+    assert after["stance"] == ct.stance(duel["far"], after["total"])
+
+
+def test_evaluate_stance_reveals_nothing_to_a_test_drive_or_without_a_duel(client, duel, scripted):
+    duel["pc"].knacks = dict(duel["pc"].knacks, iaijutsu=3)
+    duel["s"].commit()
+    assert "stance" not in _evaluate(client, duel, headers=scripted("9", base=OTHER)).json()
+    ct.set_duel(duel["s"], duel["enc"], duel["pc"].id, None, [duel["pc"].id])
+    duel["s"].commit()
+    assert "stance" not in _evaluate(client, duel, headers=scripted("9")).json()
+
+
+def test_stance_is_only_for_the_evaluate_roll(duel):
+    result = {"total": 30, "mode": "live"}
+    ct.add_stance(duel["s"], duel["pc"], "skill:etiquette", result)
+    ct.add_stance(duel["s"], duel["pc"], ct.EVALUATE_STANCE_KEY, {"mode": "live"})
+    assert "stance" not in result

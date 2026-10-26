@@ -25,6 +25,7 @@ from app.services import npc_generator as gen
 from app.services import npcs
 from app.services import fight_log
 from app.services.combat_actions import tn_to_be_hit
+from app.services.combat_targets import current_duels, weapon_for
 from app.services.dice import dying_threshold, is_impaired
 from app.services.per_adventure import per_adventure_abilities, remaining
 from app.services.void_spend import void_limits, void_pools
@@ -156,6 +157,8 @@ def public_state(db: Session, group: GamingGroup, mine: Optional[Set[int]] = Non
         # Who can strike whom, only while the GM shows the lines.
         "reach": (npcs.current_reach(encounter, [pc.id for pc in pcs], [link.character_id for link in links])
                   if encounter is not None and encounter.show_reach else []),
+        # Who is in an iaijutsu duel with whom: everyone watching knows.
+        "duels": current_duels(encounter, [pc.id for pc in pcs]),
     }
 
 
@@ -218,7 +221,6 @@ def gm_state(db: Session, group: GamingGroup) -> Dict[str, Any]:
             "total_xp": (npc.starting_xp or 0) + (npc.earned_xp or 0),
             "combat_share": g.get("combat_share"),
         })
-    from app.services.combat_targets import weapon_for
 
     return {
         "rev": _rev(encounter, pcs + [link.character for link in links]),
@@ -233,6 +235,7 @@ def gm_state(db: Session, group: GamingGroup) -> Dict[str, Any]:
         "actions": [_gm_action(a, names) for a in _actions(db, encounter)],
         "reach": npcs.current_reach(encounter, [pc.id for pc in pcs], [link.character_id for link in links]),
         "show_reach": bool(encounter.show_reach) if encounter is not None else True,
+        "duels": current_duels(encounter, [pc.id for pc in pcs]),
     }
 
 

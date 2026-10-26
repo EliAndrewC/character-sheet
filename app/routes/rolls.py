@@ -426,6 +426,7 @@ async def make_roll(request: Request, char_id: int, db: Session = Depends(get_db
         grants = (owner.granted_account_ids or []) if owner else []
         record, is_owner_roll = should_record_roll(viewer, character, grants)
     combat_targets.lock_target(db, character, body, live)
+    combat_targets.lock_duel(db, character, body)
     if live and str(body.get("roll_key") or "").startswith("initiative"):
         fight_log.note_dice_replaced(db, character)  # the new dice replace this round's
     try:
@@ -437,6 +438,7 @@ async def make_roll(request: Request, char_id: int, db: Session = Depends(get_db
     except roll_sessions.RollRefused as exc:
         return JSONResponse({"error": str(exc)}, status_code=400)
     fight_log.record_roll(db, character, body, result)
+    combat_targets.add_stance(db, character, str(body.get("roll_key") or ""), result)
     db.commit()
     return JSONResponse(result)
 
@@ -481,5 +483,7 @@ async def act_on_roll(request: Request, char_id: int, session_id: str,
         return JSONResponse({"error": str(exc), "tracking": roll_sessions.tracking_snapshot(character)},
                             status_code=400)
     fight_log.record_act(db, character, session_id, action, result)
+    if session.mode == "live":
+        combat_targets.add_stance(db, character, session.roll_key, result)
     db.commit()
     return JSONResponse(result)
