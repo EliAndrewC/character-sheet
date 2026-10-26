@@ -809,6 +809,39 @@ class RollHistory(Base):
     )
 
 
+class RestEvent(Base):
+    """One row per Night's Rest taken by a character, whoever clicked it.
+
+    Written by ``nights_rest.perform_nights_rest`` from the sheet's Night's
+    Rest button and from the GM's Rest page, so a player can count the
+    nights they have rested (the Roll History page lists these among the
+    rolls) and the GM can see who has rested recently.
+
+    Deliberately NOT a ``roll_history`` row: a rest has no dice, so it must
+    not reach ``/api/rolls``, the dice card or the roll statistics, and it
+    is recorded for every actor - the GM included - where rolls are not
+    (see ``should_record_roll``).
+
+    Schema note: a brand-new table, so ``create_all`` makes it on first
+    startup and ``_migrate_add_columns`` needs no entry.
+    """
+
+    __tablename__ = "rest_events"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    character_id: Mapped[int] = mapped_column(
+        ForeignKey("characters.id"), nullable=False, index=True,
+    )
+    actor_discord_id: Mapped[str] = mapped_column(String, nullable=False)
+    # True iff the actor owned the character at the time (stored, like
+    # RollHistory.is_owner_roll, so an owner change does not rewrite it).
+    is_owner_action: Mapped[bool] = mapped_column(default=False)
+    accelerate: Mapped[bool] = mapped_column(default=False)
+    # apply_nights_rest's summary: sw_healed, sw_remaining, vp_after, ...
+    summary: Mapped[Optional[Dict[str, Any]]] = mapped_column(JSON, default=dict)
+    created_at: Mapped[datetime] = mapped_column(server_default=func.now())
+
+
 class Conversation(Base):
     """The conversation the GM currently has open with one gaming group.
 

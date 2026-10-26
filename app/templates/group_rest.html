@@ -1,0 +1,165 @@
+{% extends "base.html" %}
+
+{% block title %}L7R - {{ group.name }} Rest{% endblock %}
+
+{% block nav_center %}<a href="/groups/{{ group.id }}" class="pointer-events-auto hover:underline" data-testid="group-nav-link">{{ group.name }}</a> Rest{% endblock %}
+
+{# This is a GM tool; the "New Character" control isn't a primary action here. #}
+{% block nav_new_character %}{% endblock %}
+
+{% block content %}
+<div x-data='groupRest({{ group.id }}, {{ cards | tojson }})'
+     class="space-y-6 max-w-3xl mx-auto">
+    <div class="flex items-center justify-between gap-3">
+        <h1 class="text-xl font-bold text-ink">Night's Rest</h1>
+        <a href="/groups/{{ group.id }}" class="text-sm text-accent hover:underline">&larr; Back to {{ group.name }}</a>
+    </div>
+
+    <template x-if="chars.length === 0">
+        <p class="text-ink/60 text-sm" data-testid="group-rest-empty">
+            No visible characters in this group yet.
+        </p>
+    </template>
+
+    <template x-if="chars.length > 0">
+        <section class="bg-white rounded-lg shadow border border-ink/10 p-4 space-y-3"
+                 data-testid="mass-rest">
+            <h2 class="font-bold text-ink">Rest everyone</h2>
+            <p class="text-xs text-ink/60">
+                Applies a Night's Rest to all
+                <span x-text="chars.length"></span> character<span x-show="chars.length !== 1">s</span> below,
+                exactly as their own Night's Rest button would. Each one shows in that
+                character's Roll History. Rests from the last {{ recent_days }} days are listed
+                on each card.
+            </p>
+            <div class="flex flex-wrap items-center gap-3">
+                <button type="button" @click="restAll()" :disabled="massBusy"
+                        data-testid="mass-rest-btn"
+                        class="btn-primary px-4 py-2 rounded text-sm font-medium disabled:opacity-40">
+                    Rest everyone
+                </button>
+                <p x-show="massError" x-cloak class="text-sm text-red-700" data-testid="mass-rest-error" x-text="massError"></p>
+                <p x-show="massOk" x-cloak class="text-sm text-success" data-testid="mass-rest-ok" x-text="massOk"></p>
+            </div>
+        </section>
+    </template>
+
+    <template x-for="c in chars" :key="c.id">
+        <section class="bg-white rounded-lg shadow border border-ink/10 p-4 space-y-3"
+                 data-group-rest-card :data-character-id="c.id">
+            <div class="flex flex-wrap items-start justify-between gap-3">
+                <div class="min-w-0">
+                    <a class="font-bold text-ink hover:underline truncate block" :href="'/characters/' + c.id" x-text="c.name"></a>
+                    <div class="text-xs text-ink/50">Player: <span x-text="c.owner_display_name"></span></div>
+                </div>
+                <button type="button" @click="restOne(c)" :disabled="rowBusy[c.id]"
+                        data-testid="row-rest-btn"
+                        class="btn-secondary px-3 py-2 rounded text-sm font-medium disabled:opacity-40 shrink-0">
+                    Apply Night's Rest
+                </button>
+            </div>
+
+            <div class="text-sm">
+                <div class="text-xs font-medium text-ink/50 mb-1">Rests in the last {{ recent_days }} days</div>
+                <p x-show="c.rests.length === 0" data-testid="no-recent-rest"
+                   class="text-sm text-amber-800">None</p>
+                <ul x-show="c.rests.length > 0" class="space-y-0.5" data-testid="recent-rests">
+                    <template x-for="r in c.rests" :key="r.id">
+                        <li class="text-ink/80" data-testid="recent-rest">
+                            <span class="font-mono text-xs tabular-nums" x-text="formatWhen(r.created_at)"></span>
+                            <span class="text-xs text-ink/50" x-text="r.by_owner ? '' : '(by ' + r.actor_name + ')'"></span>
+                            <span class="text-xs text-ink/50" x-show="r.sw_healed > 0"
+                                  x-text="'- healed ' + r.sw_healed + ' SW'"></span>
+                        </li>
+                    </template>
+                </ul>
+            </div>
+
+            <div class="text-xs border-t border-ink/10 pt-2" data-testid="would-restore">
+                <template x-if="c.would_restore.length">
+                    <span class="text-ink/70"><span class="font-medium">A rest now would:</span>
+                        <span x-text="c.would_restore.join('; ')"></span></span>
+                </template>
+                <template x-if="!c.would_restore.length">
+                    <span class="text-ink/50">Nothing to restore right now.</span>
+                </template>
+            </div>
+            <p x-show="rowError[c.id]" x-cloak class="text-sm text-red-700" x-text="rowError[c.id]"></p>
+            <p x-show="rowOk[c.id]" x-cloak class="text-sm text-success" data-testid="row-rest-ok" x-text="rowOk[c.id]"></p>
+        </section>
+    </template>
+</div>
+
+<script>
+function groupRest(groupId, chars) {
+    return {
+        groupId: groupId,
+        chars: chars,
+        massError: '', massOk: '', massBusy: false,
+        rowError: {}, rowOk: {}, rowBusy: {},
+        // Seed every per-row key up front so :disabled / x-show bind to a
+        // defined falsy value (an undefined key leaves the button disabled).
+        init() {
+            for (const c of this.chars) {
+                this.rowError[c.id] = '';
+                this.rowOk[c.id] = '';
+                this.rowBusy[c.id] = false;
+            }
+        },
+        formatWhen(iso) {
+            // "Mon Oct 19, 9:42pm" in the viewer's own time zone.
+            const d = new Date(iso);
+            const day = d.toLocaleDateString(undefined, {weekday: 'short', month: 'short', day: 'numeric'});
+            let h = d.getHours();
+            const m = String(d.getMinutes()).padStart(2, '0');
+            const ampm = h >= 12 ? 'pm' : 'am';
+            h = h % 12 || 12;
+            return day + ', ' + h + ':' + m + ampm;
+        },
+        async _rest(body) {
+            const resp = await fetch('/groups/' + this.groupId + '/rest/apply', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(body),
+            });
+            const data = await resp.json().catch(() => ({}));
+            if (!resp.ok) throw new Error(data.error || 'Could not apply the rest - please try again.');
+            const fresh = {};
+            for (const c of (data.cards || [])) fresh[c.id] = c;
+            for (const c of this.chars) {
+                const f = fresh[c.id];
+                if (f) { c.rests = f.rests; c.would_restore = f.would_restore; }
+            }
+            return data.rested || [];
+        },
+        async restOne(c) {
+            this.rowError[c.id] = ''; this.rowOk[c.id] = '';
+            if (!window.confirm('Apply a Night\'s Rest to ' + c.name + '?')) return;
+            this.rowBusy[c.id] = true;
+            try {
+                await this._rest({char_id: c.id});
+                this.rowOk[c.id] = 'Night\'s Rest applied.';
+            } catch (e) {
+                this.rowError[c.id] = e.message;
+            } finally {
+                this.rowBusy[c.id] = false;
+            }
+        },
+        async restAll() {
+            this.massError = ''; this.massOk = '';
+            const n = this.chars.length;
+            if (!window.confirm('Apply a Night\'s Rest to all ' + n + ' character' + (n === 1 ? '' : 's') + '?')) return;
+            this.massBusy = true;
+            try {
+                const rested = await this._rest({});
+                this.massOk = 'Night\'s Rest applied to ' + rested.length + ' character(s).';
+            } catch (e) {
+                this.massError = e.message;
+            } finally {
+                this.massBusy = false;
+            }
+        },
+    };
+}
+</script>
+{% endblock %}

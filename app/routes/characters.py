@@ -2211,15 +2211,18 @@ async def nights_rest_apply(
     request: Request, char_id: int, db: Session = Depends(get_db),
 ):
     """Apply a Night's Rest: LW->0, VP regen, per-day pool refresh,
-    SW heal per the cadence, combat-in-progress wipe."""
-    from app.services.nights_rest import apply_nights_rest
+    SW heal per the cadence, combat-in-progress wipe. Recorded as a
+    ``RestEvent`` so it shows in the Roll History."""
+    from app.services.nights_rest import perform_nights_rest
 
     character, err = _nights_rest_auth(request, char_id, db)
     if err is not None:
         return err
     body = await request.json() if (await request.body()) else {}
     accelerate = bool(body.get("accelerate_cadence", False))
-    summary = apply_nights_rest(character, accelerate=accelerate)
+    summary = perform_nights_rest(
+        character, db, request.state.user["discord_id"], accelerate=accelerate,
+    )
     db.commit()
     return JSONResponse({"status": "ok", "applied": summary})
 

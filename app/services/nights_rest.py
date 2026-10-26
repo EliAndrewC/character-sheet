@@ -409,3 +409,32 @@ def apply_nights_rest(character, accelerate: bool = False) -> Dict[str, Any]:
         "lw_healed_to_zero": True,
         "vp_after": character.current_void_points,
     }
+
+
+def perform_nights_rest(character, db, actor_discord_id: str,
+                        accelerate: bool = False) -> Dict[str, Any]:
+    """Apply a Night's Rest AND record it as a ``RestEvent``.
+
+    Every writer goes through here (the sheet's button, the GM's Rest
+    page), so every rest is counted no matter who clicked it. The summary
+    gains the before-values so the history line can say what changed.
+    The caller commits.
+    """
+    from app.models import RestEvent
+    from app.services.auth import is_owning_player
+
+    before = {
+        "lw_before": character.current_light_wounds or 0,
+        "sw_before": character.current_serious_wounds or 0,
+        "vp_before": character.current_void_points or 0,
+    }
+    summary = {**before, **apply_nights_rest(character, accelerate=accelerate)}
+    db.add(RestEvent(
+        character_id=character.id,
+        actor_discord_id=actor_discord_id,
+        is_owner_action=is_owning_player(
+            actor_discord_id, character.owner_discord_id),
+        accelerate=accelerate,
+        summary=summary,
+    ))
+    return summary

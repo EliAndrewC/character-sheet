@@ -781,7 +781,16 @@
                         void points are full, no per-day abilities have been used,
                         and there are no serious wounds to heal.
                     </p>
-                    <div class="flex justify-end">
+                    <p class="text-xs text-ink/55 mb-4">
+                        Rest anyway to count the night: every Night's Rest is listed in
+                        the Roll History.
+                    </p>
+                    <div class="flex justify-end gap-2">
+                        <button type="button" data-action="confirm-nights-rest-anyway"
+                                @click="confirmNightsRest()" :disabled="nightsRestConfirming"
+                                class="btn-ghost px-4 py-2 rounded text-sm font-medium disabled:opacity-40">
+                            Rest anyway
+                        </button>
                         <button type="button" data-action="close-nights-rest-nothing"
                                 @click="showNightsRestNothingModal = false"
                                 class="btn-primary px-4 py-2 rounded text-sm font-medium">

@@ -86,9 +86,8 @@
                 <h1 class="text-3xl font-bold tracking-tight">Roll History</h1>
                 <a href="/probabilities" target="_blank" rel="noopener" data-testid="rh-probability-link"
                    class="text-xs text-accent hover:underline">Probability charts &#8599;</a>
-                <p class="text-sm text-ink/45 mt-0.5" x-show="rolls.length" x-cloak>
-                    <span x-text="rolls.length"></span> roll<span x-show="rolls.length !== 1">s</span> recorded
-                </p>
+                <p class="text-sm text-ink/45 mt-0.5" x-show="rolls.length" x-cloak
+                   data-testid="rh-counts" x-text="countsText()"></p>
             </div>
             <label class="flex items-center gap-2 text-xs font-medium text-ink/60 cursor-pointer select-none
                           bg-white border border-ink/15 rounded-full px-3 py-1.5 shadow-sm hover:border-ink/30 transition-colors">
@@ -146,10 +145,11 @@
                     <span></span>
                 </div>
 
-                <template x-for="r in group.items" :key="r.id">
-                    <div class="rh-row group px-4 py-3 text-sm cursor-pointer hover:bg-ink/[0.02] transition-colors"
-                         :class="r.is_hidden ? 'opacity-50' : ''"
-                         :data-roll-id="r.id"
+                <template x-for="r in group.items" :key="r.key">
+                    <div class="rh-row group px-4 py-3 text-sm transition-colors"
+                         :class="(r.is_hidden ? 'opacity-50 ' : '') + (isRest(r) ? 'bg-gold/[0.06]' : 'cursor-pointer hover:bg-ink/[0.02]')"
+                         :data-roll-id="isRest(r) ? null : r.id"
+                         :data-rest-id="isRest(r) ? r.id : null"
                          :data-is-hidden="r.is_hidden ? '1' : '0'"
                          @click="rowClick(r, $event)">
 
@@ -160,6 +160,24 @@
                         {# Flex container, NOT itself a tooltip trigger: the
                            roll-type label and the Impaired tag are separate
                            triggers so each shows only its own tooltip. #}
+                        {# A Night's Rest: no dice, no TN, no note or Hide - it is
+                           here so the nights rested can be counted. #}
+                        <template x-if="isRest(r)">
+                        <div class="rh-row__roll flex flex-wrap items-center gap-x-1.5 gap-y-0.5 min-w-0">
+                            <span class="tooltip-trigger relative font-medium text-ink cursor-help"
+                                  data-tooltip-clamp data-testid="rest-label">
+                                <span>&#9790; Night's Rest</span>
+                                <div class="tooltip-content absolute left-0 top-full z-20 mt-1 p-3 bg-ink text-parchment text-xs font-normal leading-snug rounded shadow-lg w-72 whitespace-pre-line"
+                                     data-testid="rest-explainer" x-text="restDetails(r)"></div>
+                            </span>
+                            <template x-if="!r.is_owner_roll">
+                                <span class="text-xs text-ink/50"
+                                      data-testid="non-owner-badge"
+                                      x-text="'[by ' + r.actor_name + ']'"></span>
+                            </template>
+                        </div>
+                        </template>
+                        <template x-if="!isRest(r)">
                         <div class="rh-row__roll flex flex-wrap items-center gap-x-1.5 gap-y-0.5 min-w-0">
                             <span class="tooltip-trigger relative font-medium text-ink cursor-help"
                                   data-tooltip-clamp data-testid="roll-type">
@@ -222,6 +240,7 @@
                                       x-text="'[by ' + r.actor_name + ']'"></span>
                             </template>
                         </div>
+                        </template>
 
                         <div class="rh-row__tn font-mono text-xs text-ink/45 tabular-nums"
                              x-text="(r.tn !== null && r.tn !== undefined) ? ('TN ' + r.tn) : ''"
@@ -247,12 +266,17 @@
                                           data-testid="lucky-reroll-total"></span>
                                 </span>
                             </template>
-                            <template x-if="!(r.payload && r.payload.lucky)">
+                            <template x-if="isRest(r)">
+                                <span class="text-xs text-ink/60" x-text="restResult(r)"
+                                      data-testid="rest-result"></span>
+                            </template>
+                            <template x-if="!isRest(r) && !(r.payload && r.payload.lucky)">
                                 <span :class="resultClass(r)" x-text="resultText(r)"
                                       data-testid="roll-result"></span>
                             </template>
                         </div>
 
+                        <template x-if="!isRest(r)">
                         <div class="rh-row__note">
                             <input type="text"
                                    x-model="r.annotation"
@@ -261,7 +285,9 @@
                                    placeholder="Add a note..."
                                    class="rh-note-input w-full text-xs text-ink/70 px-0 py-1 cursor-text">
                         </div>
+                        </template>
 
+                        <template x-if="!isRest(r)">
                         <div class="rh-row__acts flex items-center justify-end gap-2">
                             <button type="button"
                                     :data-action="r.is_hidden ? 'unhide-roll' : 'hide-roll'"
@@ -282,6 +308,7 @@
                                 </svg>
                             </button>
                         </div>
+                        </template>
                     </div>
                 </template>
             </div>
@@ -339,6 +366,35 @@
                     ? { month: 'short', day: 'numeric' }
                     : { month: 'short', day: 'numeric', year: 'numeric' };
                 return d.toLocaleDateString(undefined, opts);
+            },
+
+            isRest(r) { return r.kind === 'rest'; },
+
+            countsText() {
+                const rests = this.rolls.filter(r => this.isRest(r)).length;
+                const rolls = this.rolls.length - rests;
+                const parts = [];
+                if (rolls) parts.push(rolls + ' roll' + (rolls === 1 ? '' : 's'));
+                if (rests) parts.push(rests + " Night's Rest" + (rests === 1 ? '' : 's'));
+                return parts.join(' and ') + ' recorded';
+            },
+
+            restResult(r) {
+                const healed = (r.summary && r.summary.sw_healed) || 0;
+                return healed
+                    ? healed + ' serious wound' + (healed === 1 ? '' : 's') + ' healed'
+                    : 'no serious wounds healed';
+            },
+
+            restDetails(r) {
+                const s = r.summary || {};
+                const lines = [];
+                if (typeof s.lw_before === 'number') lines.push('Light wounds: ' + s.lw_before + ' -> 0');
+                if (typeof s.sw_before === 'number') lines.push('Serious wounds: ' + s.sw_before + ' -> ' + s.sw_remaining);
+                if (typeof s.vp_before === 'number') lines.push('Void points: ' + s.vp_before + ' -> ' + s.vp_after);
+                if (r.accelerate) lines.push('Healing cadence accelerated.');
+                lines.push('Per-day abilities refreshed.');
+                return lines.join('\n');
             },
 
             resultText(r) {
@@ -414,6 +470,8 @@
             },
 
             rowClick(r, ev) {
+                // A Night's Rest has no dice, so nothing to open.
+                if (this.isRest(r)) return;
                 // The whole row opens the read-only results modal, EXCEPT when
                 // the click lands on something with its own behaviour: the note
                 // input, a button (Hide / the details chevron), or a tooltip

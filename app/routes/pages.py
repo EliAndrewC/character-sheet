@@ -668,6 +668,136 @@ async def group_xp_award(
     })
 
 
+#: How far back the Rest page looks for rests: last week's session and this one.
+REST_RECENT_DAYS = 8
+
+
+def _rest_cards(db: Session, chars: List[Character]) -> List[Dict[str, Any]]:
+    """What the Rest page shows per character: its rests in the last
+    ``REST_RECENT_DAYS`` days (newest first, with who clicked), and what a
+    rest would restore right now, so the GM can see who still needs one."""
+    from datetime import datetime, timedelta, timezone
+
+    from app.models import RestEvent
+    from app.routes.rolls import _iso_utc
+    from app.services.nights_rest import compute_nights_rest_plan
+
+    ids = [c.id for c in chars]
+    # created_at is SQLite's naive UTC, so the bound must be naive UTC too.
+    since = (datetime.now(timezone.utc) - timedelta(days=REST_RECENT_DAYS)
+             ).replace(tzinfo=None)
+    rests = (
+        db.query(RestEvent)
+        .filter(RestEvent.character_id.in_(ids), RestEvent.created_at >= since)
+        .order_by(RestEvent.created_at.desc(), RestEvent.id.desc())
+        .all()
+    ) if ids else []
+    people = ({c.owner_discord_id for c in chars if c.owner_discord_id}
+              | {r.actor_discord_id for r in rests})
+    names = {
+        u.discord_id: u.display_name or u.discord_name
+        for u in db.query(UserModel).filter(UserModel.discord_id.in_(people)).all()
+    } if people else {}
+    cards = []
+    for c in chars:
+        plan = compute_nights_rest_plan(c)
+        cards.append({
+            "id": c.id,
+            "name": c.name,
+            "owner_display_name": names.get(c.owner_discord_id, c.player_name),
+            "rests": [
+                {
+                    "id": r.id,
+                    "created_at": _iso_utc(r.created_at),
+                    "actor_name": names.get(r.actor_discord_id, r.actor_discord_id),
+                    "by_owner": bool(r.is_owner_action),
+                    "sw_healed": (r.summary or {}).get("sw_healed", 0),
+                }
+                for r in rests if r.character_id == c.id
+            ],
+            "would_restore": [e["label"] for e in plan["effects"]],
+        })
+    return cards
+
+
+@router.get("/groups/{group_id}/rest", response_class=HTMLResponse)
+def group_rest(request: Request, group_id: int, db: Session = Depends(get_db)):
+    """GM Night's Rest page for one gaming group. Admin-only.
+
+    Shows who has rested in the last ``REST_RECENT_DAYS`` days and applies
+    a Night's Rest to everyone or to one character through
+    ``POST /groups/{id}/rest/apply``.
+    """
+    deny = _require_admin(request)
+    if deny is not None:
+        return deny
+    group = db.query(GamingGroup).filter(GamingGroup.id == group_id).first()
+    if not group:
+        return HTMLResponse("Group not found", status_code=404)
+    cards = _rest_cards(db, _visible_group_characters(db, group_id))
+    return _templates().TemplateResponse(
+        request=request,
+        name="group_rest.html",
+        context={"group": group, "cards": cards, "recent_days": REST_RECENT_DAYS},
+    )
+
+
+@router.post("/groups/{group_id}/rest/apply")
+async def group_rest_apply(
+    request: Request, group_id: int, db: Session = Depends(get_db)
+):
+    """Apply a Night's Rest to characters in a gaming group. Admin-only.
+
+    Body: ``{"char_id": int|null}``: that one visible character, or every
+    visible character. Each is recorded as a ``RestEvent`` by the GM, the
+    same as the sheet's button. Returns ``{"ok": true, "cards": [...]}``
+    (the Rest page's cards, refreshed).
+    """
+    from app.services.nights_rest import perform_nights_rest
+
+    user = getattr(request.state, "user", None)
+    if not user:
+        return JSONResponse({"error": "Not authenticated"}, status_code=401)
+    if not is_admin(user["discord_id"]):
+        return JSONResponse({"error": "Admin access required"}, status_code=403)
+
+    group = db.query(GamingGroup).filter(GamingGroup.id == group_id).first()
+    if not group:
+        return JSONResponse({"error": "Group not found"}, status_code=404)
+
+    try:
+        body = await request.json()
+    except Exception:
+        return JSONResponse({"error": "Invalid JSON"}, status_code=400)
+    if not isinstance(body, dict):
+        return JSONResponse({"error": "Invalid payload"}, status_code=400)
+
+    group_chars = _visible_group_characters(db, group_id)
+    char_id = body.get("char_id")
+    if char_id is not None:
+        if isinstance(char_id, bool) or not isinstance(char_id, int):
+            return JSONResponse(
+                {"error": "char_id must be an integer"}, status_code=400
+            )
+        targets = [c for c in group_chars if c.id == char_id]
+        if not targets:
+            return JSONResponse(
+                {"error": "Character not in this group"}, status_code=404
+            )
+    else:
+        targets = group_chars
+
+    for c in targets:
+        perform_nights_rest(c, db, user["discord_id"])
+    db.commit()
+
+    return JSONResponse({
+        "ok": True,
+        "rested": [c.id for c in targets],
+        "cards": _rest_cards(db, group_chars),
+    })
+
+
 @router.get("/characters/{char_id}", response_class=HTMLResponse)
 def view_character(request: Request, char_id: int, db: Session = Depends(get_db)):
     character = db.query(Character).filter(Character.id == char_id).first()
@@ -1543,7 +1673,7 @@ def roll_history_page(
     the show-hidden toggle is client-side, so flipping it doesn't
     round-trip.
     """
-    from app.models import RollHistory
+    from app.models import RestEvent, RollHistory
     from app.routes.rolls import _iso_utc
     from app.services.roll_descriptions import describe_roll, label_for_roll
 
@@ -1579,9 +1709,18 @@ def roll_history_page(
         )
         .all()
     )
+    rests = (
+        db.query(RestEvent)
+        .filter(RestEvent.character_id == char_id)
+        .order_by(RestEvent.created_at.desc(), RestEvent.id.desc())
+        .all()
+    )
 
     # Resolve display names for every actor that appears in the list.
-    actor_ids = sorted({r.actor_discord_id for r in rolls if r.actor_discord_id})
+    actor_ids = sorted(
+        {r.actor_discord_id for r in rolls if r.actor_discord_id}
+        | {r.actor_discord_id for r in rests if r.actor_discord_id}
+    )
     actor_users = (
         db.query(UserModel)
         .filter(UserModel.discord_id.in_(actor_ids))
@@ -1598,6 +1737,8 @@ def roll_history_page(
     # Serialize rolls + explainers for the client JSON blob.
     rolls_json = [
         {
+            "kind": "roll",
+            "key": f"roll-{r.id}",
             "id": r.id,
             "roll_key": r.roll_key,
             "roll_label": label_for_roll(r.roll_key, r.payload),
@@ -1614,6 +1755,24 @@ def roll_history_page(
         }
         for r in rolls
     ]
+    # Night's Rests share the list so a player can count them; the page
+    # sorts by time, newest first, and gives them their own row.
+    rolls_json += [
+        {
+            "kind": "rest",
+            "key": f"rest-{r.id}",
+            "id": r.id,
+            "summary": r.summary or {},
+            "accelerate": bool(r.accelerate),
+            "actor_name": actor_names.get(r.actor_discord_id, r.actor_discord_id),
+            "is_owner_roll": bool(r.is_owner_action),
+            "is_hidden": False,
+            "created_at": _iso_utc(r.created_at),
+        }
+        for r in rests
+    ]
+    # Stable, so each list keeps its own newest-first order within a second.
+    rolls_json.sort(key=lambda r: r["created_at"] or "", reverse=True)
 
     return _templates().TemplateResponse(
         request=request,

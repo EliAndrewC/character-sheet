@@ -1024,6 +1024,12 @@ The Suzume family of the Sparrow clan is drawn from Crane Doji Artisans and merc
 - [x] The XP link is hidden from non-admins and the page rejects them (403) → `test_group_xp.py::test_xp_page_is_admin_only`
 - [x] No horizontal overflow at 375px, and "Award to all" stays visible → `test_group_xp.py::test_xp_page_has_no_horizontal_overflow_on_a_phone`
 
+## Night's Rest records + GM Rest page (roll_history.html, group_rest.html)
+
+- [x] Every Night's Rest is a Roll History line (count in the header, "no serious wounds healed" result, before/after tooltip, no Hide / note, clicking opens nothing); the sheet's "nothing to restore" dialog offers "Rest anyway" → `test_rest.py::test_each_rest_is_a_roll_history_line`
+- [x] Group Summary's GM "Rest" link opens the page; cards list rests from the last 8 days and what a rest would restore; "Apply Night's Rest" rests one character inline, "Rest everyone" (after a confirm) rests all, and both land in the Roll History → `test_rest.py::test_gm_rest_page_rests_one_then_everyone`
+- [x] No horizontal overflow at 375px on the Rest page ("Rest everyone" visible) or the Group Summary with the extra nav link → `test_rest.py::test_rest_page_and_group_nav_fit_a_phone`
+
 ## GM — Group Money Awards (group_money.html)
 
 - [x] Nav title reads "<Group> Money" with the group name linking back to the Group Summary (group sub-page convention) → `test_group_money.py::test_money_page_nav_title_links_back_to_group`

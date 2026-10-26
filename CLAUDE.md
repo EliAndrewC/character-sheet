@@ -377,6 +377,13 @@ Design, the GM's answers (Q1-Q8) and the checklist: `archery-design/design.md`. 
 - **Damage is two rolls** (A12): `arrow_table` on the attack session rolls the d10 as a child session (`archery:table`, no history row) that takes only Lucky / a PCP reroll (`_arrow_table_guard`); then `damage` (`_arrow_damage`, refused until the table is rolled) reads that die and picks 10k2/4/6/8 from odds each 5 of excess shifts; past 45, raises. The modal keeps the attack session id (`atkArrowAttackSessionId`) for the damage and rerolls the table outside the generic reroll path, so the attack's history row is never touched. **Ability damage dice are never added to it**: each is 5 excess (Bayushi: 10 per void point). Serious wounds (1, +1 with double attack, -1 on a failed parry) ride the payload (`serious_wounds`), which a history PATCH cannot change (`rolls.ARROW_DAMAGE_KEYS`). Nothing is written to the target.
 - Tests: `tests/test_archery.py`; clicktests `tests/e2e/test_archery.py` (mark `archery`).
 
+## Night's Rest records and the GM Rest page
+
+- **Every Night's Rest is a `RestEvent` row** (`models.RestEvent`), written by `nights_rest.perform_nights_rest` - the ONE entry point for both the sheet's button and the GM page; never call `apply_nights_rest` from a route directly or the rest goes uncounted. It is recorded for every actor, the GM included (unlike rolls, `should_record_roll`), and a rest that restores nothing still counts (the sheet's "nothing to restore" dialog has "Rest anyway").
+- **Not a `roll_history` row on purpose**: a rest has no dice, so it must not reach `/api/rolls` (gm-assistant), the dice card or the statistics. The Roll History page merges rests into its list (`kind: "rest"`, keyed `rest-<id>`), with no Hide, note, or details modal - players count them.
+- **`/groups/{id}/rest`** (admin, linked "Rest" in the Group Summary nav) shows each visible PC's rests from the last `REST_RECENT_DAYS` (8: last week's session and this one) and what a rest would restore now; `POST /groups/{id}/rest/apply {"char_id": int|null}` rests one or everyone. Only rests from 2026-10-26 on exist; earlier ones were never recorded.
+- Tests: `tests/test_rest_events.py`; clicktests `tests/e2e/test_rest.py`.
+
 ## Roll statistics (opt-in averages and probability charts)
 
 Design and decisions P1-P11: `probability-design/design.md`. A per-viewer setting (`User.preferences["roll_stats_enabled"]`, Profile > Roll Settings, off by default) shows an average beside every roll and opens a statistics modal (`partials/sheet/roll_stats.html`, badges from `_roll_avg.html`).
