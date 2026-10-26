@@ -748,3 +748,37 @@ def test_dark_secret_map_page(page, live_server_url):
     tooltip.wait_for(state="hidden", timeout=2000)
     page.locator('[data-testid="ds-map-back"]').click()
     page.wait_for_url(f"**/groups/{gid}", timeout=10000)
+
+
+def test_group_summary_hidden_tooltips_do_not_widen_the_page(page, live_server_url):
+    """A hidden tooltip is ``visibility: hidden``, which still takes up
+    layout room: a ``w-80`` tooltip opening off a chip near a card's right
+    edge used to hang past the viewport and give the page a horizontal
+    scroll with nothing in it (a 1920px screen zoomed to 175%). The Group
+    Summary's chips are ``data-tooltip-clamp``, so each tooltip is shifted
+    back on screen. The Honor tooltip of a Virtue character sits mid-line,
+    so at phone width it is the one that overflowed."""
+    create_and_apply(page, live_server_url, name="WideTipCard",
+                     school="akodo_bushi", advantages=["virtue"])
+    page.goto(page.url + "/edit")
+    page.wait_for_selector('select[name="gaming_group_id"]')
+    page.locator('select[name="gaming_group_id"]').select_option(label="Tuesday Group")
+    page.wait_for_timeout(300)
+    page.goto(live_server_url)
+    page.locator('[data-testid="group-link"]', has_text="Tuesday Group").click()
+    page.wait_for_url("**/groups/**")
+    group_url = page.url
+    card = page.locator('[data-group-card]').filter(has_text="WideTipCard")
+    assert card.locator('[data-testid="card-honor-tooltip"]').count() == 1
+    for width in (375, 446, 627, 781, 1097):
+        page.set_viewport_size({"width": width, "height": 700})
+        page.goto(group_url)
+        page.wait_for_load_state("networkidle")
+        sizes = page.evaluate("""() => ({
+            client: document.documentElement.clientWidth,
+            scroll: document.documentElement.scrollWidth,
+            tips: [...document.querySelectorAll('[data-tooltip-clamp] > .tooltip-content')]
+                .map(t => Math.round(t.getBoundingClientRect().right)),
+        })""")
+        assert sizes["scroll"] <= sizes["client"], (width, sizes)
+        assert all(r <= sizes["client"] for r in sizes["tips"]), (width, sizes)
