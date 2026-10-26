@@ -12,13 +12,16 @@
    in both views - players may know who is Impaired. #}
 {# "Can strike >": checkboxes for everyone on the other side; each one is
    a striking-distance line between this card and that one. A flyout on
-   wide screens, inline beneath the item on narrow ones. #}
+   wide screens, inline beneath the item on narrow ones. The flyout's box
+   starts flush against the menu item and its gap is transparent PADDING,
+   not a margin: a margin was a strip where the pointer was over neither
+   the item nor the flyout, so moving across it closed the flyout. #}
 {% macro can_strike(who, others, pc_id, npc_id, flyout) -%}
 <div class="relative" x-data="{ strikeOpen: false }" @mouseenter="strikeOpen = true" @mouseleave="strikeOpen = false" @click.stop>
     <button type="button" @click="strikeOpen = !strikeOpen" :data-testid="'{{ who }}-can-strike-' + {{ who }}.id"
             class="flex w-full items-center justify-between gap-3 px-4 py-2 hover:bg-parchment text-left">Can strike <span class="text-ink/40">&#9656;</span></button>
-    <div x-show="strikeOpen" x-cloak
-         class="lg:absolute lg:top-0 {{ flyout }} bg-white lg:rounded-lg lg:shadow-xl lg:border border-ink/20 py-1 min-w-[200px] z-40">
+    <div x-show="strikeOpen" x-cloak class="lg:absolute lg:top-0 {{ flyout }} z-40" :data-testid="'{{ who }}-can-strike-flyout-' + {{ who }}.id">
+    <div class="bg-white lg:rounded-lg lg:shadow-xl lg:border border-ink/20 py-1 min-w-[200px]">
         <template x-for="o in state.{{ others }}" :key="o.id">
             <label class="flex items-center gap-2 px-4 py-1.5 hover:bg-parchment cursor-pointer whitespace-nowrap">
                 <input type="checkbox" :checked="hasReach({{ pc_id }}, {{ npc_id }})"
@@ -28,6 +31,7 @@
             </label>
         </template>
         <p x-show="!state.{{ others }}.length" class="px-4 py-1.5 text-ink/50">Nobody on the other side</p>
+    </div>
     </div>
 </div>
 {%- endmacro %}
@@ -163,7 +167,7 @@
                                      class="absolute right-0 top-full mt-1 z-30 bg-white rounded-lg shadow-xl border border-ink/20 py-1 min-w-[180px] text-sm">
                                     <button type="button" @click="open = false; openRoller(pc, null, $event, 'initiative')" :data-testid="'pc-init-' + pc.id"
                                             class="block w-full text-left px-4 py-2 hover:bg-parchment">Roll initiative</button>
-                                    {{ can_strike('pc', 'npcs', 'pc.id', 'o.id', 'lg:left-full lg:ml-1') }}
+                                    {{ can_strike('pc', 'npcs', 'pc.id', 'o.id', 'lg:left-full lg:pl-2') }}
                                     {# Whom this PC is in an iaijutsu duel with: their duel
                                        modal and Evaluate Stance roll use that NPC (combat_targets). #}
                                     <label class="block px-4 py-2 border-t border-ink/10" @click.stop>
@@ -325,7 +329,7 @@
                                        class="block w-full text-left px-4 py-2 hover:bg-parchment">Sheet</a>
                                     <button type="button" @click="removeNpc(npc)" :data-testid="'npc-remove-' + npc.id"
                                             class="block w-full text-left px-4 py-2 hover:bg-parchment">Leave fight</button>
-                                    {{ can_strike('npc', 'pcs', 'o.id', 'npc.id', 'lg:right-full lg:mr-1') }}
+                                    {{ can_strike('npc', 'pcs', 'o.id', 'npc.id', 'lg:right-full lg:pr-2') }}
                                     <div class="border-t border-ink/10 mt-1 pt-1 px-4 py-1 text-[10px] uppercase tracking-wide text-ink/40">Status</div>
                                     <template x-for="opt in [['fighting', 'Fighting'], ['unconscious', 'Down'], ['dead', 'Dead']]" :key="opt[0]">
                                         <button type="button" @click="setStatus(npc, opt[0])"

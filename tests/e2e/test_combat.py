@@ -825,3 +825,28 @@ def test_the_gm_puts_a_pc_in_a_duel_and_their_duel_and_stance_rolls_know_the_opp
     page.locator(f'[data-testid="pc-menu-{pc["id"]}"]').click()
     page.locator(f'[data-testid="pc-duel-{pc["id"]}"]').select_option("")
     expect(page.locator(f'[data-testid="pc-dueling-{pc["id"]}"]')).to_be_hidden()
+
+
+@pytest.mark.parametrize("side", ["pc", "npc"])
+def test_a_can_strike_flyout_stays_open_while_the_pointer_crosses_to_it(page, live_server_url, side):
+    """The flyout sits beside the kebab menu; moving the pointer slowly from
+    "Can strike" into it must never pass over a strip that belongs to
+    neither (that strip used to close the flyout)."""
+    gid, pc, (npc,) = _pc_in_fight(page, live_server_url, wave_men=1)
+    page.set_viewport_size({"width": 1280, "height": 900})
+    page.goto(f"{live_server_url}/groups/{gid}/combat")
+    me, other = (pc, npc) if side == "pc" else (npc, pc)
+    page.locator(f'[data-testid="{side}-menu-{me["id"]}"]').click()
+    item = page.locator(f'[data-testid="{side}-can-strike-{me["id"]}"]')
+    item.hover()
+    flyout = page.locator(f'[data-testid="{side}-can-strike-flyout-{me["id"]}"]')
+    expect(flyout).to_be_visible()
+    pair = (me["id"], other["id"]) if side == "pc" else (other["id"], me["id"])
+    box = page.locator(f'[data-testid="{side}-card-{me["id"]}"] [data-testid="reach-{pair[0]}-{pair[1]}"]')
+    start, end = item.bounding_box(), box.bounding_box()
+    page.mouse.move(start["x"] + start["width"] / 2, start["y"] + start["height"] / 2)
+    # Slowly, one small step at a time, to the checkbox.
+    page.mouse.move(end["x"] + end["width"] / 2, end["y"] + end["height"] / 2, steps=60)
+    expect(flyout).to_be_visible()
+    box.check()
+    expect(box).to_be_checked()
