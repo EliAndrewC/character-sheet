@@ -427,13 +427,12 @@ def test_phase_route_is_the_gms(client, fight):
     assert client.post(_url(fight, "/phase"), json={"delta": 1}).status_code == 409
 
 
-def test_next_phase_is_the_lowest_unspent_die_never_before_now(fight):
+def test_next_phase_is_the_lowest_unspent_die_even_a_held_one(fight):
     npc = fight["npc"]
     npc.action_dice = [{"value": 3, "spent": True}, {"value": 7, "spent": False}, {"value": 5, "spent": False}]
-    assert ct.next_phase(npc, 2) == 5
-    assert ct.next_phase(npc, 6) == 6  # a held die can be used now
+    assert ct.next_phase(npc) == 5  # whatever the fight's phase: a held die shows its own
     npc.action_dice = [{"value": 3, "spent": True}]
-    assert ct.next_phase(npc, 2) == ct.NO_ACTION_PHASE
+    assert ct.next_phase(npc) == ct.NO_ACTION_PHASE
 
 
 def _school(pc, school, dan):

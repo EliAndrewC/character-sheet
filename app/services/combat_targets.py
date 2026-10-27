@@ -109,11 +109,13 @@ BLESSINGS = {"attack": "attacks", "parry": "parries", "damage": "damage", "wound
 BLESSING_ABILITY = "priest_combat_rounding"
 
 
-def next_phase(npc: Character, current: int) -> int:
-    """When this NPC acts next: its lowest unspent die, but never before
-    the current phase (a held die can be used now); 11 with none left."""
+def next_phase(npc: Character) -> int:
+    """This NPC's next action: its lowest unspent die, even one held from an
+    earlier phase (GM, 2026-10-27: in phase 3 a die held from phase 1 is
+    shown as 1 - the Kakita 3rd Dan bonus is clamped at 0 anyway); 11 with
+    none left."""
     left = [int(d.get("value") or 0) for d in npc.action_dice or [] if not d.get("spent")]
-    return max(current, min(left)) if left else NO_ACTION_PHASE
+    return min(left) if left else NO_ACTION_PHASE
 
 
 def knows_next_actions(pc: Character) -> bool:
@@ -250,7 +252,7 @@ def for_pc(db: Session, pc: Character) -> Optional[Dict[str, Any]]:
             entry.update(_numbers(link.character))
         # Kakita 3rd Dan: targets within striking range; Kitsuki 4th Dan: anyone.
         if sees_next and (reachable or sees_parry):
-            entry["next_phase"] = next_phase(link.character, phase)
+            entry["next_phase"] = next_phase(link.character)
         targets.append(entry)
     weapon = weapon_for(encounter, pc.id)
     duel = duel_link(encounter, pc.id)
@@ -379,7 +381,7 @@ def lock_phase(db: Session, character: Character, body: Dict[str, Any]) -> None:
     if link is not None and knows_next_actions(character):
         reach = {p[1] for p in encounter.reach or [] if p[0] == character.id}
         if link.character_id in reach or knows_parry(character):
-            body["kakita_defender_phase"] = next_phase(link.character, phase)
+            body["kakita_defender_phase"] = next_phase(link.character)
 
 
 def lock_duel(db: Session, character: Character, body: Dict[str, Any]) -> None:

@@ -661,9 +661,9 @@ def test_an_npcs_next_action_is_public_once_a_kakita_who_can_strike_it_knows_it(
     npcs.set_reach(s, enc, pc.id, npc.id, True, [pc.id], [npc.id])
     s.commit()
     assert cv.public_state(s, g)["npcs"][0]["next_action"] == {"phase": 7, "known_by": ["Yudai"]}
-    enc.current_phase = 8  # a held die acts now
+    enc.current_phase = 8  # the 7 is held: it is still the next action, shown as 7 (GM, 2026-10-27)
     s.commit()
-    assert cv.public_state(s, g)["npcs"][0]["next_action"]["phase"] == 8
+    assert cv.public_state(s, g)["npcs"][0]["next_action"]["phase"] == 7
     npc.action_dice = [{"value": v, "spent": True} for v in (7, 4, 9)]
     s.commit()
     assert cv.public_state(s, g)["npcs"][0]["next_action"]["phase"] == 11  # none left
