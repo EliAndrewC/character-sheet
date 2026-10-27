@@ -170,6 +170,10 @@
                                 <div class="tooltip-content absolute left-0 top-full z-20 mt-1 p-3 bg-ink text-parchment text-xs font-normal leading-snug rounded shadow-lg w-72 whitespace-pre-line"
                                      data-testid="rest-explainer" x-text="restDetails(r)"></div>
                             </span>
+                            <template x-if="r.game_date">
+                                <span class="text-xs text-ink/70" data-testid="rest-game-date"
+                                      x-text="r.game_date.label"></span>
+                            </template>
                             <template x-if="!r.is_owner_roll">
                                 <span class="text-xs text-ink/50"
                                       data-testid="non-owner-badge"

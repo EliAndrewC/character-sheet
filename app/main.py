@@ -115,6 +115,16 @@ templates.env.globals["extended_keepalive_enabled"] = extended_keepalive_enabled
 # ``X-App-Build`` header of later responses to notice a deploy.
 templates.env.globals["app_build_id"] = build_id
 
+
+def rokugan_months():
+    """The 12 months of Rokugan's calendar with their day labels, for the
+    Night's Rest date picker (``partials/rest_date_picker.html``)."""
+    from app.services.game_calendar import load_calendar
+    return load_calendar()["months"]
+
+
+templates.env.globals["rokugan_months"] = rokugan_months
+
 # Static files
 # Ensure correct font MIME types - Python's mimetypes doesn't know woff2 by
 # default, so StaticFiles would otherwise serve fonts as text/plain.

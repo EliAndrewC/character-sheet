@@ -200,6 +200,13 @@
                 nightsRestSwRemaining: 0,
                 nightsRestAccelerate: false,
                 nightsRestConfirming: false,
+                // The rest's optional in-game night, edited by the nested
+                // picker (partials/rest_date_picker.html); restCalendar is
+                // the preview's `calendar` (previous rest, next night).
+                restMonth: '',
+                restDay: '',
+                restCalendar: null,
+                restDateError: '',
                 // Read-only roll mode: when canEdit is false, every save()
                 // short-circuits so nothing persists. Banner copy and the
                 // login link come from the same flags.
@@ -941,12 +948,16 @@
                     // /nights-rest/preview endpoint will also 403 a non-editor.
                     if (!this.canEdit) return;
                     this.nightsRestAccelerate = false;
+                    this.restMonth = '';
+                    this.restDay = '';
+                    this.restDateError = '';
                     try {
                         const resp = await fetch(
                             '/characters/' + this._charId + '/nights-rest/preview'
                         );
                         if (!resp.ok) return;
                         const data = await resp.json();
+                        this.restCalendar = data.calendar || null;
                         if (!data.would_change) {
                             this.showNightsRestNothingModal = true;
                             return;
@@ -969,6 +980,8 @@
                 },
                 async confirmNightsRest() {
                     if (this.nightsRestConfirming) return;
+                    const date = window.L7RRestDate.restDateBody(this.restMonth, this.restDay);
+                    if (date.error) { this.restDateError = date.error; return; }
                     this.nightsRestConfirming = true;
                     try {
                         const resp = await fetch(
@@ -978,9 +991,15 @@
                                 headers: {'Content-Type': 'application/json'},
                                 body: JSON.stringify({
                                     accelerate_cadence: this.nightsRestAccelerate,
+                                    ...date,
                                 }),
                             }
                         );
+                        if (resp.status === 400) {
+                            const data = await resp.json().catch(() => ({}));
+                            this.restDateError = data.error || 'Could not rest - please try again.';
+                            return;
+                        }
                         this.showNightsRestModal = false;
                         this.showNightsRestNothingModal = false;
                         if (resp.ok) window.location.reload();

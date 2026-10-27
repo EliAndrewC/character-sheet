@@ -688,6 +688,7 @@ def _rest_cards(db: Session, chars: List[Character]) -> List[Dict[str, Any]]:
 
     from app.models import RestEvent
     from app.routes.rolls import _iso_utc
+    from app.services.game_calendar import game_date_json
     from app.services.nights_rest import compute_nights_rest_plan
 
     ids = [c.id for c in chars]
@@ -720,6 +721,7 @@ def _rest_cards(db: Session, chars: List[Character]) -> List[Dict[str, Any]]:
                     "actor_name": names.get(r.actor_discord_id, r.actor_discord_id),
                     "by_owner": bool(r.is_owner_action),
                     "sw_healed": (r.summary or {}).get("sw_healed", 0),
+                    "game_date": game_date_json(r.game_month, r.game_day),
                 }
                 for r in rests if r.character_id == c.id
             ],
@@ -734,7 +736,8 @@ def group_rest(request: Request, group_id: int, db: Session = Depends(get_db)):
 
     Shows who has rested in the last ``REST_RECENT_DAYS`` days and applies
     a Night's Rest to everyone or to one character through
-    ``POST /groups/{id}/rest/apply``.
+    ``POST /groups/{id}/rest/apply``, optionally dated with an in-game night
+    (the picker's "Next night" counts from the group's latest dated rest).
     """
     deny = _require_admin(request)
     if deny is not None:
@@ -742,11 +745,18 @@ def group_rest(request: Request, group_id: int, db: Session = Depends(get_db)):
     group = db.query(GamingGroup).filter(GamingGroup.id == group_id).first()
     if not group:
         return HTMLResponse("Group not found", status_code=404)
-    cards = _rest_cards(db, _visible_group_characters(db, group_id))
+    from app.services.nights_rest import rest_calendar_state
+
+    chars = _visible_group_characters(db, group_id)
     return _templates().TemplateResponse(
         request=request,
         name="group_rest.html",
-        context={"group": group, "cards": cards, "recent_days": REST_RECENT_DAYS},
+        context={
+            "group": group,
+            "cards": _rest_cards(db, chars),
+            "rest_calendar": rest_calendar_state(db, [c.id for c in chars]),
+            "recent_days": REST_RECENT_DAYS,
+        },
     )
 
 
@@ -756,12 +766,15 @@ async def group_rest_apply(
 ):
     """Apply a Night's Rest to characters in a gaming group. Admin-only.
 
-    Body: ``{"char_id": int|null}``: that one visible character, or every
-    visible character. Each is recorded as a ``RestEvent`` by the GM, the
-    same as the sheet's button. Returns ``{"ok": true, "cards": [...]}``
-    (the Rest page's cards, refreshed).
+    Body: ``{"char_id": int|null, "game_month": int|null, "game_day":
+    int|null}``: that one visible character, or every visible character,
+    optionally on an in-game night. Each is recorded as a ``RestEvent`` by
+    the GM, the same as the sheet's button. Returns ``{"ok": true, "cards":
+    [...], "calendar": {...}}`` (the Rest page's cards and date picker
+    state, refreshed).
     """
-    from app.services.nights_rest import perform_nights_rest
+    from app.services.game_calendar import parse_game_date
+    from app.services.nights_rest import perform_nights_rest, rest_calendar_state
 
     user = getattr(request.state, "user", None)
     if not user:
@@ -780,6 +793,10 @@ async def group_rest_apply(
     if not isinstance(body, dict):
         return JSONResponse({"error": "Invalid payload"}, status_code=400)
 
+    game_date, date_error = parse_game_date(body)
+    if date_error:
+        return JSONResponse({"error": date_error}, status_code=400)
+
     group_chars = _visible_group_characters(db, group_id)
     char_id = body.get("char_id")
     if char_id is not None:
@@ -796,13 +813,14 @@ async def group_rest_apply(
         targets = group_chars
 
     for c in targets:
-        perform_nights_rest(c, db, user["discord_id"])
+        perform_nights_rest(c, db, user["discord_id"], game_date=game_date)
     db.commit()
 
     return JSONResponse({
         "ok": True,
         "rested": [c.id for c in targets],
         "cards": _rest_cards(db, group_chars),
+        "calendar": rest_calendar_state(db, [c.id for c in group_chars]),
     })
 
 
@@ -1683,6 +1701,7 @@ def roll_history_page(
     """
     from app.models import RestEvent, RollHistory
     from app.routes.rolls import _iso_utc
+    from app.services.game_calendar import game_date_json
     from app.services.roll_descriptions import describe_roll, label_for_roll
 
     user = getattr(request.state, "user", None)
@@ -1772,6 +1791,7 @@ def roll_history_page(
             "id": r.id,
             "summary": r.summary or {},
             "accelerate": bool(r.accelerate),
+            "game_date": game_date_json(r.game_month, r.game_day),
             "actor_name": actor_names.get(r.actor_discord_id, r.actor_discord_id),
             "is_owner_roll": bool(r.is_owner_action),
             "is_hidden": False,

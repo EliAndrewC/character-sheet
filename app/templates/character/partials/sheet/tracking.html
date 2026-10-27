@@ -764,6 +764,8 @@
                could do: clear LW/VP/temp-VP, refresh per-day pools, advance
                the SW healing cadence, etc. #}
             {% if viewer_can_edit %}
+            {% from "partials/rest_date_picker.html" import rest_date_picker %}
+            <script src="/static/js/rest_date.js?v={{ static_v('js/rest_date.js') }}"></script>
             <button @click="openNightsRestModal()" data-action="open-nights-rest-modal"
                     class="{% if per_adventure %}ml-2{% else %}mt-4{% endif %} text-sm bg-ink/10 hover:bg-ink/20 px-3 py-1.5 rounded transition-colors">
                 Night's Rest
@@ -785,6 +787,9 @@
                         Rest anyway to count the night: every Night's Rest is listed in
                         the Roll History.
                     </p>
+                    <template x-if="showNightsRestNothingModal">
+                        <div>{{ rest_date_picker() }}</div>
+                    </template>
                     <div class="flex justify-end gap-2">
                         <button type="button" data-action="confirm-nights-rest-anyway"
                                 @click="confirmNightsRest()" :disabled="nightsRestConfirming"
@@ -827,6 +832,9 @@
                             (accelerate or delay healing by 1 day)
                         </span>
                     </label>
+                    <template x-if="showNightsRestModal">
+                        <div>{{ rest_date_picker() }}</div>
+                    </template>
                     <div class="flex justify-end gap-2">
                         <button type="button" data-action="cancel-nights-rest"
                                 @click="showNightsRestModal = false"

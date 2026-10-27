@@ -129,3 +129,121 @@ def test_rest_page_and_group_nav_fit_a_phone(page, live_server_url):
     page.wait_for_load_state("networkidle")
     assert page.evaluate(
         "document.documentElement.scrollWidth <= document.documentElement.clientWidth")
+
+
+def _modal_picker(page):
+    return page.locator('[data-testid="rest-date-picker"]:visible')
+
+
+def test_sheet_rest_takes_an_in_game_night_and_next_night_follows_it(page, live_server_url):
+    """Pick the 14th day of the 3rd month, rest; the next rest's dialog names
+    it as the previous rest, and "Next night" picks the 15th."""
+    sheet = create_and_apply(page, live_server_url, name="RestNight")
+    page.goto(sheet)
+    page.wait_for_selector('[data-action="open-nights-rest-modal"]')
+    save_tracking(page, lightWounds=2)
+
+    page.locator('[data-action="open-nights-rest-modal"]').click()
+    picker = _modal_picker(page)
+    picker.wait_for(state="visible", timeout=5000)
+    assert "No Night's Rest recorded yet." in picker.locator(
+        '[data-testid="rest-previous"]').text_content()
+    assert picker.locator('[data-action="rest-next-night"]').is_disabled()
+    assert picker.locator('[data-testid="rest-day"]').is_disabled()
+    month = picker.locator('[data-testid="rest-month"]')
+    assert 'Yayoi ("new life")' in month.locator('option[value="3"]').text_content()
+    month.select_option("3")
+    day = picker.locator('[data-testid="rest-day"]')
+    assert day.locator('option[value="1"]').text_content() == '1 - Seimei ("clear and bright")'
+    assert day.locator('option[value="2"]').text_content() == "2"
+    day.select_option("14")
+    with page.expect_navigation():
+        page.locator('[data-action="confirm-nights-rest"]').click()
+
+    # Nothing to restore now, so the second rest goes through "Rest anyway".
+    page.wait_for_selector('[data-action="open-nights-rest-modal"]')
+    page.locator('[data-action="open-nights-rest-modal"]').click()
+    picker = _modal_picker(page)
+    picker.wait_for(state="visible", timeout=5000)
+    assert "Previous rest: 14th day of the 3rd month (Yayoi)" in picker.locator(
+        '[data-testid="rest-previous"]').text_content()
+    nxt = picker.locator('[data-action="rest-next-night"]')
+    assert "15th day of the 3rd month" in nxt.text_content()
+    nxt.click()
+    assert picker.locator('[data-testid="rest-month"]').input_value() == "3"
+    assert picker.locator('[data-testid="rest-day"]').input_value() == "15"
+    with page.expect_navigation():
+        page.locator('[data-action="confirm-nights-rest-anyway"]').click()
+
+    page.wait_for_selector('[data-action="open-nights-rest-modal"]')
+    page.locator('[data-action="roll-history"]').click()
+    page.wait_for_selector('[data-testid="roll-history-page"]')
+    nights = page.locator('[data-testid="rest-game-date"]')
+    assert [nights.nth(i).text_content() for i in range(nights.count())] == [
+        "15th day of the 3rd month (Yayoi)", "14th day of the 3rd month (Yayoi)"]
+
+
+def test_sheet_rest_refuses_a_month_without_a_day(page, live_server_url):
+    sheet = create_and_apply(page, live_server_url, name="RestHalfNight")
+    page.goto(sheet)
+    page.wait_for_selector('[data-action="open-nights-rest-modal"]')
+    page.locator('[data-action="open-nights-rest-modal"]').click()
+    picker = _modal_picker(page)
+    picker.wait_for(state="visible", timeout=5000)
+    picker.locator('[data-testid="rest-month"]').select_option("3")
+    page.locator('[data-action="confirm-nights-rest-anyway"]').click()
+    err = picker.locator('[data-testid="rest-date-error"]')
+    err.wait_for(state="visible")
+    assert "both a month and a day" in err.text_content()
+    # Still open, nothing recorded.
+    assert page.locator('[data-action="confirm-nights-rest-anyway"]').is_visible()
+
+
+def test_gm_rest_page_dates_the_rest_and_offers_the_next_night(page, live_server_url):
+    _make_rest_group(page, live_server_url, ["NightOne", "NightTwo"])
+    picker = page.locator('[data-testid="rest-date-picker"]')
+    assert "No Night's Rest recorded yet." in picker.locator(
+        '[data-testid="rest-previous"]').text_content()
+    picker.locator('[data-testid="rest-month"]').select_option("12")
+    picker.locator('[data-testid="rest-day"]').select_option("30")
+
+    dialogs = []
+    page.once("dialog", lambda d: (dialogs.append(d.message), d.accept()))
+    page.locator('[data-testid="mass-rest-btn"]').click()
+    page.wait_for_selector('[data-testid="mass-rest-ok"]', state="visible")
+    assert "on the 30th day of the 12th month" in dialogs[0]
+    for name in ("NightOne", "NightTwo"):
+        assert "30th day of the 12th month (Shiwasu)" in _card(page, name).locator(
+            '[data-testid="recent-rest-night"]').text_content()
+
+    # The group's latest rest is now dated; "Next night" wraps to the new year
+    # and dates a single card's rest too.
+    assert "Latest rest in this group: 30th day of the 12th month" in picker.locator(
+        '[data-testid="rest-previous"]').text_content()
+    picker.locator('[data-action="rest-next-night"]').click()
+    assert picker.locator('[data-testid="rest-month"]').input_value() == "1"
+    assert picker.locator('[data-testid="rest-day"]').input_value() == "1"
+    page.once("dialog", lambda d: d.accept())
+    one = _card(page, "NightOne")
+    one.locator('[data-testid="row-rest-btn"]').click()
+    one.locator('[data-testid="row-rest-ok"]').wait_for(state="visible")
+    assert "1st day of the 1st month (Mutsuki)" in one.locator(
+        '[data-testid="recent-rest-night"]').first.text_content()
+
+
+def test_rest_date_picker_fits_a_phone(page, live_server_url):
+    """The day labels are long (the 3rd of the 3rd month is a sentence); the
+    picker must not widen the sheet's dialog past a 375px screen."""
+    sheet = create_and_apply(page, live_server_url, name="RestPhonePicker")
+    page.set_viewport_size({"width": 375, "height": 700})
+    page.goto(sheet)
+    page.wait_for_selector('[data-action="open-nights-rest-modal"]')
+    page.locator('[data-action="open-nights-rest-modal"]').click()
+    picker = _modal_picker(page)
+    picker.wait_for(state="visible", timeout=5000)
+    picker.locator('[data-testid="rest-month"]').select_option("3")
+    picker.locator('[data-testid="rest-day"]').select_option("3")
+    assert page.evaluate(
+        "document.documentElement.scrollWidth <= document.documentElement.clientWidth")
+    box = picker.bounding_box()
+    assert box["x"] >= 0 and box["x"] + box["width"] <= 375

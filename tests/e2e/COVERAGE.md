@@ -1029,6 +1029,10 @@ The Suzume family of the Sparrow clan is drawn from Crane Doji Artisans and merc
 - [x] Every Night's Rest is a Roll History line (count in the header, "no serious wounds healed" result, before/after tooltip, no Hide / note, clicking opens nothing); the sheet's "nothing to restore" dialog offers "Rest anyway" → `test_rest.py::test_each_rest_is_a_roll_history_line`
 - [x] Group Summary's GM "Rest" link opens the page; cards list rests from the last 8 days and what a rest would restore; "Apply Night's Rest" rests one character inline, "Rest everyone" (after a confirm) rests all, and both land in the Roll History → `test_rest.py::test_gm_rest_page_rests_one_then_everyone`
 - [x] No horizontal overflow at 375px on the Rest page ("Rest everyone" visible) or the Group Summary with the extra nav link → `test_rest.py::test_rest_page_and_group_nav_fit_a_phone`
+- [x] The sheet's Night's Rest dialog takes an optional in-game night (month / day dropdowns labelled from the festival calendar, day disabled until a month is picked); the next dialog names it as the previous rest, "Next night" picks the day after, and the Roll History shows each rest's night → `test_rest.py::test_sheet_rest_takes_an_in_game_night_and_next_night_follows_it`
+- [x] A month without a day is refused in the dialog with a message, and the dialog stays open → `test_rest.py::test_sheet_rest_refuses_a_month_without_a_day`
+- [x] The GM Rest page's picker dates "Rest everyone" (named in the confirm) and each card's rest; cards show the night; "Next night" counts from the group's latest dated rest and wraps the year → `test_rest.py::test_gm_rest_page_dates_the_rest_and_offers_the_next_night`
+- [x] The picker with the longest day label fits a 375px screen → `test_rest.py::test_rest_date_picker_fits_a_phone`
 
 ## GM — Group Money Awards (group_money.html)
 

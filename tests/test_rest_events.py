@@ -49,6 +49,15 @@ def _rests(client, char_id):
             .order_by(RestEvent.id).all())
 
 
+def _group_rest_args(text):
+    """The Rest page's ``groupRest(id, cards, calendar)`` arguments."""
+    m = re.search(r"x-data='groupRest\(\d+, ", text)
+    decoder = json.JSONDecoder()
+    cards, end = decoder.raw_decode(text, m.end())
+    calendar, _ = decoder.raw_decode(text, end + len(", "))
+    return cards, calendar
+
+
 def _page_json(text, script_id):
     m = re.search(r'id="%s">(.*?)</script>' % script_id, text, re.S)
     return json.loads(m.group(1))
@@ -204,8 +213,7 @@ def test_rest_page_shows_recent_rests_and_what_a_rest_would_restore(client):
     s.commit()
     resp = client.get(f"/groups/{gid}/rest")
     assert resp.status_code == 200
-    m = re.search(r"x-data='groupRest\(\d+, (.*?)\)'", resp.text, re.S)
-    cards = {c["name"]: c for c in json.loads(m.group(1))}
+    cards = {c["name"]: c for c in _group_rest_args(resp.text)[0]}
     assert [r["sw_healed"] for r in cards["Rested"]["rests"]] == [1]
     assert cards["Rested"]["rests"][0]["by_owner"] is True
     assert cards["Rested"]["would_restore"] == []
@@ -304,3 +312,113 @@ def test_apply_to_one_rests_only_that_one(client):
     assert len(_rests(client, b)) == 1
     # Every card comes back, so the page can redraw the whole list.
     assert {c["id"] for c in resp.json()["cards"]} == {a, b}
+
+
+# ---------------------------------------------------------------------------
+# The in-game night (game_month / game_day)
+# ---------------------------------------------------------------------------
+
+
+def test_sheet_rest_records_the_in_game_night(client):
+    cid = _seed(client)
+    resp = client.post(f"/characters/{cid}/nights-rest",
+                       json={"game_month": 3, "game_day": 14}, headers=PLAYER_HDR)
+    assert resp.status_code == 200
+    [rest] = _rests(client, cid)
+    assert (rest.game_month, rest.game_day) == (3, 14)
+
+
+def test_sheet_rest_without_a_night_records_none(client):
+    cid = _seed(client)
+    client.post(f"/characters/{cid}/nights-rest", json={}, headers=PLAYER_HDR)
+    [rest] = _rests(client, cid)
+    assert (rest.game_month, rest.game_day) == (None, None)
+
+
+def test_sheet_rest_with_a_bad_night_is_refused_and_changes_nothing(client):
+    cid = _seed(client, current_light_wounds=3)
+    resp = client.post(f"/characters/{cid}/nights-rest",
+                       json={"game_month": 3, "game_day": 31}, headers=PLAYER_HDR)
+    assert resp.status_code == 400
+    assert "game_day" in resp.json()["error"]
+    assert _rests(client, cid) == []
+    c = _session(client).query(Character).filter(Character.id == cid).first()
+    assert c.current_light_wounds == 3
+
+
+def test_preview_names_the_previous_rest_and_the_next_night(client):
+    cid = _seed(client)
+    s = _session(client)
+    t0 = datetime(2026, 10, 19, 23, 0, 0)
+    s.add(RestEvent(character_id=cid, actor_discord_id=PLAYER, is_owner_action=True,
+                    summary={}, game_month=3, game_day=13, created_at=t0))
+    s.add(RestEvent(character_id=cid, actor_discord_id=PLAYER, is_owner_action=True,
+                    summary={}, game_month=3, game_day=14,
+                    created_at=t0 + timedelta(hours=1)))
+    s.commit()
+    cal = client.get(f"/characters/{cid}/nights-rest/preview",
+                     headers=PLAYER_HDR).json()["calendar"]
+    assert cal["previous"]["game_date"]["label"] == "14th day of the 3rd month (Yayoi)"
+    assert cal["previous"]["created_at"].endswith("Z")
+    assert cal["last_dated"] is None  # the previous rest is itself dated
+    assert cal["next_night"] == {"month": 3, "day": 15,
+                                 "label": "15th day of the 3rd month (Yayoi)"}
+
+
+def test_preview_after_an_undated_rest_counts_from_the_last_dated_one(client):
+    cid = _seed(client)
+    s = _session(client)
+    t0 = datetime(2026, 10, 19, 23, 0, 0)
+    s.add(RestEvent(character_id=cid, actor_discord_id=PLAYER, is_owner_action=True,
+                    summary={}, game_month=12, game_day=30, created_at=t0))
+    s.add(RestEvent(character_id=cid, actor_discord_id=PLAYER, is_owner_action=True,
+                    summary={}, created_at=t0 + timedelta(hours=1)))
+    s.commit()
+    cal = client.get(f"/characters/{cid}/nights-rest/preview",
+                     headers=PLAYER_HDR).json()["calendar"]
+    assert cal["previous"]["game_date"] is None
+    assert cal["last_dated"]["game_date"]["month"] == 12
+    assert cal["next_night"]["month"] == 1 and cal["next_night"]["day"] == 1
+
+
+def test_preview_with_no_rests_has_no_next_night(client):
+    cid = _seed(client)
+    cal = client.get(f"/characters/{cid}/nights-rest/preview",
+                     headers=PLAYER_HDR).json()["calendar"]
+    assert cal == {"previous": None, "last_dated": None, "next_night": None}
+
+
+def test_rest_records_carry_their_night_to_the_history_and_rest_pages(client):
+    gid = _group(client)
+    cid = _seed(client, gaming_group_id=gid)
+    client.post(f"/characters/{cid}/nights-rest",
+                json={"game_month": 3, "game_day": 14}, headers=PLAYER_HDR)
+    items = _page_json(client.get(f"/characters/{cid}/roll-history",
+                                  headers=PLAYER_HDR).text, "rolls-data")
+    assert items[0]["game_date"]["label"] == "14th day of the 3rd month (Yayoi)"
+    resp = client.get(f"/groups/{gid}/rest")
+    [card], group_cal = _group_rest_args(resp.text)
+    assert card["rests"][0]["game_date"]["day"] == 14
+    assert group_cal["next_night"]["day"] == 15
+
+
+def test_gm_apply_records_the_night_for_everyone(client):
+    gid = _group(client)
+    a = _seed(client, gaming_group_id=gid, name="A")
+    b = _seed(client, gaming_group_id=gid, name="B")
+    resp = client.post(f"/groups/{gid}/rest/apply",
+                       json={"game_month": 3, "game_day": 15})
+    assert resp.status_code == 200
+    for cid in (a, b):
+        [rest] = _rests(client, cid)
+        assert (rest.game_month, rest.game_day) == (3, 15)
+    assert resp.json()["calendar"]["next_night"]["day"] == 16
+
+
+def test_gm_apply_with_a_bad_night_rests_nobody(client):
+    gid = _group(client)
+    a = _seed(client, gaming_group_id=gid, name="A")
+    resp = client.post(f"/groups/{gid}/rest/apply",
+                       json={"char_id": a, "game_month": 3})
+    assert resp.status_code == 400
+    assert _rests(client, a) == []

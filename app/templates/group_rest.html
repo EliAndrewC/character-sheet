@@ -8,7 +8,9 @@
 {% block nav_new_character %}{% endblock %}
 
 {% block content %}
-<div x-data='groupRest({{ group.id }}, {{ cards | tojson }})'
+{% from "partials/rest_date_picker.html" import rest_date_picker %}
+<script src="/static/js/rest_date.js?v={{ static_v('js/rest_date.js') }}"></script>
+<div x-data='groupRest({{ group.id }}, {{ cards | tojson }}, {{ rest_calendar | tojson }})'
      class="space-y-6 max-w-3xl mx-auto">
     <div class="flex items-center justify-between gap-3">
         <h1 class="text-xl font-bold text-ink">Night's Rest</h1>
@@ -30,8 +32,10 @@
                 <span x-text="chars.length"></span> character<span x-show="chars.length !== 1">s</span> below,
                 exactly as their own Night's Rest button would. Each one shows in that
                 character's Roll History. Rests from the last {{ recent_days }} days are listed
-                on each card.
+                on each card. The in-game night below also dates each card's own
+                "Apply Night's Rest".
             </p>
+            {{ rest_date_picker("Latest rest in this group") }}
             <div class="flex flex-wrap items-center gap-3">
                 <button type="button" @click="restAll()" :disabled="massBusy"
                         data-testid="mass-rest-btn"
@@ -67,6 +71,8 @@
                     <template x-for="r in c.rests" :key="r.id">
                         <li class="text-ink/80" data-testid="recent-rest">
                             <span class="font-mono text-xs tabular-nums" x-text="formatWhen(r.created_at)"></span>
+                            <span class="text-xs text-ink/70" x-show="r.game_date" data-testid="recent-rest-night"
+                                  x-text="r.game_date ? '- ' + r.game_date.label : ''"></span>
                             <span class="text-xs text-ink/50" x-text="r.by_owner ? '' : '(by ' + r.actor_name + ')'"></span>
                             <span class="text-xs text-ink/50" x-show="r.sw_healed > 0"
                                   x-text="'- healed ' + r.sw_healed + ' SW'"></span>
@@ -91,10 +97,12 @@
 </div>
 
 <script>
-function groupRest(groupId, chars) {
+function groupRest(groupId, chars, restCalendar) {
     return {
         groupId: groupId,
         chars: chars,
+        // The optional in-game night, edited by the nested date picker.
+        restMonth: '', restDay: '', restCalendar: restCalendar, restDateError: '',
         massError: '', massOk: '', massBusy: false,
         rowError: {}, rowOk: {}, rowBusy: {},
         // Seed every per-row key up front so :disabled / x-show bind to a
@@ -116,6 +124,18 @@ function groupRest(groupId, chars) {
             h = h % 12 || 12;
             return day + ', ' + h + ':' + m + ampm;
         },
+        // The chosen night for the POST body and the confirm text, or null
+        // (after showing why) when only half of it is chosen.
+        _night() {
+            const date = window.L7RRestDate.restDateBody(this.restMonth, this.restDay);
+            if (date.error) { this.restDateError = date.error; return null; }
+            return date;
+        },
+        _nightText(date) {
+            if (!date.game_month) return '';
+            return ' on the ' + window.L7RRestDate.ordinal(date.game_day) + ' day of the '
+                + window.L7RRestDate.ordinal(date.game_month) + ' month';
+        },
         async _rest(body) {
             const resp = await fetch('/groups/' + this.groupId + '/rest/apply', {
                 method: 'POST',
@@ -130,14 +150,17 @@ function groupRest(groupId, chars) {
                 const f = fresh[c.id];
                 if (f) { c.rests = f.rests; c.would_restore = f.would_restore; }
             }
+            if (data.calendar) this.restCalendar = data.calendar;
             return data.rested || [];
         },
         async restOne(c) {
             this.rowError[c.id] = ''; this.rowOk[c.id] = '';
-            if (!window.confirm('Apply a Night\'s Rest to ' + c.name + '?')) return;
+            const date = this._night();
+            if (!date) return;
+            if (!window.confirm('Apply a Night\'s Rest to ' + c.name + this._nightText(date) + '?')) return;
             this.rowBusy[c.id] = true;
             try {
-                await this._rest({char_id: c.id});
+                await this._rest({char_id: c.id, ...date});
                 this.rowOk[c.id] = 'Night\'s Rest applied.';
             } catch (e) {
                 this.rowError[c.id] = e.message;
@@ -148,10 +171,12 @@ function groupRest(groupId, chars) {
         async restAll() {
             this.massError = ''; this.massOk = '';
             const n = this.chars.length;
-            if (!window.confirm('Apply a Night\'s Rest to all ' + n + ' character' + (n === 1 ? '' : 's') + '?')) return;
+            const date = this._night();
+            if (!date) return;
+            if (!window.confirm('Apply a Night\'s Rest to all ' + n + ' character' + (n === 1 ? '' : 's') + this._nightText(date) + '?')) return;
             this.massBusy = true;
             try {
-                const rested = await this._rest({});
+                const rested = await this._rest(date);
                 this.massOk = 'Night\'s Rest applied to ' + rested.length + ' character(s).';
             } catch (e) {
                 this.massError = e.message;

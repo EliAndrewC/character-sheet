@@ -303,6 +303,13 @@ def _migrate_add_columns():
     if "roll_label" in rh_cols:  # pragma: no cover
         cursor.execute("ALTER TABLE roll_history DROP COLUMN roll_label")
 
+    # Night's Rest records: the in-game night (month / day), added after the table.
+    cursor.execute("PRAGMA table_info(rest_events)")
+    rest_cols = {row[1] for row in cursor.fetchall()}
+    for col in ("game_month", "game_day"):
+        if col not in rest_cols:  # pragma: no cover
+            cursor.execute(f"ALTER TABLE rest_events ADD COLUMN {col} INTEGER DEFAULT NULL")
+
     # Seed initial gaming groups if the table is empty (first deploy only).
     cursor.execute("SELECT COUNT(*) FROM gaming_groups")
     if cursor.fetchone()[0] == 0:  # pragma: no cover

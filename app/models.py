@@ -822,8 +822,8 @@ class RestEvent(Base):
     is recorded for every actor - the GM included - where rolls are not
     (see ``should_record_roll``).
 
-    Schema note: a brand-new table, so ``create_all`` makes it on first
-    startup and ``_migrate_add_columns`` needs no entry.
+    Schema note: ``create_all`` made the table; ``game_month`` / ``game_day``
+    came later and are added by ``_migrate_add_columns``.
     """
 
     __tablename__ = "rest_events"
@@ -837,6 +837,10 @@ class RestEvent(Base):
     # RollHistory.is_owner_roll, so an owner change does not rewrite it).
     is_owner_action: Mapped[bool] = mapped_column(default=False)
     accelerate: Mapped[bool] = mapped_column(default=False)
+    # The in-game night, when the player gave one (``game_calendar``: month
+    # 1-12, day 1-30). Both or neither.
+    game_month: Mapped[Optional[int]] = mapped_column(nullable=True)
+    game_day: Mapped[Optional[int]] = mapped_column(nullable=True)
     # apply_nights_rest's summary: sw_healed, sw_remaining, vp_after, ...
     summary: Mapped[Optional[Dict[str, Any]]] = mapped_column(JSON, default=dict)
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())

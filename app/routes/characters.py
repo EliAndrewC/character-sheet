@@ -2196,13 +2196,15 @@ def _nights_rest_auth(request: Request, char_id: int, db: Session):
 async def nights_rest_preview(
     request: Request, char_id: int, db: Session = Depends(get_db),
 ):
-    """Compute the modal preview for a Night's Rest without persisting."""
-    from app.services.nights_rest import compute_nights_rest_plan
+    """Compute the modal preview for a Night's Rest without persisting,
+    plus the date picker's ``calendar`` (``rest_calendar_state``)."""
+    from app.services.nights_rest import compute_nights_rest_plan, rest_calendar_state
 
     character, err = _nights_rest_auth(request, char_id, db)
     if err is not None:
         return err
     plan = compute_nights_rest_plan(character, accelerate=False)
+    plan["calendar"] = rest_calendar_state(db, [character.id])
     return JSONResponse(plan)
 
 
@@ -2212,7 +2214,10 @@ async def nights_rest_apply(
 ):
     """Apply a Night's Rest: LW->0, VP regen, per-day pool refresh,
     SW heal per the cadence, combat-in-progress wipe. Recorded as a
-    ``RestEvent`` so it shows in the Roll History."""
+    ``RestEvent`` so it shows in the Roll History, with the in-game night
+    when the body names one (``game_month`` + ``game_day``; 400 if invalid,
+    before anything changes)."""
+    from app.services.game_calendar import parse_game_date
     from app.services.nights_rest import perform_nights_rest
 
     character, err = _nights_rest_auth(request, char_id, db)
@@ -2220,8 +2225,12 @@ async def nights_rest_apply(
         return err
     body = await request.json() if (await request.body()) else {}
     accelerate = bool(body.get("accelerate_cadence", False))
+    game_date, date_error = parse_game_date(body)
+    if date_error:
+        return JSONResponse({"error": date_error}, status_code=400)
     summary = perform_nights_rest(
         character, db, request.state.user["discord_id"], accelerate=accelerate,
+        game_date=game_date,
     )
     db.commit()
     return JSONResponse({"status": "ok", "applied": summary})

@@ -24,7 +24,7 @@ Quick Healer's +1 bonus this flips 2 -> 0 (the bonus follows the base).
 
 from __future__ import annotations
 
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional, Tuple
 
 from app.game_data import (
     SCHOOLS,
@@ -412,13 +412,15 @@ def apply_nights_rest(character, accelerate: bool = False) -> Dict[str, Any]:
 
 
 def perform_nights_rest(character, db, actor_discord_id: str,
-                        accelerate: bool = False) -> Dict[str, Any]:
+                        accelerate: bool = False,
+                        game_date: Optional[Tuple[int, int]] = None) -> Dict[str, Any]:
     """Apply a Night's Rest AND record it as a ``RestEvent``.
 
     Every writer goes through here (the sheet's button, the GM's Rest
     page), so every rest is counted no matter who clicked it. The summary
     gains the before-values and the preview's effect labels so the history
-    line can say what changed.
+    line can say what changed. ``game_date`` is the in-game night as
+    ``(month, day)``, already validated (``game_calendar.parse_game_date``).
     The caller commits.
     """
     from app.models import RestEvent
@@ -440,6 +442,46 @@ def perform_nights_rest(character, db, actor_discord_id: str,
         is_owner_action=is_owning_player(
             actor_discord_id, character.owner_discord_id),
         accelerate=accelerate,
+        game_month=game_date[0] if game_date else None,
+        game_day=game_date[1] if game_date else None,
         summary=summary,
     ))
     return summary
+
+
+def rest_calendar_state(db, character_ids: List[int]) -> Dict[str, Any]:
+    """What the Night's Rest date picker shows beside its "Next night" button,
+    over the rests of ``character_ids`` (one character on the sheet, the
+    whole group on the GM's Rest page).
+
+    ``previous`` is the latest rest, dated or not; ``last_dated`` is the
+    latest one with an in-game night when that is an OLDER rest (an undated
+    rest came after it), else None; ``next_night`` is the night after the
+    latest dated rest, or None when no rest was ever dated.
+    """
+    from app.models import RestEvent
+    from app.routes.rolls import _iso_utc
+    from app.services.game_calendar import game_date_json, next_night
+
+    def latest(query):
+        return (query.order_by(RestEvent.created_at.desc(), RestEvent.id.desc())
+                .first()) if character_ids else None
+
+    def describe(r):
+        return None if r is None else {
+            "created_at": _iso_utc(r.created_at),
+            "game_date": game_date_json(r.game_month, r.game_day),
+        }
+
+    base = db.query(RestEvent).filter(RestEvent.character_id.in_(character_ids))
+    previous = latest(base)
+    dated = (previous if previous is not None and previous.game_month
+             else latest(base.filter(RestEvent.game_month.isnot(None))))
+    nxt = None
+    if dated is not None:
+        nxt = game_date_json(*next_night(dated.game_month, dated.game_day))
+    return {
+        "previous": describe(previous),
+        "last_dated": describe(dated) if dated is not previous else None,
+        "next_night": nxt,
+    }

@@ -1,0 +1,36 @@
+{# The optional in-game night for a Night's Rest: month and day dropdowns
+   labelled from Rokugan's festival calendar, a "Next night" button that
+   picks the night after the latest dated rest, and a line naming the
+   previous rest. A nested Alpine component (static/js/rest_date.js) that
+   reads and writes its parent's restMonth / restDay / restCalendar /
+   restDateError. `prefix` names whose rest the line describes. #}
+{% macro rest_date_picker(prefix="Previous rest") %}
+<div x-data='restDatePicker({{ rokugan_months() | tojson }}, {{ prefix | tojson }})'
+     class="space-y-2 mb-4" data-testid="rest-date-picker">
+    <div class="text-xs font-medium text-ink/70">In-game night (optional)</div>
+    <div class="flex items-start gap-2 flex-wrap">
+        <button type="button" @click="useNextNight()" :disabled="!restCalendar?.next_night"
+                data-action="rest-next-night"
+                class="btn-ghost border border-ink/20 px-2 py-1 rounded text-xs font-medium disabled:opacity-40 shrink-0"
+                x-text="nextNightLabel()">Next night</button>
+        <span class="text-xs text-ink/60 min-w-0 flex-1" data-testid="rest-previous"
+              x-text="previousLine()"></span>
+    </div>
+    <select x-model="restMonth" @change="monthChanged()" data-testid="rest-month"
+            class="w-full min-w-0 border rounded px-2 py-1.5 text-sm">
+        <option value="">Month...</option>
+        <template x-for="m in months" :key="m.n">
+            <option :value="String(m.n)" x-text="m.label" :selected="String(m.n) === restMonth"></option>
+        </template>
+    </select>
+    <select x-model="restDay" @change="restDateError = ''" :disabled="!restMonth" data-testid="rest-day"
+            class="w-full min-w-0 border rounded px-2 py-1.5 text-sm disabled:opacity-50">
+        <option value="">Day...</option>
+        <template x-for="(label, i) in days()" :key="restMonth + '-' + i">
+            <option :value="String(i + 1)" x-text="label" :selected="String(i + 1) === restDay"></option>
+        </template>
+    </select>
+    <p x-show="restDateError" x-cloak class="text-xs text-red-700" data-testid="rest-date-error"
+       x-text="restDateError"></p>
+</div>
+{% endmacro %}
