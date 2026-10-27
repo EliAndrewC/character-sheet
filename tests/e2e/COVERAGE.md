@@ -177,7 +177,9 @@ The three failures were:
 - [x] No conviction block on strike result without the knack -> `test_iaijutsu_duel.py::test_duel_strike_no_conviction_no_spend_block`
 - [x] Conviction spend on duel damage result (+1, undo) -> `test_iaijutsu_duel.py::test_duel_damage_conviction_spend_increments_total`
 - [x] Strike wound check offers ONLY own conviction (no raises/priest ally), no auto-apply until accepted -> `test_iaijutsu_duel.py::test_duel_strike_wound_check_conviction_only_discretionary`
-- [x] Strike wound check without conviction auto-applies failure as before -> `test_iaijutsu_duel.py::test_duel_strike_wound_check_auto_applies_without_conviction`
+- [x] Strike wound check without conviction waits for Accept Result while a PCP is spendable; the PCP free raise lands (+5), Accept takes the SW, and the menu then hides the refused spends -> `test_iaijutsu_duel.py::test_duel_strike_wound_check_waits_for_pcp_without_conviction`
+- [x] A PCP raise spent on the strike does not hide the strike wound check's own PCP raise / reroll (per-roll flags reset) -> `test_iaijutsu_duel.py::test_duel_strike_pcp_raise_does_not_hide_the_wound_checks`
+- [x] Strike damage past 10k10 adds +5 per die (not +2), in the modal's damage preview and on the server's damage card -> `test_iaijutsu_duel.py::test_duel_strike_damage_past_10k10_is_five_per_die`
 - [x] Manual Iaijutsu Strike Wound Check button also offers own conviction only -> `test_iaijutsu_duel.py::test_manual_strike_wound_check_offers_conviction`
 - [x] Party priest 5th Dan conviction hidden on strike wound checks -> `test_groups.py::test_party_priest_ally_conviction_hidden_on_strike_wound_check`
 - [x] Evaluate Stance (rolled with Air) option present in iaijutsu menu -> `test_iaijutsu_duel.py::test_evaluate_stance_option_in_iaijutsu_menu`

@@ -581,9 +581,13 @@ def act(db: Session, session: RollSession, character: Character, action: str,
     dice_before = session.dice
     if choices.get("resolved"):
         raise RollRefused("this wound check is already resolved")
+    # A strike's wound check takes no void and no school bonuses. Player
+    # Character Points are not barred (GM, 2026-10-27): rules/10 lets a PCP
+    # reroll or raise ANY roll, and only its reroll-10s names the strike.
     if (session.formula or {}).get("iaijutsu_strike") and name in (
-            "raise", "togashi_raise", "wc_vp", "matsu_bank", "wc_excess", "pcp_free_raise"):
-        raise RollRefused("only Conviction may be spent on an iaijutsu strike's wound check")
+            "raise", "togashi_raise", "wc_vp", "matsu_bank", "wc_excess"):
+        raise RollRefused("only Conviction and Player Character Points may be spent "
+                          "on an iaijutsu strike's wound check")
 
     if (session.formula or {}).get("arrow_table"):
         _arrow_table_guard(session, action)

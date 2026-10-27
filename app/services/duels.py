@@ -12,6 +12,10 @@ from app.services.void_spend import school_dan
 # Roll key recorded -> the formula it rolls.
 DUEL_KEYS = {"iaijutsu:contested": "knack:iaijutsu", "iaijutsu:strike": "knack:iaijutsu:strike"}
 KAKITA_5TH = "kakita_5th_dan"
+# rules/03-combat.md, iaijutsu duels: on the strike's damage "each rolled die
+# above 10k10 adds +5 instead of +2". Only the strike: Kakita 5th Dan's
+# contest damage is an ordinary damage roll.
+STRIKE_OVERFLOW_PER_DIE = 5
 
 
 def restart_bonus(choices: Dict[str, Any]) -> int:
@@ -64,7 +68,7 @@ def kakita_5th_formula(character: Any, formulas: Dict[str, Any], choices: Dict[s
 
 
 def _damage_parts(formula: Dict[str, Any], weapon: tuple, ring_val: int, capped: Dict[str, int],
-                  last: str) -> list:
+                  last: str, per_die: int = 2) -> list:
     """How a duel damage pool was assembled, as the card's lines: the weapon,
     the ring, the school's dice, ``last`` (the excess / the contest), and each
     flat bonus by name (Kakita 4th Dan's +5 used to go unlisted)."""
@@ -79,19 +83,20 @@ def _damage_parts(formula: Dict[str, Any], weapon: tuple, ring_val: int, capped:
     parts.append(last)
     parts.extend(damage_flat_parts(formula, formula.get("damage_flat_bonus") or 0))
     if capped["overflow_flat"]:
-        parts.append(f"+{capped['overflow_flat']} from rolling above 10k10")
+        parts.append(f"+{capped['overflow_flat']} from rolling above 10k10 (+{per_die} per die)")
     return parts
 
 
 def duel_damage_pool(formula: Dict[str, Any], weapon: tuple, extra_dice: int) -> Dict[str, Any]:
     """The duel strike's damage: weapon + ring + school dice + a die per point
-    of the strike's excess."""
+    of the strike's excess, and +5 (not +2) per die past 10k10."""
     ring_val = formula.get("damage_ring_val") or 2
     rolled = weapon[0] + ring_val + (formula.get("damage_extra_rolled") or 0) + max(0, extra_dice)
     kept = weapon[1] + (formula.get("damage_extra_kept") or 0)
-    capped = apply_dice_cap(rolled, kept, formula.get("damage_flat_bonus") or 0)
+    capped = apply_dice_cap(rolled, kept, formula.get("damage_flat_bonus") or 0, STRIKE_OVERFLOW_PER_DIE)
     capped["parts"] = _damage_parts(formula, weapon, ring_val, capped,
-                                    f"+{max(0, extra_dice)}k0 from the strike's excess")
+                                    f"+{max(0, extra_dice)}k0 from the strike's excess",
+                                    STRIKE_OVERFLOW_PER_DIE)
     return capped
 
 

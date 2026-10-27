@@ -624,9 +624,10 @@ def test_wound_check_outcome_captured_on_pass_take_1_sw(page, live_server_url):
 def test_wound_check_outcome_captured_on_failure(page, live_server_url):
     _create_owner_character(page, live_server_url, name="WCFail")
     cid = _char_id(page)
-    # Nothing to spend on it, so the failure applies itself.
+    # A PCP could still change it, so the failure waits for Accept Result.
     _real_wound_check(page, 30, dice=(1,))
     wounds = page.evaluate("() => window._diceRoller.wcSeriousWounds")
+    page.evaluate("() => window._diceRoller.applyWoundCheckFailure()")
     page.wait_for_timeout(800)
     rolls = _list_rolls(page, cid)
     assert len(rolls) == 1
@@ -640,14 +641,14 @@ def test_wound_check_outcome_captured_on_failure(page, live_server_url):
 def test_wound_check_outcome_survives_modal_close_before_create_resolves(
     page, live_server_url,
 ):
-    """A WC failure auto-applies and the player closes the modal at once:
+    """The player accepts a WC failure, which closes the modal at once:
     the outcome is still recorded on the row the server wrote."""
     _create_owner_character(page, live_server_url, name="WCCloseRace")
     cid = _char_id(page)
-    # Nothing to spend on it, so the failure applies itself.
+    # A PCP could still change it, so the failure waits for Accept Result.
     _real_wound_check(page, 30, dice=(1,))
     wounds = page.evaluate("() => window._diceRoller.wcSeriousWounds")
-    page.evaluate("() => { window._diceRoller.wcModalOpen = false; }")
+    page.evaluate("() => window._diceRoller.wcAcceptResult()")
     page.wait_for_timeout(800)
     rolls = _list_rolls(page, cid)
     assert len(rolls) == 1
@@ -659,13 +660,14 @@ def test_wound_check_outcome_survives_modal_close_before_create_resolves(
 
 
 def test_wound_check_outcome_captured_with_sync_failure_apply(page, live_server_url):
-    """A failed WC with nothing to spend applies itself as soon as the
-    server's roll lands; the outcome reaches the server's history row."""
+    """A failed WC applied as soon as the server's roll lands (no wait on
+    the tab's own history request); the outcome reaches the server's row."""
     _create_owner_character(page, live_server_url, name="WCFailSync")
     cid = _char_id(page)
-    # Nothing to spend on it, so the failure applies itself.
+    # A PCP could still change it, so the failure waits for Accept Result.
     _real_wound_check(page, 30, dice=(1,))
     wounds = page.evaluate("() => window._diceRoller.wcSeriousWounds")
+    page.evaluate("() => window._diceRoller.applyWoundCheckFailure()")
     page.wait_for_timeout(800)
     rolls = _list_rolls(page, cid)
     assert len(rolls) == 1

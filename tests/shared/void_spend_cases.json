@@ -16,6 +16,7 @@
     {"name": "under the cap is untouched", "args": [6, 3, 5], "want": {"rolled": 6, "kept": 3, "flat": 5, "overflow": 0}},
     {"name": "rolled past 10 becomes kept", "args": [12, 4, 0], "want": {"rolled": 10, "kept": 6, "flat": 0, "overflow": 0}},
     {"name": "kept past 10 becomes +2 each", "args": [10, 12, 1], "want": {"rolled": 10, "kept": 10, "flat": 5, "overflow": 4}},
-    {"name": "both at once", "args": [13, 9, 0], "want": {"rolled": 10, "kept": 10, "flat": 4, "overflow": 4}}
+    {"name": "both at once", "args": [13, 9, 0], "want": {"rolled": 10, "kept": 10, "flat": 4, "overflow": 4}},
+    {"name": "an iaijutsu strike's damage is +5 per die", "args": [25, 3, 1, 5], "want": {"rolled": 10, "kept": 10, "flat": 41, "overflow": 40}}
   ]
 }

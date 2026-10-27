@@ -364,7 +364,9 @@ def test_a_failed_wound_check_is_rolled_and_applied_by_the_server(page, live_ser
     assert body["wc"]["light_wounds"] == 45 and not body["wc"]["passed"]
     wounds = body["wc"]["serious_wounds"]
     assert page.evaluate("() => window._diceRoller.wcSeriousWounds") == wounds
-    # Nothing to spend on it, so the failure applies itself - on the server.
+    # A PCP could still change it, so it waits; Accept applies it - on the server.
+    assert page.evaluate("() => window._diceRoller.wcResultApplied") is False
+    page.locator('[data-action="wc-accept-result"]').click()
     page.wait_for_function(f"() => window._trackingBridge.seriousWounds === {wounds}"
                            " && window._trackingBridge.lightWounds === 0", timeout=5000)
     page.reload()

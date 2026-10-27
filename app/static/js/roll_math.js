@@ -171,18 +171,20 @@
 
     /**
      * L7R 10k10 cap. Rolled dice past 10 convert to kept dice; kept dice past
-     * 10 convert to +2 flat each. Order matters: cap rolled first, then kept.
+     * 10 convert to +2 flat each (``perDie``: +5 on an iaijutsu duel strike's
+     * damage). Order matters: cap rolled first, then kept.
      * @returns {{rolled, kept, flat, overflowFlat}} - overflowFlat is just the
-     *   +2-per-die kept-overflow contribution (for labeling).
+     *   per-die kept-overflow contribution (for labeling).
      */
-    applyDiceCap: function (rolled, kept, flat) {
+    applyDiceCap: function (rolled, kept, flat, perDie) {
       var overflowFlat = 0;
+      if (perDie === undefined) perDie = 2;
       if (rolled > 10) {
         kept += rolled - 10;
         rolled = 10;
       }
       if (kept > 10) {
-        overflowFlat = 2 * (kept - 10);
+        overflowFlat = perDie * (kept - 10);
         flat += overflowFlat;
         kept = 10;
       }

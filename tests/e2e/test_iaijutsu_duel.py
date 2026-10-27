@@ -992,20 +992,7 @@ def test_duel_strike_wound_check_conviction_only_discretionary(page, live_server
     assert lw == 0
 
 
-def test_duel_strike_wound_check_auto_applies_without_conviction(page, live_server_url):
-    """Without conviction, a failed strike wound check keeps its original
-    behavior: the failure is applied immediately, no discretionary UI."""
-    _create_duelist(page, live_server_url, "DuelNoConvWC")
-    _wait_alpine(page)
-    _mock_dice_low(page)
-    # Take light wounds, then use the manual Iaijutsu Strike Wound Check
-    # button (same rollWoundCheck path as the duel's).
-    page.locator('[data-action="lw-plus"]').click()
-    page.wait_for_selector('input[placeholder="Amount"]', timeout=10000)
-    page.fill('input[placeholder="Amount"]', "40")
-    page.locator('input[placeholder="Amount"]').locator('..').locator('button', has_text="Add").click()
-    page.wait_for_selector('[data-action="roll-wound-check-strike"]', state='visible', timeout=10000)
-    page.locator('[data-action="roll-wound-check-strike"]').click()
+def _wait_wc_result(page):
     page.wait_for_function("""() => {
         const els = document.querySelectorAll('[x-data]');
         for (const el of els) {
@@ -1014,12 +1001,72 @@ def test_duel_strike_wound_check_auto_applies_without_conviction(page, live_serv
         }
         return false;
     }""", timeout=15000)
+
+
+def _spend_pcp(page, scope, action):
+    """Open ``scope``'s header menu, pick the PCP ``action``, confirm it."""
+    scope.locator('[data-action="pcp-menu"]').first.click()
+    scope.locator(f'[data-action="{action}"]').click()
+    page.locator('[data-action="pcp-confirm-accept"]').click()
+    page.locator('[data-modal="pcp-confirm"]').wait_for(state="hidden", timeout=5000)
+
+
+def test_duel_strike_wound_check_waits_for_pcp_without_conviction(page, live_server_url):
+    """GM 2026-10-27: a Player Character Point may be spent on a strike's
+    wound check. With no conviction, a failure still waits for Accept
+    Result (applying it would lock the check), the PCP free raise lands,
+    and accepting takes the serious wounds."""
+    _create_duelist(page, live_server_url, "DuelPcpWC")
+    _wait_alpine(page)
+    _mock_dice_low(page)
+    page.locator('[data-action="lw-plus"]').click()
+    page.wait_for_selector('input[placeholder="Amount"]', timeout=10000)
+    page.fill('input[placeholder="Amount"]', "40")
+    page.locator('input[placeholder="Amount"]').locator('..').locator('button', has_text="Add").click()
+    page.wait_for_selector('[data-action="roll-wound-check-strike"]', state='visible', timeout=10000)
+    page.locator('[data-action="roll-wound-check-strike"]').click()
+    _wait_wc_result(page)
     wc = page.locator('[data-modal="wound-check"]')
     wc.locator('text="Wound check FAILED"').wait_for(state="visible", timeout=5000)
-    state = _duel_state(page, "wcResultApplied")
-    assert state["wcResultApplied"] is True, \
-        "strike WC with no conviction must auto-apply as before"
+    state = _duel_state(page, "wcResultApplied", "wcRollTotal")
+    assert state["wcResultApplied"] is False, "a PCP could still change it, so it must wait"
     assert not wc.locator('[data-action="spend-conviction-wc-strike"]').is_visible()
+    assert "Player Character Points" in wc.locator('[data-testid="wc-strike-spend-note"]').text_content()
+
+    _spend_pcp(page, wc, "pcp-raise-wc")
+    page.wait_for_function("(t) => window._diceRoller.wcRollTotal === t", arg=state["wcRollTotal"] + 5,
+                           timeout=5000)
+    assert page.evaluate("() => window._trackingBridge.pcpCount") == 1
+
+    wc.locator('[data-action="wc-strike-accept-result"]').click()
+    page.wait_for_function("() => window._trackingBridge.seriousWounds >= 1"
+                           " && window._trackingBridge.lightWounds === 0", timeout=5000)
+    # Once applied, the menu no longer offers a spend the server would refuse.
+    assert page.evaluate("""() => { const d = window._diceRoller;
+        return d.wcPhase === 'result' && !d.wcResultApplied && d.canUsePcpReroll(); }""") is False
+
+
+def test_duel_strike_pcp_raise_does_not_hide_the_wound_checks(page, live_server_url):
+    """A PCP free raise on the strike, then the opponent's strike lands: the
+    wound check is a new roll and offers its own PCP raise and reroll (the
+    strike's per-roll flags used to leak into it)."""
+    _create_duelist(page, live_server_url, "DuelPcpStrike")
+    _wait_alpine(page)
+    _mock_dice_low(page)
+    modal = _walk_to_strike_result(page, 200)
+    before = _duel_state(page, "duelStrikeRoll")["duelStrikeRoll"]
+    _spend_pcp(page, modal, "pcp-raise-duel-strike")
+    page.wait_for_function("(t) => window._diceRoller.duelStrikeRoll === t", arg=before + 5, timeout=5000)
+    modal.locator('input[placeholder="Enter total"]').fill("999")
+    modal.locator('button:text("Apply Roll"):visible').click()
+    page.wait_for_selector('input[placeholder="Damage"]', state='visible', timeout=10000)
+    page.locator('input[placeholder="Damage"]').fill("40")
+    page.locator('button:text("Make Wound Check")').click()
+    _wait_wc_result(page)
+    wc = page.locator('[data-modal="wound-check"]')
+    wc.locator('[data-action="pcp-menu"]').first.click()
+    assert wc.locator('[data-action="pcp-raise-wc"]').is_visible()
+    assert wc.locator('[data-action="pcp-reroll-wc"]').is_visible()
 
 
 def test_manual_strike_wound_check_offers_conviction(page, live_server_url):
@@ -1115,3 +1162,28 @@ def test_akodo_4th_dan_evaluate_stance_vp_free_raise(page, live_server_url):
     page.wait_for_timeout(100)
     assert page.evaluate("() => window._diceRoller.baseTotal") == before + 5
     assert page.evaluate("() => window._diceRoller.akodoPostRollVpSpent") == 1
+
+
+def test_duel_strike_damage_past_10k10_is_five_per_die(page, live_server_url):
+    """rules/03-combat.md: on an iaijutsu strike's damage each die past
+    10k10 adds +5 instead of +2 - in the modal's damage preview and on the
+    server's damage roll."""
+    from tests.e2e.dice_control import force_dice
+    _create_duelist(page, live_server_url, "DuelOverflow")
+    _wait_alpine(page)
+    force_dice(page, [10])  # the strike keeps its 10s unexploded: a big excess
+    modal = _walk_to_strike_result(page, 10)  # opponent TN 1
+    s = _duel_state(page, "duelStrikeExcess", "duelWeaponRolled", "duelWeaponKept")
+    f = page.evaluate("() => window._diceRoller.formulas['knack:iaijutsu']")
+    rolled = s["duelWeaponRolled"] + (f.get("damage_ring_val") or 2) + (f.get("damage_extra_rolled") or 0) \
+        + s["duelStrikeExcess"]
+    kept = s["duelWeaponKept"] + (f.get("damage_extra_kept") or 0) + max(0, rolled - 10)
+    assert kept > 10, "the test needs the damage pool past 10k10"
+    over = 5 * (kept - 10)
+    preview = page.evaluate("() => window._diceRoller.duelComputeDamage()")
+    assert (preview["rolled"], preview["kept"]) == (10, 10)
+    assert preview["flat"] == (f.get("damage_flat_bonus") or 0) + over
+    modal.locator('button:text-is("Roll Damage")').click()
+    page.wait_for_function("() => window._diceRoller.duelPhase === 'damage-result'", timeout=15000)
+    extras = page.evaluate("() => window._diceRoller.formula.damage_parts || []")
+    assert f"+{over} from rolling above 10k10 (+5 per die)" in extras

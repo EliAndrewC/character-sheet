@@ -254,15 +254,16 @@ def _bonuses_for_payload(formula: Dict[str, Any]) -> List[Dict[str, Any]]:
     ]
 
 
-def apply_dice_cap(rolled: int, kept: int, flat: int) -> Dict[str, int]:
+def apply_dice_cap(rolled: int, kept: int, flat: int, per_die: int = 2) -> Dict[str, int]:
     """The 10k10 ceiling. Mirror of ``L7RRollMath.applyDiceCap``: rolled dice
-    past 10 become kept dice, kept dice past 10 become +2 each."""
+    past 10 become kept dice, kept dice past 10 become +``per_die`` each (+2;
+    +5 on an iaijutsu duel strike's damage, ``STRIKE_OVERFLOW_PER_DIE``)."""
     overflow_flat = 0
     if rolled > 10:
         kept += rolled - 10
         rolled = 10
     if kept > 10:
-        overflow_flat = 2 * (kept - 10)
+        overflow_flat = per_die * (kept - 10)
         flat += overflow_flat
         kept = 10
     return {"rolled": rolled, "kept": kept, "flat": flat, "overflow_flat": overflow_flat}

@@ -4320,7 +4320,7 @@
                 let rolled = wR + ringVal + (f.damage_extra_rolled || 0) + extraDice;
                 let kept = wK + (f.damage_extra_kept || 0);
                 let flat = f.damage_flat_bonus || 0;
-                const _cap = window.L7RRollMath.applyDiceCap(rolled, kept, flat);
+                const _cap = window.L7RRollMath.applyDiceCap(rolled, kept, flat, 5);  // +5 per die past 10k10 on the strike (duels.STRIKE_OVERFLOW_PER_DIE)
                 rolled = _cap.rolled; kept = _cap.kept; flat = _cap.flat;
                 const rk = `${rolled},${kept}`;
                 const avg = Math.round((this.atkDamageAvgs[rk] || 0) + flat);
@@ -6282,13 +6282,24 @@
                 this.preceptsPoolSwapBonuses = [];
                 this._wcMatsuStack = [];
                 this._wcExcessStack = [];
+                // A new roll: what the previous one (the duel's strike, an
+                // attack) spent on Lucky / PCPs must not hide this one's.
+                this.luckyUsedThisRoll = false; this.pcpRerollUsedThisRoll = false; this.pcpRaisesSpentThisRoll = 0; this.pcpTensRerolledThisRoll = false;
+                this.merchantRerollUsedThisRoll = false;
+                this.luckyOriginalWasHigher = false;
+                this.luckyRollPair = null;
                 // Iaijutsu strike: discretionary bonuses are banned EXCEPT
-                // the character's own Conviction (rules quirk).
+                // the character's own Conviction (rules quirk) - and the
+                // Player Character Points below, which no rule bars.
                 if (this.wcIsStrike) {
                     this.wcHasDiscretionary =
                         (this.convictionConfig.rank || 0) > 0
                         && this.convictionPoolAvail() > 0;
                 }
+                // A failure must wait for Accept Result while Lucky or a PCP
+                // could still change it: once applied, the server refuses
+                // every reroll on the check ("already resolved").
+                this.wcHasDiscretionary = this.wcHasDiscretionary || this._wcRerollOpen();
                 const f = this.formulas['wound_check'] || {};
                 this._wcRequest = {
                     roll_key: 'wound_check',
@@ -6354,6 +6365,13 @@
                 if (!this.wcPassed && !this.wcHasDiscretionary) {
                     this.applyWoundCheckFailure();
                 }
+            },
+
+            // Lucky or a Player Character Point could still reroll / raise
+            // the wound check.
+            _wcRerollOpen() {
+                const t = window._trackingBridge;
+                return this.canUseLucky() || !!(t && t.canSpendPcp && t.canSpendPcp());
             },
 
             retryServerWoundCheck() {

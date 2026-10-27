@@ -320,12 +320,19 @@ def _roll_wound_check(page):
 
 
 def _set_light_wounds(page, amount):
-    """Set light wounds on the tracking bridge."""
-    page.evaluate(f"""() => {{
+    """Set light wounds on the tracking bridge and wait until the server has
+    them. An operation still in flight (a posture just picked) would make the
+    whole-state save stale, and the tab would adopt the server's old count."""
+    page.evaluate(f"""async () => {{
         const t = window._trackingBridge;
-        if (t) {{ t.lightWounds = {amount}; t.save(); }}
+        if (!t) return;
+        if (t._opChain) await t._opChain.catch(() => null);
+        if (typeof t.whenSaved === 'function') await t.whenSaved();
+        t.lightWounds = {amount};
+        t.save();
+        if (typeof t.whenSaved === 'function') await t.whenSaved();
     }}""")
-    page.wait_for_timeout(200)
+    page.wait_for_function(f"() => window._trackingBridge?.lightWounds === {amount}", timeout=5000)
 
 
 # ===========================================================================
@@ -6142,7 +6149,9 @@ def test_yogo_serious_wound_temp_vp_behavioral(page, live_server_url):
         }
         return false;
     }""", timeout=10000)
-    # The failure auto-applies, which should grant temp VP
+    # The failure waits for Accept Result (a PCP could still change it);
+    # applying it should grant temp VP.
+    page.locator('[data-action="wc-accept-result"]').click()
     page.wait_for_timeout(500)
     temp_after = page.evaluate("window._trackingBridge?.tempVoidPoints || 0")
     assert temp_after > temp_before, f"Temp VP should increase from {temp_before}, got {temp_after}"

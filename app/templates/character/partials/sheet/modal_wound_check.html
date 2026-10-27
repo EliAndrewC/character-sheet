@@ -7,8 +7,8 @@
                     <h3 class="text-xl font-bold text-accent">Wound Check</h3>
                     <div class="flex items-center gap-1">
                         {{ pcp_kebab([
-                            {'label': 'Spend PCP to reroll wound check', 'can': "wcPhase === 'result' && canUsePcpReroll()", 'click': 'requestPcpRerollWoundCheck()', 'action': 'pcp-reroll-wc'},
-                            {'label': 'Spend PCP for a free raise', 'can': "wcPhase === 'result' && canSpendPcpRaise()", 'click': 'requestPcpRaiseWoundCheck()', 'action': 'pcp-raise-wc'},
+                            {'label': 'Spend PCP to reroll wound check', 'can': "wcPhase === 'result' && !wcResultApplied && canUsePcpReroll()", 'click': 'requestPcpRerollWoundCheck()', 'action': 'pcp-reroll-wc'},
+                            {'label': 'Spend PCP for a free raise', 'can': "wcPhase === 'result' && !wcResultApplied && canSpendPcpRaise()", 'click': 'requestPcpRaiseWoundCheck()', 'action': 'pcp-raise-wc'},
                         ]) }}
                         <button type="button" @click="wcModalOpen = false"
                                 class="text-ink/60 hover:text-ink text-2xl leading-none px-2">&times;</button>
@@ -456,6 +456,10 @@
                             <div class="mt-2 flex flex-wrap gap-2">
                                 {{ precepts_pool_block('wc', 'wc-p') }}
                             </div>
+                            <div x-show="window._trackingBridge?.canSpendPcp?.() && (canUsePcpReroll() || canSpendPcpRaise())" x-cloak
+                                 class="text-xs text-ink/50 italic mt-2" data-testid="wc-pcp-note">
+                                A Player Character Point (the &#8942; menu) can still reroll or raise this check.
+                            </div>
                             <button type="button" @click="wcAcceptResult()"
                                     data-action="wc-accept-result"
                                     class="btn-primary px-4 py-2 rounded text-sm font-medium mt-2">
@@ -464,14 +468,16 @@
                         </div>
 
                         {# Iaijutsu strike: own Conviction is the ONLY
-                           discretionary spend allowed (rules quirk) - no
+                           discretionary bonus allowed (rules quirk) - no
                            raises, banked bonuses, post-roll VP, or
-                           priest-ally conviction. wcHasDiscretionary is
-                           recomputed to conviction-only for strikes in
+                           priest-ally conviction. Player Character Points
+                           are allowed (the header's menu), so the result
+                           also waits here while one could be spent.
+                           wcHasDiscretionary is recomputed for strikes in
                            rollWoundCheck(). #}
                         <div x-show="wcIsStrike && wcHasDiscretionary && !wcResultApplied" x-cloak
                              class="mt-3 pt-2 border-t border-red-200" data-conviction-block-wc-strike>
-                            <div class="flex flex-wrap items-center gap-2 mb-1">
+                            <div x-show="(convictionConfig.rank || 0) > 0" x-cloak class="flex flex-wrap items-center gap-2 mb-1">
                                 <button type="button"
                                         @click="spendConviction('wc')" :disabled="!canSpendConviction()"
                                         data-action="spend-conviction-wc-strike"
@@ -485,8 +491,8 @@
                                     Undo Conviction
                                 </button>
                             </div>
-                            <div class="text-xs text-ink/50 italic mb-1">
-                                Conviction is the only discretionary bonus that can be spent on an iaijutsu strike wound check.
+                            <div class="text-xs text-ink/50 italic mb-1" data-testid="wc-strike-spend-note">
+                                Only Conviction and Player Character Points (the &#8942; menu) can be spent on an iaijutsu strike wound check.
                             </div>
                             <button type="button" @click="wcAcceptResult()"
                                     data-action="wc-strike-accept-result"
@@ -524,7 +530,7 @@
                     </div>
 
                     {# Lucky reroll for wound check #}
-                    <button x-show="canUseLucky()" x-cloak type="button" @click="useLuckyWoundCheck()"
+                    <button x-show="canUseLucky() && !wcResultApplied" x-cloak type="button" @click="useLuckyWoundCheck()"
                             class="btn-gold px-4 py-2 rounded text-sm font-medium mt-2">
                         Use Lucky to reroll wound check
                     </button>

@@ -379,7 +379,9 @@ def test_party_priest_ally_conviction_hidden_on_strike_wound_check(page, live_se
     wc = page.locator('[data-modal="wound-check"]')
     # No priest-ally conviction button is visible on the strike WC...
     assert wc.locator('[data-action^="spend-priest-ally-wc"]:visible').count() == 0
-    # ...and with no own conviction either, the failure auto-applied.
+    # ...and with no own conviction, only a PCP could change it: Accept
+    # Result applies the failure.
+    wc.locator('[data-action="wc-strike-accept-result"]').click()
     applied = page.evaluate("""() => {
         const els = document.querySelectorAll('[x-data]');
         for (const el of els) {

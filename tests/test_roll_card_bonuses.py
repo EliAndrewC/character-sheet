@@ -188,4 +188,19 @@ def test_duel_damage_parts_name_school_dice_flat_and_overflow():
     assert pool["parts"] == ["4k2 weapon", "+4k0 from Fire", "+1k1 from school",
                              "+6k0 from the strike's excess", "+5 from 4th Dan (iaijutsu)", "+2 flat"]
     big = duel_damage_pool(f, (10, 10), 0)
-    assert big["parts"][-1] == f"+{big['overflow_flat']} from rolling above 10k10"
+    assert big["parts"][-1] == f"+{big['overflow_flat']} from rolling above 10k10 (+5 per die)"
+
+
+def test_duel_strike_damage_past_10k10_is_five_per_die_kakita_5th_stays_two():
+    """rules/03-combat.md: on an iaijutsu duel strike's damage each die past
+    10k10 adds +5 instead of +2. Kakita 5th Dan's contest damage is not a
+    strike and keeps the ordinary +2."""
+    from app.services.duels import duel_damage_pool, kakita_5th_damage_pool
+    f = {"damage_ring_val": 3, "damage_flat_bonus": 0}
+    # 4k2 weapon + 3 Fire + 15 excess = 22k2 -> 10k14 -> 10k10 and 4 dice over.
+    strike = duel_damage_pool(f, (4, 2), 15)
+    assert (strike["rolled"], strike["kept"], strike["overflow_flat"], strike["flat"]) == (10, 10, 20, 20)
+    assert strike["parts"][-1] == "+20 from rolling above 10k10 (+5 per die)"
+    kakita = kakita_5th_damage_pool(f, (4, 2), 75)  # +15 rolled from the contest
+    assert (kakita["rolled"], kakita["kept"], kakita["overflow_flat"]) == (10, 10, 8)
+    assert kakita["parts"][-1] == "+8 from rolling above 10k10 (+2 per die)"

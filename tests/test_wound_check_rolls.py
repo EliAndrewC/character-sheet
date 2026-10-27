@@ -79,6 +79,7 @@ def test_strike_and_daidoji_refusals(client):
     data = _wc(client, cid, strike=True).json()
     assert data["formula"]["no_reroll_reason"] == "iaijutsu_strike"
     assert "only Conviction" in _act(client, cid, data["session_id"], "raise").json()["error"]
+    assert "only Conviction" in _act(client, cid, data["session_id"], "wc_vp").json()["error"]
     d = _school(client, "daidoji_yojimbo", dan=3, current_light_wounds=10)
     assert _wc(client, d, daidoji=True).json()["formula"]["daidoji_counterattack_bonus"] == 10
 
@@ -243,3 +244,28 @@ def test_a_yogo_post_roll_point_heals_no_more_than_is_left(client, scripted):
     s = _wc(client, sim, headers={**OTHER, "X-Test-Dice": "1"}, light_wounds=20).json()
     up = _act(client, sim, s["session_id"], "wc_vp", headers=OTHER).json()
     assert up["wc"]["light_wounds"] == 12 and not _get(client, sim).current_light_wounds
+
+
+def test_a_strike_wound_check_takes_player_character_points(client, scripted):
+    """GM 2026-10-27: nothing bars a PCP on an iaijutsu strike's wound check
+    - a free raise and a reroll both land; reroll-10s stays refused (the
+    strike never rerolls 10s, rules/10)."""
+    cid = _school(client, "akodo_bushi", current_light_wounds=40)
+    data = _wc(client, cid, strike=True, light_wounds=40, headers=scripted("1")).json()
+    sid, base = data["session_id"], data["total"]
+    raised = _act(client, cid, sid, "pcp_free_raise").json()
+    assert raised["pcp"]["use"] == "free_raise" and raised["total"] == base + 5
+    rerolled = _act(client, cid, sid, "pcp_reroll", headers=scripted("9")).json()
+    assert rerolled["pcp"]["use"] == "reroll" and rerolled["total"] > base + 5
+    assert _act(client, cid, sid, "pcp_reroll_tens").status_code == 400
+    assert _get(client, cid).pcp_count == 2
+
+
+def test_the_strike_itself_takes_player_character_points(client, scripted):
+    cid = _school(client, "kakita_duelist", ring_fire=3)
+    strike = _roll(client, cid, roll_key="iaijutsu:strike", opponent_tn=20, headers=scripted("5")).json()
+    assert strike["duel"]["excess"] == -5
+    raised = _act(client, cid, strike["session_id"], "pcp_free_raise").json()
+    assert raised["duel"] == {"hit": True, "excess": 0}
+    rerolled = _act(client, cid, strike["session_id"], "pcp_reroll", headers=scripted("9")).json()
+    assert rerolled["pcp"]["use"] == "reroll" and rerolled["duel"]["excess"] > 0
