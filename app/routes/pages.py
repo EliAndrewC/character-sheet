@@ -401,8 +401,8 @@ def group_money(request: Request, group_id: int, db: Session = Depends(get_db)):
 
     Shows each visible (non-hidden) character's full money ledger
     (the same ``compute_money_state`` the player sees on their sheet)
-    and lets the GM make an income award to one character inline or
-    the same award to everyone in the group at once - all driven by
+    and lets the GM add an income or expense entry to one character
+    inline or the same entry to everyone in the group at once - all driven by
     AJAX against ``POST /groups/{id}/money/award``, no page reload.
     """
     deny = _require_admin(request)
@@ -446,13 +446,16 @@ def group_money(request: Request, group_id: int, db: Session = Depends(get_db)):
 async def group_money_award(
     request: Request, group_id: int, db: Session = Depends(get_db)
 ):
-    """Award koku to characters in a gaming group. Admin-only.
+    """Award koku to (or charge it from) characters in a gaming group.
+    Admin-only.
 
-    Body: ``{"char_id": int|null, "label": str, "amount": number}``.
+    Body: ``{"char_id": int|null, "kind": "income"|"expense",
+    "label": str, "amount": number}``; ``kind`` defaults to income.
     With ``char_id`` set, the award goes to that one character (it must
     belong to the group and be visible); with ``char_id`` omitted or
     null, the same award goes to every visible character in the group.
-    Each award appends an income entry to that character's money ledger.
+    Each award appends an entry of that kind to the character's money
+    ledger.
 
     Returns ``{"ok": true, "awards": {"<char_id>": <money_state>, ...}}``
     so the page can refresh each affected ledger inline.
@@ -474,6 +477,11 @@ async def group_money_award(
     if not isinstance(body, dict):
         return JSONResponse({"error": "Invalid payload"}, status_code=400)
 
+    kind = body.get("kind", "income")
+    if kind not in ("income", "expense"):
+        return JSONResponse(
+            {"error": "kind must be 'income' or 'expense'"}, status_code=400
+        )
     label_raw = body.get("label")
     label = label_raw.strip() if isinstance(label_raw, str) else ""
     if not label:
@@ -482,8 +490,8 @@ async def group_money_award(
         label = label[:200]
     # Mirror the per-character money endpoint's amount handling: reject
     # bools (which are ints in Python) and non-numbers, round half-up to
-    # the hundredth-koku (zeni), and require a positive value (awards add
-    # money).
+    # the hundredth-koku (zeni), and require a positive value (the kind
+    # carries the sign).
     raw_amount = body.get("amount")
     if isinstance(raw_amount, bool) or not isinstance(raw_amount, (int, float)):
         return JSONResponse({"error": "amount must be a number"}, status_code=400)
@@ -514,7 +522,7 @@ async def group_money_award(
         # Fresh list of fresh dicts so SQLAlchemy marks the JSON column
         # dirty (in-place mutation isn't detected).
         new_ledger = [dict(e) for e in (c.money_ledger or [])]
-        new_ledger.append(new_ledger_entry("income", label, amount))
+        new_ledger.append(new_ledger_entry(kind, label, amount))
         c.money_ledger = new_ledger
     db.commit()
 

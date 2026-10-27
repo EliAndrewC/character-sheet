@@ -616,6 +616,36 @@ class TestGroupMoneyAwards:
         )
         assert resp.status_code == 400
 
+    def test_individual_expense_adds_expense_entry(self, client):
+        gid, ids = self._make_group_with(client, {"name": "Spender"})
+        resp = client.post(
+            f"/groups/{gid}/money/award",
+            json={"char_id": ids[0], "kind": "expense",
+                  "label": "Inn bill", "amount": 3},
+        )
+        assert resp.status_code == 200
+        entries = resp.json()["awards"][str(ids[0])]["entries"]
+        assert any(e["label"] == "Inn bill" and e["kind"] == "expense"
+                   and e["amount"] == 3 for e in entries)
+        assert [e["kind"] for e in self._ledger(client, ids[0])] == ["expense"]
+
+    def test_award_kind_defaults_to_income(self, client):
+        gid, ids = self._make_group_with(client, {"name": "Default"})
+        client.post(
+            f"/groups/{gid}/money/award",
+            json={"char_id": ids[0], "label": "x", "amount": 1},
+        )
+        assert [e["kind"] for e in self._ledger(client, ids[0])] == ["income"]
+
+    def test_award_unknown_kind_400(self, client):
+        gid, ids = self._make_group_with(client, {"name": "Bad"})
+        resp = client.post(
+            f"/groups/{gid}/money/award",
+            json={"char_id": ids[0], "kind": "theft", "label": "x", "amount": 1},
+        )
+        assert resp.status_code == 400
+        assert self._ledger(client, ids[0]) == []
+
     # ---- award endpoint: mass ----
 
     def test_mass_award_hits_all_visible_excludes_hidden(self, client):
@@ -637,6 +667,17 @@ class TestGroupMoneyAwards:
             assert any(e["label"] == "Winter stipend" and e["amount"] == 10
                        for e in self._ledger(client, cid))
         assert self._ledger(client, ids[2]) == []
+
+    def test_mass_expense_hits_all_visible(self, client):
+        gid, ids = self._make_group_with(client, {"name": "PC1"}, {"name": "PC2"})
+        resp = client.post(
+            f"/groups/{gid}/money/award",
+            json={"kind": "expense", "label": "Ferry toll", "amount": 2},
+        )
+        assert resp.status_code == 200
+        for cid in ids:
+            assert [(e["kind"], e["label"]) for e in self._ledger(client, cid)] \
+                == [("expense", "Ferry toll")]
 
     # ---- award endpoint: validation ----
 

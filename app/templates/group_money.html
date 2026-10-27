@@ -22,21 +22,29 @@
         </p>
     </template>
 
-    {# Mass award: same income entry to every character below. #}
+    {# Mass award: same income or expense entry to every character below. #}
     <template x-if="chars.length > 0">
         <section class="bg-white rounded-lg shadow border border-ink/10 p-4 space-y-3"
                  data-testid="mass-award">
-            <h2 class="font-bold text-ink">Award to everyone</h2>
+            <h2 class="font-bold text-ink">Everyone</h2>
             <p class="text-xs text-ink/60">
-                Adds the same income entry to all
+                Adds the same <span x-text="massKind"></span> entry to all
                 <span x-text="chars.length"></span> character<span x-show="chars.length !== 1">s</span> below.
             </p>
             <div class="flex flex-wrap items-end gap-2">
+                <div>
+                    <label class="block text-xs font-medium mb-1">Type</label>
+                    <select x-model="massKind" data-testid="mass-kind"
+                            class="border rounded px-2 py-1.5 text-sm">
+                        <option value="income">Income</option>
+                        <option value="expense">Expense</option>
+                    </select>
+                </div>
                 <div class="flex-1 min-w-[12rem]">
                     <label class="block text-xs font-medium mb-1">Reason / label</label>
                     <input type="text" x-model="massLabel" maxlength="200"
                            data-testid="mass-label"
-                           placeholder="e.g. Winter Court stipend"
+                           :placeholder="massKind === 'expense' ? 'e.g. Ferry toll' : 'e.g. Winter Court stipend'"
                            class="w-full border rounded px-2 py-1.5 text-sm">
                 </div>
                 <div class="w-28">
@@ -47,7 +55,8 @@
                 </div>
                 <button type="button" @click="awardAll()" :disabled="massBusy"
                         data-testid="mass-award-btn"
-                        class="btn-primary px-4 py-2 rounded text-sm font-medium disabled:opacity-40">
+                        class="btn-primary px-4 py-2 rounded text-sm font-medium disabled:opacity-40"
+                        x-text="massKind === 'expense' ? 'Charge all' : 'Award to all'">
                     Award to all
                 </button>
             </div>
@@ -56,7 +65,7 @@
         </section>
     </template>
 
-    {# One card per visible character: full money history + inline award. #}
+    {# One card per visible character: full money history + inline income / expense. #}
     <template x-for="c in chars" :key="c.id">
         <section class="bg-white rounded-lg shadow border border-ink/10 p-4 space-y-3"
                  data-group-money-card :data-character-id="c.id">
@@ -131,13 +140,21 @@
                 </ul>
             </div>
 
-            {# Inline individual award. #}
+            {# Inline individual income / expense. #}
             <div class="border-t border-ink/10 pt-2 flex flex-wrap items-end gap-2">
+                <div>
+                    <label class="block text-xs font-medium mb-1">Type</label>
+                    <select x-model="rowKind[c.id]" data-testid="row-kind"
+                            class="border rounded px-2 py-1.5 text-sm">
+                        <option value="income">Income</option>
+                        <option value="expense">Expense</option>
+                    </select>
+                </div>
                 <div class="flex-1 min-w-[10rem]">
-                    <label class="block text-xs font-medium mb-1">Award reason</label>
+                    <label class="block text-xs font-medium mb-1">Reason</label>
                     <input type="text" maxlength="200" x-model="rowLabel[c.id]"
                            data-testid="row-label"
-                           placeholder="e.g. Bounty payout"
+                           :placeholder="rowKind[c.id] === 'expense' ? 'e.g. Inn bill' : 'e.g. Bounty payout'"
                            class="w-full border rounded px-2 py-1.5 text-sm">
                 </div>
                 <div class="w-24">
@@ -148,7 +165,8 @@
                 </div>
                 <button type="button" @click="awardOne(c.id)" :disabled="rowBusy[c.id]"
                         data-testid="row-award-btn"
-                        class="btn-primary px-3 py-2 rounded text-sm font-medium disabled:opacity-40">
+                        class="btn-primary px-3 py-2 rounded text-sm font-medium disabled:opacity-40"
+                        x-text="rowKind[c.id] === 'expense' ? 'Charge' : 'Award'">
                     Award
                 </button>
                 <p x-show="rowError[c.id]" x-cloak class="w-full text-sm text-red-700" x-text="rowError[c.id]"></p>
@@ -162,8 +180,8 @@ function groupMoney(groupId, chars) {
     return {
         groupId: groupId,
         chars: chars,
-        massLabel: '', massAmount: '', massError: '', massOk: '', massBusy: false,
-        rowLabel: {}, rowAmount: {}, rowError: {}, rowBusy: {},
+        massKind: 'income', massLabel: '', massAmount: '', massError: '', massOk: '', massBusy: false,
+        rowKind: {}, rowLabel: {}, rowAmount: {}, rowError: {}, rowBusy: {},
         // Inline edit / delete of an existing entry. Only one entry is in
         // edit or confirm-delete mode at a time; both track the entry id
         // (user entries carry unique uuids, so there's no cross-card clash).
@@ -173,6 +191,7 @@ function groupMoney(groupId, chars) {
         // defined falsy value (an undefined key leaves the button disabled).
         init() {
             for (const c of this.chars) {
+                this.rowKind[c.id] = 'income';
                 this.rowLabel[c.id] = '';
                 this.rowAmount[c.id] = '';
                 this.rowError[c.id] = '';
@@ -208,7 +227,9 @@ function groupMoney(groupId, chars) {
             if (!(amount > 0)) { this.rowError[charId] = 'Enter a positive amount.'; return; }
             this.rowBusy[charId] = true;
             try {
-                this._applyAwards(await this._award({char_id: charId, label: label, amount: amount}));
+                this._applyAwards(await this._award({
+                    char_id: charId, kind: this.rowKind[charId], label: label, amount: amount,
+                }));
                 this.rowLabel[charId] = '';
                 this.rowAmount[charId] = '';
             } catch (e) {
@@ -275,9 +296,11 @@ function groupMoney(groupId, chars) {
             if (!(amount > 0)) { this.massError = 'Enter a positive amount.'; return; }
             this.massBusy = true;
             try {
-                const awards = await this._award({label: label, amount: amount});
+                const awards = await this._award({kind: this.massKind, label: label, amount: amount});
                 this._applyAwards(awards);
-                this.massOk = 'Awarded ' + this.fmt(amount) + ' koku to '
+                this.massOk = (this.massKind === 'expense' ? 'Charged ' : 'Awarded ')
+                    + this.fmt(amount) + ' koku '
+                    + (this.massKind === 'expense' ? 'from ' : 'to ')
                     + Object.keys(awards).length + ' character(s).';
                 this.massLabel = '';
                 this.massAmount = '';

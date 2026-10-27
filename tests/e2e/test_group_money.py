@@ -202,3 +202,47 @@ def test_money_page_is_admin_only(page, page_nonadmin, live_server_url):
 
     page_nonadmin.goto(money_url)
     assert "Admin access required" in page_nonadmin.content()
+
+
+def test_individual_expense_charges_only_that_character_inline(page, live_server_url):
+    """Switching a card's Type to Expense turns its button into "Charge"
+    and subtracts the amount from only that character, with no reload."""
+    _make_money_group(page, live_server_url, ["ChargedPC", "SparedPC"])
+    before_c = _on_hand(page, "ChargedPC")
+    before_s = _on_hand(page, "SparedPC")
+    page.evaluate("window.__noReload = true")
+
+    card = _card(page, "ChargedPC")
+    card.locator('[data-testid="row-kind"]').select_option("expense")
+    assert card.locator('[data-testid="row-award-btn"]').text_content().strip() == "Charge"
+    card.locator('[data-testid="row-label"]').fill("Inn bill")
+    card.locator('[data-testid="row-amount"]').fill("3")
+    card.locator('[data-testid="row-award-btn"]').click()
+    row = card.locator('[data-testid="ledger-entry"]', has_text="Inn bill")
+    row.wait_for(state="visible", timeout=5000)
+
+    assert "-3" in row.text_content()
+    assert abs(_on_hand(page, "ChargedPC") - (before_c - 3)) < 0.05
+    assert abs(_on_hand(page, "SparedPC") - before_s) < 0.05
+    assert page.evaluate("window.__noReload") is True
+
+
+def test_mass_expense_charges_every_character_inline(page, live_server_url):
+    """An Expense from the Everyone form subtracts the same amount from
+    every character inline."""
+    _make_money_group(page, live_server_url, ["TollAlpha", "TollBravo"])
+    before_a = _on_hand(page, "TollAlpha")
+    before_b = _on_hand(page, "TollBravo")
+    page.evaluate("window.__noReload = true")
+
+    page.locator('[data-testid="mass-kind"]').select_option("expense")
+    assert page.locator('[data-testid="mass-award-btn"]').text_content().strip() == "Charge all"
+    page.fill('[data-testid="mass-label"]', "Ferry toll")
+    page.fill('[data-testid="mass-amount"]', "2")
+    page.locator('[data-testid="mass-award-btn"]').click()
+    page.wait_for_selector('[data-testid="mass-ok"]', state="visible", timeout=5000)
+
+    assert "Charged 2 koku from 2" in page.locator('[data-testid="mass-ok"]').text_content()
+    assert abs(_on_hand(page, "TollAlpha") - (before_a - 2)) < 0.05
+    assert abs(_on_hand(page, "TollBravo") - (before_b - 2)) < 0.05
+    assert page.evaluate("window.__noReload") is True

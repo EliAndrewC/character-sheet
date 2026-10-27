@@ -1035,6 +1035,8 @@ The Suzume family of the Sparrow clan is drawn from Crane Doji Artisans and merc
 - [x] Nav title reads "<Group> Money" with the group name linking back to the Group Summary (group sub-page convention) → `test_group_money.py::test_money_page_nav_title_links_back_to_group`
 - [x] Mass award adds the same income entry to every character and refreshes each on-hand inline (no reload) → `test_group_money.py::test_mass_award_updates_all_characters_inline`
 - [x] Inline individual award updates only the targeted character's ledger + on-hand (no reload) → `test_group_money.py::test_individual_award_updates_only_that_character_inline`
+- [x] Type = Expense on a card charges only that character (button reads "Charge", on-hand drops, no reload) → `test_group_money.py::test_individual_expense_charges_only_that_character_inline`
+- [x] Type = Expense on the Everyone form charges every character (button reads "Charge all", on-hand drops, no reload) → `test_group_money.py::test_mass_expense_charges_every_character_inline`
 - [x] GM money link hidden from non-admins and the money page rejects them (403) → `test_group_money.py::test_money_page_is_admin_only`
 - [x] An existing award can be edited inline (label + amount + on-hand update, no reload) → `test_group_money.py::test_edit_existing_award_inline`
 - [x] An existing award can be deleted inline via a confirm step (entry removed, on-hand drops, no reload) → `test_group_money.py::test_delete_existing_award_inline`
