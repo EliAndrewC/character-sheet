@@ -151,7 +151,9 @@ def test_down_prompt_needs_the_npc_in_the_fight(world):
 # ---------------------------------------------------------------------------
 
 _PUBLIC_NPC_KEYS = {"id", "name", "light_wounds", "serious_wounds", "down",
-                    "spent_dice", "unknown_dice", "tn_to_be_hit", "impaired"}
+                    "spent_dice", "unknown_dice", "tn_to_be_hit", "impaired",
+                    # None unless a PC in the fight knows it (Kakita 3rd Dan, Kitsuki 4th Dan)
+                    "next_action"}
 
 
 def _spend(npc, *indices, spent=True):
@@ -641,3 +643,40 @@ def test_the_roller_opens_a_kakitas_phase_zero_option(client, world):
     assert "window._trackingBridge.kakitaPhase0Interrupt();" not in page
     assert "window._diceRoller.openKakita5thDanModal();" not in page
     assert client.get(_url(world, f"/roller/{pc.id}?kakita=5th"), headers=OTHER).status_code == 403
+
+
+def test_an_npcs_next_action_is_public_once_a_kakita_who_can_strike_it_knows_it(world):
+    """Kakita 3rd Dan: "You know the next action of all potential targets
+    within striking range" - and what a PC knows, the table sees (GM,
+    2026-10-27). Kitsuki 4th Dan knows everyone's."""
+    s, g, enc, pc, npc = world["s"], world["g"], world["enc"], world["pc"], world["npc"]
+    _dice(npc, (7, 4, 9))
+    npc.action_dice[1]["spent"] = True  # the 4 is spent: next is the 7
+    s.commit()
+    assert cv.public_state(s, g)["npcs"][0]["next_action"] is None  # an Akodo knows nothing
+    pc.school, pc.school_ring_choice = "kakita_duelist", "Fire"
+    pc.knacks = {"double_attack": 3, "iaijutsu": 3, "lunge": 3}
+    s.commit()
+    assert cv.public_state(s, g)["npcs"][0]["next_action"] is None  # 3rd Dan, but out of reach
+    npcs.set_reach(s, enc, pc.id, npc.id, True, [pc.id], [npc.id])
+    s.commit()
+    assert cv.public_state(s, g)["npcs"][0]["next_action"] == {"phase": 7, "known_by": ["Yudai"]}
+    enc.current_phase = 8  # a held die acts now
+    s.commit()
+    assert cv.public_state(s, g)["npcs"][0]["next_action"]["phase"] == 8
+    npc.action_dice = [{"value": v, "spent": True} for v in (7, 4, 9)]
+    s.commit()
+    assert cv.public_state(s, g)["npcs"][0]["next_action"]["phase"] == 11  # none left
+    pc.knacks = {"double_attack": 2, "iaijutsu": 2, "lunge": 2}
+    s.commit()
+    assert cv.public_state(s, g)["npcs"][0]["next_action"] is None  # 2nd Dan
+    # Kitsuki 4th Dan: every NPC, no striking line needed.
+    pc.school, pc.school_ring_choice = "kitsuki_magistrate", "Water"
+    from app.game_data import SCHOOLS
+    pc.knacks = {k: 4 for k in SCHOOLS["kitsuki_magistrate"].school_knacks}
+    enc.reach = []
+    s.commit()
+    assert cv.public_state(s, g)["npcs"][0]["next_action"]["known_by"] == ["Yudai"]
+    npcs.set_status(s, enc, npc, "dead")
+    s.commit()
+    assert cv.public_state(s, g)["npcs"][0]["next_action"] is None  # out of the fight

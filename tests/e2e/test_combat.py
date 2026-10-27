@@ -235,6 +235,7 @@ def test_public_view_shows_totals_but_not_how(page, page_anon, live_server_url):
     assert set(state["npcs"][0]) == {
         "id", "name", "light_wounds", "serious_wounds", "down",
         "spent_dice", "unknown_dice", "tn_to_be_hit", "impaired",
+        "next_action",  # None unless a PC in the fight knows it (Kakita 3rd Dan, Kitsuki 4th Dan)
     }
 
 
@@ -1170,3 +1171,20 @@ def test_a_kakitas_phase_zero_options_in_the_pc_kebab(page, live_server_url):
     expect(fifth).to_be_disabled()
     expect(fifth).to_contain_text("Only in phase 0")
     expect(interrupt).to_contain_text("Only in phase 0")
+
+
+def test_everyone_sees_the_next_action_a_kakita_3rd_dan_knows(page, page_anon, live_server_url):
+    """Kakita 3rd Dan knows the next action of anyone within striking range,
+    so the public view shows that NPC's next action die (with who knows it),
+    and stops once the striking line is gone."""
+    gid, pc, npc = _school_pc_in_fight(page, live_server_url, "SeerKakita", "kakita_duelist",
+                                       knacks={"double_attack": 3, "iaijutsu": 3, "lunge": 3})
+    _set_dice(page, live_server_url, npc["id"], [{"value": 6, "spent": False}, {"value": 3, "spent": True}])
+    page_anon.goto(f"{live_server_url}/groups/{gid}/combat")
+    nxt = page_anon.locator(f'[data-testid="npc-next-action-{npc["id"]}"]')
+    expect(nxt).to_be_visible()
+    expect(nxt.locator(".die-text")).to_have_text("6")
+    assert "SeerKakita" in nxt.get_attribute("title")
+    page.request.post(f"{live_server_url}/groups/{gid}/combat/reach",
+                      data={"pc_id": pc["id"], "npc_id": npc["id"], "on": False})
+    expect(nxt).to_have_count(0, timeout=10000)  # the page polls every 4s

@@ -25,7 +25,8 @@ from app.services import npc_generator as gen
 from app.services import npcs
 from app.services import fight_log
 from app.services.combat_actions import tn_to_be_hit
-from app.services.combat_targets import current_duels, phase_abilities, weapon_for
+from app.services.combat_targets import (current_duels, knows_next_actions, knows_parry, next_phase,
+                                         phase_abilities, weapon_for)
 from app.services.dice import dying_threshold, is_impaired
 from app.services.per_adventure import per_adventure_abilities, remaining
 from app.services.void_spend import school_dan, void_limits, void_pools
@@ -136,6 +137,20 @@ def _public_pc(pc: Character, mine: bool, encounter: Optional[Encounter] = None)
     return out
 
 
+def _next_action(link: Any, knowers: List[Character], reach: Set[tuple], phase: int) -> Optional[Dict[str, Any]]:
+    """An NPC's next action, public once a PC in the fight knows it: a Kakita
+    at 3rd Dan who can strike it ("You know the next action of all potential
+    targets within striking range") or a Kitsuki at 4th Dan (every character).
+    What a PC knows, the table knows (GM, 2026-10-27). ``phase`` 11 means it
+    has no action left this round."""
+    if link.status != "fighting":
+        return None
+    names = [pc.name for pc in knowers if (pc.id, link.character_id) in reach or knows_parry(pc)]
+    if not names:
+        return None
+    return {"phase": next_phase(link.character, phase), "known_by": names}
+
+
 def public_state(db: Session, group: GamingGroup, mine: Optional[Set[int]] = None) -> Dict[str, Any]:
     """The allow-listed view. ``mine``: PCs this viewer can edit - for those
     (their own character) the whole action dice, spent ones included, so
@@ -144,6 +159,9 @@ def public_state(db: Session, group: GamingGroup, mine: Optional[Set[int]] = Non
     encounter, pcs, links = _sides(db, group)
     actions = _actions(db, encounter)
     current = encounter.current_round if encounter else 0
+    knowers = [pc for pc in pcs if knows_next_actions(pc)]
+    reach = {tuple(p) for p in (encounter.reach or [])} if encounter is not None else set()
+    phase = (encounter.current_phase or 0) if encounter is not None else 0
     out_npcs = []
     for link in links:
         npc = link.character
@@ -163,6 +181,7 @@ def public_state(db: Session, group: GamingGroup, mine: Optional[Set[int]] = Non
             "unknown_dice": max(0, fight_log.known_actions(link, current) - len(spent)),
             "tn_to_be_hit": tn_to_be_hit(npc) if _tn_known(link, mine) else None,
             "impaired": is_impaired(npc.to_dict()),  # shown as an orange SW count
+            "next_action": _next_action(link, knowers, reach, phase),
         })
     return {
         "rev": _rev(encounter, pcs + [link.character for link in links]),

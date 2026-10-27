@@ -470,12 +470,26 @@
                        the actions players know of from earlier rounds. Never its rolls. #}
                     <template x-if="!gm">
                         <div class="space-y-1">
-                            <div x-show="npc.spent_dice.length || npc.unknown_dice" class="flex flex-wrap items-center gap-1"
+                            <div x-show="npc.spent_dice.length || npc.unknown_dice || npc.next_action" class="flex flex-wrap items-center gap-1"
                                  :data-testid="'npc-public-dice-' + npc.id">
                                 <template x-for="(die, i) in publicDice(npc)" :key="i">
                                     <span class="block" :data-testid="(die.spent ? 'npc-spent-die-' : 'npc-unknown-die-') + npc.id"
                                           :title="die.spent ? '' : 'An action this opponent has from an earlier round, not taken yet'">
 {% include 'character/partials/sheet/action_die_icon.html' %}
+                                    </span>
+                                </template>
+                                {# Its next action, once a PC in the fight knows it (a Kakita
+                                   3rd Dan who can strike it, a Kitsuki 4th Dan). #}
+                                <template x-if="npc.next_action">
+                                    <span class="inline-flex items-center gap-1 text-xs text-ink/60 ml-1"
+                                          :data-testid="'npc-next-action-' + npc.id" :title="nextActionTitle(npc)">
+                                        <span>Next:</span>
+                                        <template x-if="npc.next_action.phase <= 10">
+                                            <span class="block" x-data="{ get die() { return { value: npc.next_action.phase, spent: false }; } }">
+{% include 'character/partials/sheet/action_die_icon.html' %}
+                                            </span>
+                                        </template>
+                                        <span x-show="npc.next_action.phase > 10">no actions left</span>
                                     </span>
                                 </template>
                             </div>
