@@ -1127,3 +1127,46 @@ def test_an_unmapped_school_waits_for_the_gm_and_clear_resets_the_row(page, live
     assert page.locator('[data-testid="row-type-0"]').input_value() == "wave_man"
     assert page.locator('[data-testid="row-count-0"]').is_enabled()
     assert page.locator('[data-testid="row-roll-0"]').is_checked()
+
+
+def test_a_kakitas_phase_zero_options_in_the_pc_kebab(page, live_server_url):
+    """A Kakita Duelist's card kebab offers the special ability's iaijutsu
+    interrupt (spends the 2 highest dice, opens the iaijutsu attack) and the
+    5th Dan contest - both only in phase 0, greyed out with the reason
+    otherwise; the interrupt also needs 2 unspent dice."""
+    gid, pc, npc = _school_pc_in_fight(page, live_server_url, "KebabKakita", "kakita_duelist",
+                                       knacks={"double_attack": 5, "iaijutsu": 5, "lunge": 5})
+    _set_dice(page, live_server_url, pc["id"], [{"value": v, "spent": False} for v in (3, 7, 9)])
+    page.goto(f"{live_server_url}/groups/{gid}/combat")
+    interrupt = page.locator(f'[data-testid="pc-kakita-interrupt-{pc["id"]}"]')
+    fifth = page.locator(f'[data-testid="pc-kakita-5th-{pc["id"]}"]')
+
+    page.locator(f'[data-testid="pc-menu-{pc["id"]}"]').click()
+    expect(interrupt).to_be_enabled()
+    expect(fifth).to_be_enabled()
+    fifth.click()
+    frame = _roller(page)
+    expect(frame.locator('[data-modal="kakita-5th-dan"]')).to_be_visible()
+    frame.locator('[data-modal="kakita-5th-dan"] button:has-text("×")').first.click()
+    _roller_gone(page)
+
+    page.locator(f'[data-testid="pc-menu-{pc["id"]}"]').click()
+    interrupt.click()
+    frame = _roller(page)
+    expect(frame.locator('[data-modal="attack"]')).to_be_visible()
+    dice = next(p for p in _state(page, live_server_url, gid)["pcs"] if p["id"] == pc["id"])["action_dice"]
+    assert [(d["value"], d["spent"]) for d in dice] == [(3, False), (7, True), (9, True)]
+    frame.locator('[data-modal="attack"] button:has-text("×")').first.click()
+    _roller_gone(page)
+
+    # One die left: the interrupt says why it is greyed out.
+    page.locator(f'[data-testid="pc-menu-{pc["id"]}"]').click()
+    expect(interrupt).to_be_disabled()
+    expect(interrupt).to_contain_text("Needs 2 unspent action dice")
+    page.keyboard.press("Escape")
+    _phase(page, live_server_url, gid, 1)
+    page.reload()
+    page.locator(f'[data-testid="pc-menu-{pc["id"]}"]').click()
+    expect(fifth).to_be_disabled()
+    expect(fifth).to_contain_text("Only in phase 0")
+    expect(interrupt).to_contain_text("Only in phase 0")

@@ -602,3 +602,42 @@ def test_players_get_their_own_pcs_dice_whole(client, world):
     assert "mine" not in shared and shared["action_dice"] == [{"value": 6}]
     page = client.get(_url(world, ""), headers=PLAYER).text
     assert '"mine": true' in page
+
+
+def test_kakita_options_ride_the_gm_and_own_pc_state(client, world):
+    """A Kakita Duelist's phase-0 options (the kebab's interrupt and 5th Dan
+    contest) reach the GM and whoever drives the PC - never anyone else."""
+    s, pc, npc = world["s"], world["pc"], world["npc"]
+    assert cv.kakita_options(pc) is None  # an Akodo
+    pc.school, pc.school_ring_choice = "kakita_duelist", "Fire"
+    pc.knacks = {"double_attack": 5, "iaijutsu": 5, "lunge": 5}
+    pc.adventure_state = {"kakita_5th_dan_used": True}
+    npc.school = "kakita_duelist"
+    npc.knacks = {"double_attack": 2, "iaijutsu": 2, "lunge": 2}
+    s.commit()
+    assert cv.kakita_options(pc) == {"fifth_dan": True, "fifth_dan_used": True}
+    gm = client.get(_url(world, "/state")).json()
+    assert gm["pcs"][0]["kakita"] == {"fifth_dan": True, "fifth_dan_used": True}
+    assert gm["npcs"][0]["kakita"] == {"fifth_dan": False, "fifth_dan_used": False}
+    mine = client.get(_url(world, "/state"), headers=PLAYER).json()["pcs"][0]
+    assert mine["kakita"] == {"fifth_dan": True, "fifth_dan_used": True}
+    other = client.get(_url(world, "/state"), headers=OTHER).json()["pcs"][0]
+    assert "kakita" not in other
+
+
+def test_the_roller_opens_a_kakitas_phase_zero_option(client, world):
+    s, pc = world["s"], world["pc"]
+    # Not a Kakita: the option is ignored, nothing is opened.
+    page = client.get(_url(world, f"/roller/{pc.id}?kakita=interrupt"), headers=PLAYER).text
+    assert "window._trackingBridge.kakitaPhase0Interrupt();" not in page
+    pc.school, pc.school_ring_choice = "kakita_duelist", "Fire"
+    pc.knacks = {"double_attack": 5, "iaijutsu": 5, "lunge": 5}
+    s.commit()
+    page = client.get(_url(world, f"/roller/{pc.id}?kakita=interrupt&x=1&y=2"), headers=PLAYER).text
+    assert "window._trackingBridge.kakitaPhase0Interrupt();" in page
+    page = client.get(_url(world, f"/roller/{pc.id}?kakita=5th"), headers=PLAYER).text
+    assert "window._diceRoller.openKakita5thDanModal();" in page
+    page = client.get(_url(world, f"/roller/{pc.id}?kakita=bogus"), headers=PLAYER).text
+    assert "window._trackingBridge.kakitaPhase0Interrupt();" not in page
+    assert "window._diceRoller.openKakita5thDanModal();" not in page
+    assert client.get(_url(world, f"/roller/{pc.id}?kakita=5th"), headers=OTHER).status_code == 403

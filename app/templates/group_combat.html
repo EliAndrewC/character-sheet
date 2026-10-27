@@ -39,6 +39,32 @@
 <span class="relative" :class="{{ who }}.impaired ? 'tooltip-trigger text-orange-600 font-semibold' : ''" data-tap-toggle
       :data-impaired="{{ who }}.impaired ? 'true' : 'false'"><span :class="{{ who }}.impaired ? '' : 'text-ink/50'">SW</span> <b :data-testid="'{{ who }}-sw-' + {{ who }}.id" x-text="{{ who }}.serious_wounds"></b>{% if show_max %}<span class="text-ink/50 font-normal" x-text="' / ' + {{ who }}.max_serious_wounds"></span>{% endif %}<span x-show="{{ who }}.impaired" class="tooltip-content absolute left-0 top-full z-10 mt-1 p-2 bg-ink text-parchment text-xs rounded shadow-lg w-56 whitespace-normal text-left font-normal">Impaired: serious wounds at least Earth. 10s are not rerolled, except on wound checks and damage.</span></span>
 {%- endmacro %}
+{# A Kakita Duelist's phase-0 options in a card's kebab: the special
+   ability's iaijutsu interrupt (spends the 2 highest dice) and the 5th Dan
+   contest, each greyed out with the reason when it cannot be taken. Each
+   opens the sheet's own flow in the roll overlay. #}
+{% macro kakita_items(who) -%}
+<template x-if="{{ who }}.kakita">
+    <div class="border-b border-ink/10" :data-testid="'{{ who }}-kakita-' + {{ who }}.id">
+        <button type="button" @click="open = false; openRoller({{ who }}, null, $event, 'kakita_interrupt')"
+                :disabled="busy || !!kakitaInterruptWhy({{ who }})" :title="kakitaInterruptWhy({{ who }})"
+                :data-testid="'{{ who }}-kakita-interrupt-' + {{ who }}.id"
+                class="block w-full text-left px-4 py-2 hover:bg-parchment disabled:opacity-40 disabled:hover:bg-transparent disabled:cursor-not-allowed">
+            Iaijutsu interrupt (2 highest dice)
+            <span x-show="kakitaInterruptWhy({{ who }})" class="block text-xs text-ink/50" x-text="kakitaInterruptWhy({{ who }})"></span>
+        </button>
+        <template x-if="{{ who }}.kakita.fifth_dan">
+            <button type="button" @click="open = false; openRoller({{ who }}, null, $event, 'kakita_5th')"
+                    :disabled="busy || !!kakitaFifthWhy({{ who }})" :title="kakitaFifthWhy({{ who }})"
+                    :data-testid="'{{ who }}-kakita-5th-' + {{ who }}.id"
+                    class="block w-full text-left px-4 py-2 hover:bg-parchment disabled:opacity-40 disabled:hover:bg-transparent disabled:cursor-not-allowed">
+                Kakita 5th Dan contest
+                <span x-show="kakitaFifthWhy({{ who }})" class="block text-xs text-ink/50" x-text="kakitaFifthWhy({{ who }})"></span>
+            </button>
+        </template>
+    </div>
+</template>
+{%- endmacro %}
 {# The combat page (combat-design/design.md 4.5). Public (D27): the GM gets
    the tracker, everyone else the public view, which is rendered from an
    allow-listed payload (app/services/combat_view.public_state) - nothing
@@ -176,14 +202,16 @@
                                class="font-semibold text-ink truncate min-w-0 hover:underline" x-text="pc.name"></a>
                         </span>
                         {# The GM's options; a player gets the menu for their own PC
-                           only for what is theirs to choose (a Kitsune's blessing). #}
-                        <template x-if="state.encounter && (gm || (pc.mine && optionalBlessing(pc)))">
+                           only for what is theirs to choose (a Kitsune's blessing,
+                           a Kakita's phase-0 options). #}
+                        <template x-if="state.encounter && (gm || (pc.mine && (optionalBlessing(pc) || pc.kakita)))">
                             <div class="relative ml-auto" x-data="{ open: false }" @click.outside="open = false">
                                 <button type="button" @click="open = !open" :data-testid="'pc-menu-' + pc.id"
                                         title="Options" aria-label="Options"
                                         class="btn-ghost rounded leading-none font-bold px-2 py-1 text-xl">&#8942;</button>
                                 <div x-show="open" x-cloak
                                      class="absolute right-0 top-full mt-1 z-30 bg-white rounded-lg shadow-xl border border-ink/20 py-1 min-w-[180px] text-sm">
+                                    {{ kakita_items('pc') }}
                                     {# Kitsune Warden 3rd Dan: bless this phase for a free
                                        raise. Optional, so it lives here, not on the card. #}
                                     <template x-if="optionalBlessing(pc)">
@@ -374,6 +402,7 @@
                                         class="btn-ghost rounded leading-none font-bold px-2 py-1 text-xl">&#8942;</button>
                                 <div x-show="open" x-cloak @click="open = false"
                                      class="absolute right-0 top-full mt-1 z-30 bg-white rounded-lg shadow-xl border border-ink/20 py-1 min-w-[180px] text-sm">
+                                    {{ kakita_items('npc') }}
                                     <button type="button" @click="rollInitiative(npc)" :disabled="busy" :data-testid="'npc-init-' + npc.id"
                                             class="block w-full text-left px-4 py-2 hover:bg-parchment">Roll initiative</button>
                                     <button type="button" @click="openDialog('adjust', npc)" :data-testid="'npc-adjust-' + npc.id"

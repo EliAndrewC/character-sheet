@@ -48,6 +48,17 @@
     });
 </script>
 {% endif %}
+{% if roller_kakita %}
+{# A Kakita Duelist's phase-0 option, picked from the combat page's kebab:
+   the sheet's own Phase 0 Interrupt (spends the 2 highest dice, then opens
+   the iaijutsu attack) or its 5th Dan contest modal. #}
+<script>
+    document.addEventListener('alpine:initialized', function () {
+        {% if roller_kakita == 'interrupt' %}window._trackingBridge.kakitaPhase0Interrupt();
+        {% else %}window._diceRoller.openKakita5thDanModal();{% endif %}
+    });
+</script>
+{% endif %}
 <script>
     // Tell the combat page once nothing is open: no die menu, no light-wounds
     // modal, no roll modal. Three quiet checks in a row, so the moment between

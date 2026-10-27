@@ -645,6 +645,17 @@ def test_pcp_needs_a_clean_published_character_and_simulation_is_free(client, sc
     assert "pcp" not in answer and not _get(client, cid).pcp_count
 
 
+def test_an_npc_spends_no_player_character_points(client):
+    """rules/10: "PCs may take advantage of one rule which NPCs cannot"."""
+    from app.services.pcp import PcpRefused, spend_pcp
+    cid = _published(client, is_npc=True)
+    s = client._test_session_factory()
+    with pytest.raises(PcpRefused, match="NPCs cannot"):
+        spend_pcp(s, s.get(Character, cid), "free_raise", None)
+    assert not s.get(Character, cid).pcp_count
+    s.close()
+
+
 def test_pcp_free_raise_once_per_roll(client):
     cid = _published(client)
     first = _roll(client, cid).json()

@@ -440,19 +440,22 @@
             // All three route through the confirmation modal first (rare rule).
             // The reroll shares the one-reroll lock with Lucky; the free raise
             // and reroll-10s are each once per roll.
+            // An NPC has none: "PCs may take advantage of one rule which
+            // NPCs cannot" (rules/10). The server refuses too (pcp.spend_pcp).
+            _isNpc: {{ character.is_npc | tojson }},
             canUsePcpReroll() {
-                return !this.luckyUsedThisRoll && !this.pcpRerollUsedThisRoll
+                return !this._isNpc && !this.luckyUsedThisRoll && !this.pcpRerollUsedThisRoll
                     && !this.merchantRerollUsedThisRoll;
             },
             canSpendPcpRaise() {
-                return this.pcpRaisesSpentThisRoll < 1;
+                return !this._isNpc && this.pcpRaisesSpentThisRoll < 1;
             },
             // Reroll 10s only makes sense when the character is impaired (so 10s
             // did NOT explode on the original roll), on a roll that would
             // normally reroll 10s (not initiative / unskilled / iaijutsu
             // strike), and only if a 10 was actually rolled.
             canPcpRerollTens() {
-                if (this.pcpTensRerolledThisRoll) return false;
+                if (this._isNpc || this.pcpTensRerolledThisRoll) return false;
                 if (!this._impairedNow()) return false;
                 const f = this.formula;
                 if (!f || f.is_initiative || f.is_unskilled) return false;
@@ -522,7 +525,7 @@
             // condition beyond "impaired + a 10 was rolled" is that we haven't
             // already done it this roll.
             _pcpCanRerollTensHere() {
-                return !this.pcpTensRerolledThisRoll && this._impairedNow()
+                return !this._isNpc && !this.pcpTensRerolledThisRoll && this._impairedNow()
                     && (this.finalDice || []).some(d => d.value === 10);
             },
             // ---- Generic (done) panel ----
@@ -6371,7 +6374,7 @@
             // the wound check.
             _wcRerollOpen() {
                 const t = window._trackingBridge;
-                return this.canUseLucky() || !!(t && t.canSpendPcp && t.canSpendPcp());
+                return this.canUseLucky() || (!this._isNpc && !!(t && t.canSpendPcp && t.canSpendPcp()));
             },
 
             retryServerWoundCheck() {

@@ -600,14 +600,16 @@ def _player_pcs(db: Session, request: Request, group: GamingGroup, pcs: List[Cha
 
 @router.get("/groups/{group_id}/combat/roller/{who_id}", response_class=HTMLResponse)
 def roller(group_id: int, who_id: int, request: Request, die: Optional[int] = None,
-           wounds: bool = False, initiative: bool = False, x: int = 0, y: int = 0,
-           db: Session = Depends(get_db)):
+           wounds: bool = False, initiative: bool = False, kakita: Optional[str] = None,
+           x: int = 0, y: int = 0, db: Session = Depends(get_db)):
     """The roll overlay: one character's sheet's own die menu, light-wounds
     modal or initiative menu and its roll modals, laid over the combat page
     in an iframe (the combat page has no roller of its own). ``die`` opens
     that action die's menu at ``(x, y)``; ``wounds`` the light-wounds modal,
     whose wound check is the sheet's; ``initiative`` the sheet's initiative
-    menu at ``(x, y)``.
+    menu at ``(x, y)``; ``kakita`` a Kakita Duelist's phase-0 option from the
+    card's kebab: ``interrupt`` (the sheet's Phase 0 Interrupt: spend the 2
+    highest dice, open the iaijutsu attack) or ``5th`` (its 5th Dan contest).
 
     For an NPC in the fight: the GM. For a visible PC of the group: the GM,
     or anyone who can edit that PC (a player driving their own action dice).
@@ -636,6 +638,7 @@ def roller(group_id: int, who_id: int, request: Request, die: Optional[int] = No
     context.update(
         bare_page=True, group=group, roller_die=die, roller_wounds=wounds,
         roller_initiative=initiative, roller_x=max(0, x), roller_y=max(0, y),
+        roller_kakita=kakita if kakita in ("interrupt", "5th") and who.school == "kakita_duelist" else None,
         # An NPC's attack modal offers the fight's PCs as targets. A PC's
         # offers none: an NPC's TN is the GM's to reveal.
         combat_targets=[

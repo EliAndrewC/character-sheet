@@ -28,7 +28,7 @@ from app.services.combat_actions import tn_to_be_hit
 from app.services.combat_targets import current_duels, phase_abilities, weapon_for
 from app.services.dice import dying_threshold, is_impaired
 from app.services.per_adventure import per_adventure_abilities, remaining
-from app.services.void_spend import void_limits, void_pools
+from app.services.void_spend import school_dan, void_limits, void_pools
 
 
 def visible_pcs(db: Session, group: GamingGroup) -> List[Character]:
@@ -106,6 +106,18 @@ def tn_known(db: Session, encounter: Encounter, link: Any) -> bool:
     return _tn_known(link, own)
 
 
+def kakita_options(character: Character) -> Optional[Dict[str, bool]]:
+    """A Kakita Duelist's phase-0 options for the combat page's kebab: the
+    special ability's iaijutsu interrupt (every Kakita) and the 5th Dan
+    contest (once per round). ``None`` for every other school."""
+    if character.school != "kakita_duelist":
+        return None
+    return {
+        "fifth_dan": school_dan(character.to_dict()) >= 5,
+        "fifth_dan_used": bool((character.adventure_state or {}).get("kakita_5th_dan_used")),
+    }
+
+
 def _public_pc(pc: Character, mine: bool, encounter: Optional[Encounter] = None) -> Dict[str, Any]:
     out = {
         "id": pc.id,
@@ -119,6 +131,8 @@ def _public_pc(pc: Character, mine: bool, encounter: Optional[Encounter] = None)
     }
     if mine:
         out["mine"] = True
+        # Only to whoever drives the PC: what their kebab can offer.
+        out["kakita"] = kakita_options(pc)
     return out
 
 
@@ -188,6 +202,7 @@ def _combatant(character: Character) -> Dict[str, Any]:
         "tn_to_be_hit": tn_to_be_hit(character),
         "parry": character.parry or 1,
         "action_dice": _dice(character, spent=True),
+        "kakita": kakita_options(character),
         "bonuses": [remaining(character, a) for a in per_adventure_abilities(character)],
         "sheet_url": f"/characters/{character.id}",
     }

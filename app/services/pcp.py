@@ -39,6 +39,9 @@ def spend_pcp(db: Session, character: Character, use: str,
     """
     if use not in PCP_USE_LABELS:
         raise PcpRefused("Invalid PCP use")
+    if character.is_npc:
+        # rules/10: "PCs may take advantage of one rule which NPCs cannot".
+        raise PcpRefused("NPCs cannot spend Player Character Points.")
     if character.publish_status != "published":
         raise PcpRefused("Apply or discard your pending changes before "
                          "spending a Player Character Point.")

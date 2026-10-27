@@ -455,6 +455,20 @@
         if (data === null) await this.refresh();
       },
 
+      // ---- Kakita Duelist phase-0 options (the card's kebab) ----
+      // Why an option is greyed out, or "" when it can be taken: both are
+      // phase 0 only; the interrupt costs the 2 highest unspent dice, the
+      // 5th Dan contest is once per round.
+      kakitaInterruptWhy: function (who) {
+        if (!this.state.encounter || (this.state.encounter.phase || 0) !== 0) return "Only in phase 0";
+        var free = (who.action_dice || []).filter(function (d) { return !d.spent && !d.athletics_only; });
+        return free.length >= 2 ? "" : "Needs 2 unspent action dice";
+      },
+      kakitaFifthWhy: function (who) {
+        if (!this.state.encounter || (this.state.encounter.phase || 0) !== 0) return "Only in phase 0";
+        return who.kakita && who.kakita.fifth_dan_used ? "Already used this round" : "";
+      },
+
       // ---- the NPC roll overlay ----
       // A character's dice, light wounds, initiative and rolls use the
       // sheet's OWN die menu, light-wounds modal, roll menu and roll modals
@@ -470,6 +484,8 @@
         var r = event.currentTarget.getBoundingClientRect();
         var at = "&x=" + Math.round(r.left + r.width / 2) + "&y=" + Math.round(r.bottom);
         var query = mode === "initiative" ? "?initiative=1" + at
+          : mode === "kakita_interrupt" ? "?kakita=interrupt" + at
+          : mode === "kakita_5th" ? "?kakita=5th" + at
           : die !== null ? "?die=" + die + at : "?wounds=1";
         var frame = document.createElement("iframe");
         frame.src = this.url("/roller/" + who.id) + query;
