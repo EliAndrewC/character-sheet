@@ -589,11 +589,12 @@ def _can_edit(db: Session, viewer: Optional[str], character: Character) -> bool:
 
 
 def _player_pcs(db: Session, request: Request, group: GamingGroup, pcs: List[Character]) -> Set[int]:
-    """The PCs a (non-GM) viewer may drive from the player view: their own,
-    or any they can edit. Never in the GM's own player-view tab, which is
-    for screen sharing."""
+    """The PCs a viewer may drive from the player view: their own, or any
+    they can edit. The GM's own player-view tab (the only way the GM gets
+    here) gets every PC, so a screen-shared tab shows each player where
+    they can click (GM, 2026-11-01); the GM may drive any PC anyway."""
     if _gm_id(request) is not None:
-        return set()
+        return {pc.id for pc in pcs}
     viewer = npcs.viewer_id(request)
     return {pc.id for pc in pcs if _can_edit(db, viewer, pc)}
 

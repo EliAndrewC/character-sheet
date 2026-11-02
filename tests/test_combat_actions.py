@@ -317,8 +317,10 @@ def test_the_gm_can_open_this_one_tab_as_the_player_view(client, world):
     assert '"earned_xp"' not in shared.text and 'data-testid="builder"' in shared.text
     assert 'data-testid="leave-player-view"' in shared.text
     state = client.get(_url(world, "/state?view=player")).json()
-    # Exactly what a player who owns none of these PCs gets.
-    assert state == client.get(_url(world, "/state"), headers={"X-Test-User": "test_user_2:other"}).json()
+    # What a player who could edit every PC gets: each card shows its
+    # player's controls, so a screen share shows players where to click.
+    assert all(pc["mine"] for pc in state["pcs"])
+    assert state == client.get(_url(world, "/state"), headers=PLAYER).json()
     gm = client.get(_url(world, ""))
     assert 'data-testid="open-player-view"' in gm.text and '"earned_xp"' in gm.text
     # A player asking for it gets what they always get, without the way back.
@@ -599,9 +601,9 @@ def test_players_get_their_own_pcs_dice_whole(client, world):
     ]
     other = client.get(_url(world, "/state"), headers=OTHER).json()["pcs"][0]
     assert "mine" not in other and other["action_dice"] == [{"value": 6}]
-    # The GM's screen-share tab shows the players' view, controls and all off.
+    # The GM's screen-share tab shows every PC as its player sees it.
     shared = client.get(_url(world, "/state?view=player")).json()["pcs"][0]
-    assert "mine" not in shared and shared["action_dice"] == [{"value": 6}]
+    assert shared == mine
     page = client.get(_url(world, ""), headers=PLAYER).text
     assert '"mine": true' in page
 

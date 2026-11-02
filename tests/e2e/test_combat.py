@@ -331,6 +331,10 @@ def test_gm_opens_a_player_view_tab_that_follows_the_fight(page, live_server_url
     assert shared.locator('[data-testid="open-player-view"]').count() == 0
     assert "earned XP" not in shared.locator(f'[data-testid="npc-card-{npc_id}"]').text_content()
     assert shared.locator('[data-testid="leave-player-view"]').is_visible()
+    # Each PC card shows its player's own controls, so a screen share shows
+    # players where they can click.
+    pc_id = _state(page, live_server_url, gid)["pcs"][0]["id"]
+    assert shared.locator(f'[data-testid="pc-init-{pc_id}"]').is_visible()
 
     # The GM acts in the original tab; the shared tab follows by itself.
     page.bring_to_front()
@@ -1171,6 +1175,12 @@ def test_a_kakitas_phase_zero_options_in_the_pc_kebab(page, live_server_url):
     expect(fifth).to_be_disabled()
     expect(fifth).to_contain_text("Only in phase 0")
     expect(interrupt).to_contain_text("Only in phase 0")
+
+    # The GM's screen-share tab shows the same kebab, as the player sees it.
+    page.goto(f"{live_server_url}/groups/{gid}/combat?view=player")
+    page.locator(f'[data-testid="pc-menu-{pc["id"]}"]').click()
+    expect(fifth).to_contain_text("Only in phase 0")
+    expect(page.locator(f'[data-testid="pc-weapon-set-{pc["id"]}"]')).to_have_count(0)
 
 
 def test_everyone_sees_the_next_action_a_kakita_3rd_dan_knows(page, page_anon, live_server_url):
